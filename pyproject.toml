@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "diffui"
+version = "0.1.0"
+description = "Terminal UI for reviewing AI agent diffs"
+requires-python = ">=3.10"
+dependencies = [
+    "textual>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+diffui = "diffui.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "RUF",   # ruff-specific
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "SIM108", # ternary instead of if/else (readability preference)
+    "SIM105", # contextlib.suppress — try/except/pass is clearer for single-line queries
+    "RUF012", # mutable class attrs — BINDINGS is a Textual convention
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["diffui"]

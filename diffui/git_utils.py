@@ -1,0 +1,254 @@
+from __future__ import annotations
+
+import functools
+import json
+import subprocess
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+
+def _git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", *args], capture_output=True, text=True)
+
+
+def _load_json(path: Path, default: Any = None) -> Any:
+    if not path.exists():
+        return default if default is not None else {}
+    return json.loads(path.read_text())
+
+
+def _save_json(path: Path, data: Any) -> None:
+    path.write_text(json.dumps(data, indent=2) + "\n")
+
+
+@dataclass
+class Commit:
+    sha: str
+    message: str
+    author: str
+    files: list[str] = field(default_factory=list)
+
+
+@functools.lru_cache(maxsize=1)
+def get_repo_root() -> Path:
+    result = _git("rev-parse", "--show-toplevel")
+    if result.returncode != 0:
+        raise RuntimeError("Not in a git repository")
+    return Path(result.stdout.strip())
+
+
+def get_main_branch() -> str:
+    for candidate in ("main", "master"):
+        result = _git("rev-parse", "--verify", f"refs/heads/{candidate}")
+        if result.returncode == 0:
+            return candidate
+    result = _git("rev-parse", "--abbrev-ref", "origin/HEAD")
+    if result.returncode == 0:
+        branch = result.stdout.strip().replace("origin/", "")
+        if branch and branch != "HEAD":
+            return branch
+    return "main"
+
+
+def get_merge_base(main_branch: str) -> str:
+    result = _git("merge-base", main_branch, "HEAD")
+    if result.returncode != 0:
+        raise RuntimeError(f"Could not find merge base with {main_branch}")
+    return result.stdout.strip()
+
+
+def get_branch_commits(merge_base: str) -> list[Commit]:
+    result = _git("log", f"{merge_base}..HEAD", "--format=%H\t%s\t%an", "--reverse")
+    if result.returncode != 0:
+        return []
+
+    commits = []
+    for line in result.stdout.strip().splitlines():
+        if not line:
+            continue
+        parts = line.split("\t", 2)
+        if len(parts) < 3:
+            continue
+        sha, message, author = parts
+        files_result = _git("diff-tree", "--no-commit-id", "-r", "--name-only", sha)
+        files = [f for f in files_result.stdout.strip().splitlines() if f]
+        commits.append(Commit(sha=sha, message=message, author=author, files=files))
+
+    return commits
+
+
+def get_full_diff(merge_base: str, path: str) -> str:
+    result = _git("diff", merge_base, "--", path).stdout
+    if result.strip():
+        return result
+    return _diff_untracked(path)
+
+
+def get_working_diff(path: str) -> str:
+    staged = _git("diff", "--cached", "--", path).stdout
+    unstaged = _git("diff", "--", path).stdout
+    parts = []
+    if staged.strip():
+        parts.append(staged)
+    if unstaged.strip():
+        parts.append(unstaged)
+    if parts:
+        return "\n".join(parts)
+    return _diff_untracked(path)
+
+
+def _diff_untracked(path: str) -> str:
+    full_path = get_repo_root() / path
+    if not full_path.exists():
+        return ""
+    try:
+        content = full_path.read_text()
+    except (OSError, UnicodeDecodeError):
+        return ""
+    if not content:
+        return ""
+    lines = content.splitlines()
+    header = (
+        f"diff --git a/{path} b/{path}\n"
+        f"new file mode 100644\n"
+        f"--- /dev/null\n"
+        f"+++ b/{path}\n"
+        f"@@ -0,0 +1,{len(lines)} @@\n"
+    )
+    body = "\n".join(f"+{line}" for line in lines) + "\n"
+    return header + body
+
+
+def get_commit_diff(commit_sha: str, path: str) -> str:
+    result = _git("diff", f"{commit_sha}~1", commit_sha, "--", path)
+    if result.returncode != 0:
+        empty_tree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+        return _git("diff", empty_tree, commit_sha, "--", path).stdout
+    return result.stdout
+
+
+def get_changed_files(merge_base: str) -> list[str]:
+    result = _git("diff", "--name-only", merge_base)
+    return [f for f in result.stdout.strip().splitlines() if f]
+
+
+def get_working_changed_files() -> list[str]:
+    unstaged = _git("diff", "--name-only", "HEAD").stdout
+    staged = _git("diff", "--name-only", "--cached").stdout
+    untracked = _git("ls-files", "--others", "--exclude-standard").stdout
+    files = set()
+    for output in (unstaged, staged, untracked):
+        for f in output.strip().splitlines():
+            if f:
+                files.add(f)
+    return sorted(files)
+
+
+def get_file_mtime(path: str) -> float:
+    try:
+        return (get_repo_root() / path).stat().st_mtime
+    except FileNotFoundError:
+        return 0.0
+
+
+def get_file_content(path: str) -> str:
+    full_path = get_repo_root() / path
+    try:
+        return full_path.read_text()
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
+def get_git_user_name() -> str:
+    result = _git("config", "user.name")
+    name = result.stdout.strip()
+    return name if name else "User"
+
+
+def short_name(path: str) -> str:
+    return path.split("/")[-1]
+
+
+def current_branch() -> str:
+    return _cached_current_branch()
+
+
+def diff_stat(diff_text: str) -> tuple[int, int]:
+    adds = 0
+    dels = 0
+    for line in diff_text.splitlines():
+        if line.startswith("+") and not line.startswith("+++"):
+            adds += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            dels += 1
+    return adds, dels
+
+
+# --- State persistence ---
+
+_CONFIG_ROOT = Path.home() / ".config" / "diffui"
+
+
+@functools.lru_cache(maxsize=1)
+def _cached_current_branch() -> str:
+    result = _git("rev-parse", "--abbrev-ref", "HEAD")
+    return result.stdout.strip() or "HEAD"
+
+
+def clear_branch_cache() -> None:
+    _cached_current_branch.cache_clear()
+
+
+def _safe_name(s: str) -> str:
+    return s.replace("/", "_").replace("\\", "_").replace(":", "_")
+
+
+def _repo_dir() -> Path:
+    repo_key = _safe_name(str(get_repo_root()))
+    d = _CONFIG_ROOT / repo_key
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _branch_dir() -> Path:
+    d = _repo_dir() / _safe_name(_cached_current_branch())
+    d.mkdir(exist_ok=True)
+    return d
+
+
+def _reviewed_path() -> Path:
+    return _branch_dir() / "reviewed.json"
+
+
+def _comments_path() -> Path:
+    return _branch_dir() / "comments.json"
+
+
+def load_reviewed() -> dict[str, float]:
+    return _load_json(_reviewed_path(), {})
+
+
+def save_reviewed(reviewed: dict[str, float]) -> None:
+    _save_json(_reviewed_path(), reviewed)
+
+
+def load_comments() -> dict[str, list[dict]]:
+    return _load_json(_comments_path(), {})
+
+
+def save_comments(comments: dict[str, list[dict]]) -> None:
+    _save_json(_comments_path(), comments)
+
+
+def _settings_path() -> Path:
+    _CONFIG_ROOT.mkdir(parents=True, exist_ok=True)
+    return _CONFIG_ROOT / "settings.json"
+
+
+def load_settings() -> dict[str, Any]:
+    return _load_json(_settings_path(), {})
+
+
+def save_settings(settings: dict[str, Any]) -> None:
+    _save_json(_settings_path(), settings)
