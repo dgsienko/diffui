@@ -386,8 +386,8 @@ def generate_css(t: Theme) -> str:
     }}
 
     .inline-editing {{
-        height: 3;
-        max-height: 6;
+        height: auto;
+        max-height: 10;
     }}
 
     .inline-edit-group {{

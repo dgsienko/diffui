@@ -334,6 +334,7 @@ class DiffUI(App):
             self.notify("Changes detected — refreshed", timeout=2)
         elif comments_changed:
             self._refresh_comments_select()
+            await self._refresh_comments_in_viewer()
 
     # --- Tab management ---
 
@@ -389,6 +390,15 @@ class DiffUI(App):
             if isinstance(viewer, FullFileViewer):
                 viewer._cached_content = None
             await viewer.recompose()
+
+    async def _refresh_comments_in_viewer(self) -> None:
+        viewer = self._get_active_viewer()
+        if not viewer:
+            return
+        viewer._comments = self.comments
+        if isinstance(viewer, FullFileViewer):
+            viewer._cached_content = None
+        await viewer.recompose()
 
     async def _refresh_tabs(self, restore_file: str | None | object = _SENTINEL) -> None:
         if restore_file is _SENTINEL:

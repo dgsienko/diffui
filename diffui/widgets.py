@@ -189,6 +189,8 @@ class InlineCommentDisplay(Vertical):
             return
         body = self.query_one(".comment-body", Static)
         body.display = False
+        self._pre_edit_width = self.styles.width
+        self.styles.width = self.MAX_WIDTH
         ta = TextArea(self.comment_text, classes="inline-editing comment-inline-edit", show_line_numbers=False, highlight_cursor_line=False, compact=True)
         save_btn = Button("Save", variant="primary", classes="inline-edit-save")
         cancel_btn = Button("Cancel", variant="default", classes="inline-edit-cancel")
@@ -227,14 +229,27 @@ class InlineCommentDisplay(Vertical):
             self.call_later(self._cancel_inline_edits)
             event.stop()
 
+    def _restore_width(self) -> None:
+        if hasattr(self, "_pre_edit_width"):
+            self.styles.width = self._pre_edit_width
+            del self._pre_edit_width
+
     async def _cancel_inline_edits(self) -> None:
         for group in self.query(".inline-edit-group"):
             await group.remove()
+        self._restore_width()
         try:
             body = self.query_one(".comment-body", Static)
             body.display = True
         except Exception:
             pass
+
+    def _recalc_width(self) -> None:
+        header_len = len(self.author) + 12
+        reply_lens = (len(self._parse_reply(r)[0]) for r in self._raw_replies)
+        longest = max(len(self.comment_text), max(reply_lens, default=0))
+        content_len = longest + 8
+        self.styles.width = min(self.MAX_WIDTH, max(self.MIN_WIDTH, header_len, content_len))
 
     async def _save_comment_edit(self) -> None:
         try:
@@ -252,12 +267,15 @@ class InlineCommentDisplay(Vertical):
         if text and text != self.comment_text:
             old_comment = self.comment_text
             self.comment_text = text
+            self._recalc_width()
             try:
                 body = self.query_one(".comment-body", Static)
                 body.update(text.replace("[", "\\["))
             except Exception:
                 pass
             self.post_message(self.Edited(self.file_path, self.line_index, old_comment, text))
+        else:
+            self._restore_width()
 
 
 class DiffLine(Horizontal):
