@@ -332,7 +332,8 @@ class DiffUI(App):
             self.reviewed = load_reviewed()
             await self._incremental_refresh()
             self.notify("Changes detected — refreshed", timeout=2)
-        elif comments_changed:
+
+        if comments_changed:
             self._refresh_comments_select()
             await self._refresh_comments_in_viewer()
 
