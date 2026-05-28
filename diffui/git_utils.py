@@ -94,7 +94,7 @@ def get_working_diff(path: str) -> str:
     if unstaged.strip():
         parts.append(unstaged)
     if parts:
-        return "\n".join(parts)
+        return "".join(parts)
     return _diff_untracked(path)
 
 

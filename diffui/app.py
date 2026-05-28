@@ -121,6 +121,7 @@ class DiffUI(App):
         self._active_tab_ids: list[str] = []
         self._comment_nav_index: int = -1
         self._scroll_positions: dict[str, int] = {}
+        self._pending_scroll_restore: set[str] = set()
         self._last_file_mtimes = self._snapshot_file_mtimes()
         self._last_comments_mtime = self._get_comments_mtime()
         self._git_head_mtime = self._stat_mtime(self._repo_root / ".git" / "HEAD")
@@ -408,8 +409,13 @@ class DiffUI(App):
         self._tab_generation += 1
         gen = self._tab_generation
         tabs = self.query_one("#file-tabs", TabbedContent)
+        viewer = self._get_active_viewer()
+        if viewer:
+            self._scroll_positions[viewer.file_path] = viewer.scroll_offset.y
         tabs.display = False
         await tabs.clear_panes()
+        if gen != self._tab_generation:
+            return
         files = self._get_visible_files()
         self._active_files = files
 
@@ -432,6 +438,8 @@ class DiffUI(App):
             active_path = next((f for f in files if not self._is_reviewed(f)), files[0])
         tab_ids = []
         for i, path in enumerate(files):
+            if gen != self._tab_generation:
+                return
             label = self._tab_label(path)
             tab_id = f"tab-{gen}-{i}"
             tab_ids.append(tab_id)
@@ -442,7 +450,10 @@ class DiffUI(App):
                 content = LazyPlaceholder(path, short_name(path))
             pane = TabPane(label, content, id=tab_id)
             await tabs.add_pane(pane)
+        if gen != self._tab_generation:
+            return
         self._active_tab_ids = tab_ids
+        self._pending_scroll_restore = set(files)
 
         if restore_tab_id:
             tabs.active = restore_tab_id
@@ -499,7 +510,6 @@ class DiffUI(App):
 
     @on(TabbedContent.TabActivated)
     async def tab_activated(self, event: TabbedContent.TabActivated) -> None:
-        self._save_scroll_position()
         pane = event.pane
         try:
             placeholder = pane.query_one(LazyPlaceholder)
@@ -510,7 +520,8 @@ class DiffUI(App):
         except NoMatches:
             pass
         viewer = self._get_active_viewer()
-        if viewer:
+        if viewer and viewer.file_path in self._pending_scroll_restore:
+            self._pending_scroll_restore.discard(viewer.file_path)
             self._restore_scroll_position(viewer)
         self._refresh_comments_select()
         self._update_review_button()
