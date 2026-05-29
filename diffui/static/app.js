@@ -7,6 +7,8 @@ import { DiffViewer } from './components/DiffViewer.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
 import { SearchBar } from './components/SearchBar.js';
 import { ToastContainer, showToast } from './components/Toast.js';
+import { ShortcutOverlay } from './components/ShortcutOverlay.js';
+import { DiffStatsBar } from './components/DiffStatsBar.js';
 
 const html = htm.bind(h);
 
@@ -25,6 +27,7 @@ function App() {
   const [showReviewed, setShowReviewed] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const diffRef = useRef(null);
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
@@ -275,9 +278,12 @@ function App() {
       } else if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
         setShowSearch(v => !v);
+      } else if (e.key === '?') {
+        setShowShortcuts(v => !v);
       } else if (e.key === 'Escape') {
         setShowSettings(false);
         setShowSearch(false);
+        setShowShortcuts(false);
         setSearchTerm('');
       }
     };
@@ -308,6 +314,7 @@ function App() {
         onClose=${() => { setShowSearch(false); setSearchTerm(''); }}
       />
     `}
+    <${DiffStatsBar} files=${visibleFiles} />
     <${FileTabs}
       files=${visibleFiles}
       activeFile=${activeFile}
@@ -338,6 +345,9 @@ function App() {
         onChange=${handleSettingsChange}
         onClose=${() => setShowSettings(false)}
       />
+    `}
+    ${showShortcuts && html`
+      <${ShortcutOverlay} onClose=${() => setShowShortcuts(false)} />
     `}
     <div class="legend">
       <span><kbd>←</kbd><kbd>→</kbd> prev/next file</span>

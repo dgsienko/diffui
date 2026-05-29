@@ -1,8 +1,15 @@
 import { h } from 'preact';
 import { useState, useRef } from 'preact/hooks';
 import htm from 'htm';
+import { marked } from 'marked';
+
+marked.setOptions({ breaks: true, gfm: true });
 
 const html = htm.bind(h);
+
+function renderMd(text) {
+  return { __html: marked.parse(text || '') };
+}
 
 export function CommentDisplay({ comment, onDelete, onEdit, onReply }) {
   const [showReply, setShowReply] = useState(false);
@@ -64,12 +71,12 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply }) {
           </div>
         </div>
       ` : html`
-        <div class="comment-body">${comment.comment}</div>
+        <div class="comment-body comment-md" dangerouslySetInnerHTML=${renderMd(comment.comment)}></div>
       `}
       ${replies.map(r => {
         const rIcon = (r.author_type || 'agent') === 'user' ? '💬' : '🤖';
         return html`
-          <div class="comment-reply">↳ ${rIcon} ${r.author || 'agent'}: ${r.text}</div>
+          <div class="comment-reply">↳ ${rIcon} ${r.author || 'agent'}: <span class="comment-md" dangerouslySetInnerHTML=${renderMd(r.text)}></span></div>
         `;
       })}
       ${showReply && html`
