@@ -74,27 +74,32 @@ function App() {
     const current = activeFileRef.current;
     if (data.length > 0 && (!current || !data.find(f => f.path === current))) {
       const firstUnreviewed = data.find(f => !f.reviewed);
-      setActiveFile((firstUnreviewed || data[0]).path);
+      const newActive = (firstUnreviewed || data[0]).path;
+      setActiveFile(newActive);
+      fetchDiff(newActive);
     }
     setLoading(false);
   }, [view]);
 
+  const contextRef = useRef(contextLines);
+  contextRef.current = contextLines;
   const fetchDiff = useCallback(async (path, ctx) => {
     if (!path) return;
-    const c = ctx ?? contextLines;
-    const cacheKey = `${path}:${view}:c${c}`;
+    const c = ctx ?? contextRef.current;
+    const v = viewRef.current;
+    const cacheKey = `${path}:${v}:c${c}`;
     const cached = diffCache.current.get(cacheKey);
     if (cached) {
       setDiffData(cached);
       return;
     }
-    const res = await fetch(`/api/diff/${encodeURIComponent(path)}?view=${view}&context=${c}`);
+    const res = await fetch(`/api/diff/${encodeURIComponent(path)}?view=${v}&context=${c}`);
     const data = await res.json();
     diffCache.current.set(cacheKey, data);
     if (activeFileRef.current === path) {
       setDiffData(data);
     }
-  }, [view, contextLines]);
+  }, []);
 
   // Restore scroll position after diff renders
   useEffect(() => {
@@ -112,9 +117,8 @@ function App() {
     Promise.all([fetchTheme(), fetchRepos(), fetchBranch(), fetchCommits(), fetchFiles(), fetchComments()]);
   }, []);
 
-  useEffect(() => {
-    if (activeFile) fetchDiff(activeFile);
-  }, [activeFile, view]);
+  const viewRef = useRef(view);
+  viewRef.current = view;
 
   useEffect(() => {
     if (themeCss) {
@@ -182,11 +186,9 @@ function App() {
     if (activeFileRef.current && diffRef.current) {
       scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
     }
-    if (path !== activeFileRef.current) {
-      setDiffData(null);
-    }
     setActiveFile(path);
-  }, []);
+    fetchDiff(path);
+  }, [fetchDiff]);
 
   const handleToggleReview = useCallback(async () => {
     const af = activeFileRef.current;
