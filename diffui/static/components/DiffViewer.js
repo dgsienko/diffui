@@ -6,6 +6,47 @@ import { CommentDisplay } from './CommentDisplay.js';
 
 const html = htm.bind(h);
 
+function highlightSearch(html, term) {
+  if (!term || !html) return html;
+  const lowerTerm = term.toLowerCase();
+  let result = '';
+  let textBuf = '';
+  let i = 0;
+  const flushText = () => {
+    if (!textBuf) return;
+    const lower = textBuf.toLowerCase();
+    let pos = 0;
+    let idx;
+    while ((idx = lower.indexOf(lowerTerm, pos)) !== -1) {
+      result += textBuf.slice(pos, idx);
+      result += '<mark class="search-hl">' + textBuf.slice(idx, idx + term.length) + '</mark>';
+      pos = idx + term.length;
+    }
+    result += textBuf.slice(pos);
+    textBuf = '';
+  };
+  while (i < html.length) {
+    if (html[i] === '<') {
+      flushText();
+      const end = html.indexOf('>', i);
+      if (end === -1) { result += html.slice(i); break; }
+      result += html.slice(i, end + 1);
+      i = end + 1;
+    } else if (html[i] === '&') {
+      flushText();
+      const semi = html.indexOf(';', i);
+      if (semi === -1) { result += html.slice(i); break; }
+      result += html.slice(i, semi + 1);
+      i = semi + 1;
+    } else {
+      textBuf += html[i];
+      i++;
+    }
+  }
+  flushText();
+  return result;
+}
+
 function DiffLine({ line, searchTerm, onRightClick, onCtrlClick }) {
   const typeClass = {
     add: 'add',
@@ -16,6 +57,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick }) {
   }[line.type] || '';
 
   const isMatch = searchTerm && line.text && line.text.toLowerCase().includes(searchTerm.toLowerCase());
+  const lineHtml = isMatch ? highlightSearch(line.html, searchTerm) : line.html;
 
   const handleClick = (e) => {
     if ((e.ctrlKey || e.metaKey) && line.new_num) {
@@ -44,7 +86,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick }) {
         <span class="gutter-new">${line.new_num || ''}</span>
         <span class="gutter-sep">│</span>
       </div>
-      <div class="diff-code" dangerouslySetInnerHTML=${{ __html: line.html }}></div>
+      <div class="diff-code" dangerouslySetInnerHTML=${{ __html: lineHtml }}></div>
     </div>
   `;
 }

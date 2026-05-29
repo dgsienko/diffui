@@ -446,7 +446,14 @@ mark {
 
 .search-match {
   background: var(--hover-bg);
-  outline: 1px solid var(--accent);
+}
+
+.search-hl {
+  background: rgba(250, 180, 40, 0.35);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  outline: 1px solid rgba(250, 180, 40, 0.5);
   outline-offset: -1px;
 }
 
