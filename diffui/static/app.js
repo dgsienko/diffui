@@ -305,9 +305,15 @@ function App() {
       base = remote.replace(/\.git$/, '');
     }
     const ref = b.head_sha ? b.head_sha.slice(0, 12) : b.name;
-    const url = `${base}/-/blob/${ref}/${af}`;
+    let lineNum = null;
+    const hovered = document.querySelector('.diff-line:hover, .split-line:hover');
+    if (hovered) {
+      const gutterNew = hovered.querySelector('.gutter-new, .split-gutter');
+      if (gutterNew) lineNum = parseInt(gutterNew.textContent);
+    }
+    const url = `${base}/-/blob/${ref}/${af}${lineNum ? '#L' + lineNum : ''}`;
     navigator.clipboard.writeText(url);
-    showToast('GitLab link copied');
+    showToast(lineNum ? `GitLab link copied (line ${lineNum})` : 'GitLab link copied');
   }, []);
 
   const visibleFiles = useMemo(() => showReviewed ? files : files.filter(f => !f.reviewed), [files, showReviewed]);
