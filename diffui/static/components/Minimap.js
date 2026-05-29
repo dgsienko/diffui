@@ -1,12 +1,11 @@
 import { h } from 'preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
 
 const html = htm.bind(h);
 
 export function Minimap({ diffData, comments, containerRef }) {
   const [viewport, setViewport] = useState({ top: 0, height: 0 });
-  const canvasRef = useRef(null);
 
   const allLines = diffData?.hunks?.flatMap(h => h.lines) || [];
   const totalLines = allLines.length;

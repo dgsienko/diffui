@@ -204,6 +204,18 @@ def get_changed_files(merge_base: str) -> list[str]:
     return [f for f in result.stdout.strip().splitlines() if f]
 
 
+def get_diff_numstat(merge_base: str) -> dict[str, tuple[int, int]]:
+    result = _git("diff", "--numstat", merge_base)
+    stats: dict[str, tuple[int, int]] = {}
+    for line in result.stdout.strip().splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) == 3:
+            adds = int(parts[0]) if parts[0] != "-" else 0
+            dels = int(parts[1]) if parts[1] != "-" else 0
+            stats[parts[2]] = (adds, dels)
+    return stats
+
+
 def get_working_changed_files() -> list[str]:
     unstaged = _git("diff", "--name-only", "HEAD").stdout
     staged = _git("diff", "--name-only", "--cached").stdout
@@ -239,27 +251,6 @@ def get_remote_url() -> str:
 def get_head_sha() -> str:
     result = _git("rev-parse", "HEAD")
     return result.stdout.strip() if result.returncode == 0 else ""
-
-
-def build_remote_permalink(file_path: str, line_num: int | None = None) -> str:
-    remote = get_remote_url()
-    if not remote:
-        return ""
-    if remote.startswith("git@"):
-        host_path = remote.split(":", 1)[1].removesuffix(".git")
-        host = remote.split("@")[1].split(":")[0]
-        base = f"https://{host}/{host_path}"
-    elif remote.startswith("https://") or remote.startswith("http://"):
-        base = remote.removesuffix(".git")
-    else:
-        return ""
-    sha = get_head_sha()
-    branch = current_branch()
-    ref = sha[:12] if sha else branch
-    url = f"{base}/-/blob/{ref}/{file_path}"
-    if line_num:
-        url += f"#L{line_num}"
-    return url
 
 
 def get_git_user_name() -> str:

@@ -9,23 +9,32 @@ const html = htm.bind(h);
 function splitHunkLines(lines) {
   const left = [];
   const right = [];
+  let removeBuffer = [];
+  let addBuffer = [];
+
+  const flush = () => {
+    const count = Math.max(removeBuffer.length, addBuffer.length);
+    for (let i = 0; i < count; i++) {
+      left.push(removeBuffer[i] ?? null);
+      right.push(addBuffer[i] ?? null);
+    }
+    removeBuffer = [];
+    addBuffer = [];
+  };
+
   for (const line of lines) {
     if (line.type === 'remove') {
-      left.push(line);
-      right.push(null);
+      if (addBuffer.length) flush();
+      removeBuffer.push(line);
     } else if (line.type === 'add') {
-      const lastRight = right.length - 1;
-      if (lastRight >= 0 && right[lastRight] === null) {
-        right[lastRight] = line;
-      } else {
-        left.push(null);
-        right.push(line);
-      }
+      addBuffer.push(line);
     } else {
+      flush();
       left.push(line);
       right.push(line);
     }
   }
+  flush();
   return { left, right };
 }
 

@@ -253,7 +253,9 @@ function App() {
     const levels = [3, 10, 50, 9999];
     const next = levels.find(l => l > contextLines) || 9999;
     setContextLines(next);
-    diffCache.current.clear();
+    for (const key of [...diffCache.current.keys()]) {
+      if (key.startsWith(`${activeFile}:`)) diffCache.current.delete(key);
+    }
     if (activeFile) fetchDiff(activeFile, next);
     showToast(next >= 9999 ? 'Showing full context' : `Expanded to ${next} lines of context`);
   }, [contextLines, activeFile, fetchDiff]);

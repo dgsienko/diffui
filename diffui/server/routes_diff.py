@@ -60,26 +60,24 @@ def list_files(view: str = "all"):
         commit = next((c for c in app_state.commits if c.sha == view), None)
         files = commit.files if commit else []
 
-    from diffui.git_utils import diff_stat
+    from diffui.git_utils import get_diff_numstat
 
-    result = []
-    for f in files:
-        diff_text = _get_diff(f, view)
-        adds, dels = diff_stat(diff_text)
-        result.append(
-            {
-                "path": f,
-                "short_name": short_name(f),
-                "reviewed": f in app_state.reviewed,
-                "review_mtime": app_state.reviewed.get(f),
-                "file_mtime": get_file_mtime(f),
-                "has_comments": f in app_state.comments,
-                "comment_count": len(app_state.comments.get(f, [])),
-                "adds": adds,
-                "dels": dels,
-            }
-        )
-    return result
+    numstat = get_diff_numstat(app_state.merge_base) if view == "all" else {}
+
+    return [
+        {
+            "path": f,
+            "short_name": short_name(f),
+            "reviewed": f in app_state.reviewed,
+            "review_mtime": app_state.reviewed.get(f),
+            "file_mtime": get_file_mtime(f),
+            "has_comments": f in app_state.comments,
+            "comment_count": len(app_state.comments.get(f, [])),
+            "adds": numstat.get(f, (0, 0))[0],
+            "dels": numstat.get(f, (0, 0))[1],
+        }
+        for f in files
+    ]
 
 
 @router.get("/diff/{path:path}")
