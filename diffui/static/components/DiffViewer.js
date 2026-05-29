@@ -94,9 +94,8 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onAddComm
   `;
 }
 
-export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onOpenInEditor, onExpandContext, contextLines, reviewed, ref }) {
+export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onOpenInEditor, onExpandContext, contextLines, reviewed, containerRef }) {
   const [commentingLine, setCommentingLine] = useState(null);
-  const containerRef = useRef(null);
 
   const handleRightClick = (line) => {
     setCommentingLine(line.index);
@@ -111,8 +110,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
   }
 
   const mergedRef = (el) => {
-    containerRef.current = el;
-    if (ref) ref.current = el;
+    if (containerRef) containerRef.current = el;
   };
 
   return html`

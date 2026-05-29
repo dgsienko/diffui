@@ -405,7 +405,7 @@ function App() {
             : html`<div class="loading">Select a file</div>`
           : diffMode === 'file'
             ? html`<${FullFileViewer}
-                ref=${diffRef}
+                containerRef=\${diffRef}
                 filePath=${activeFile}
                 view=${view}
                 onToggleReview=${handleToggleReview}
@@ -413,7 +413,7 @@ function App() {
               />`
             : diffMode === 'split' && diffData
               ? html`<${SplitDiffViewer}
-                  ref=${diffRef}
+                  containerRef=\${diffRef}
                   data=${diffData}
                   comments=${comments}
                   onToggleReview=${handleToggleReview}
@@ -425,7 +425,7 @@ function App() {
                 />`
               : diffData
                 ? html`<${DiffViewer}
-                    ref=${diffRef}
+                    containerRef=\${diffRef}
                     data=${diffData}
                     comments=${comments}
                     searchTerm=${searchTerm}

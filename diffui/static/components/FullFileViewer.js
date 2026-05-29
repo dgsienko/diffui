@@ -6,7 +6,7 @@ const html = htm.bind(h);
 
 // All line HTML is server-generated from Pygments — source code is html.escape'd
 // in highlight.py before wrapping in <span> tags. No user content is rendered as HTML.
-export function FullFileViewer({ filePath, view, onToggleReview, reviewed, ref }) {
+export function FullFileViewer({ filePath, view, onToggleReview, reviewed, containerRef }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -20,7 +20,7 @@ export function FullFileViewer({ filePath, view, onToggleReview, reviewed, ref }
   if (loading) return html`<div class="loading">Loading...</div>`;
   if (!data?.lines?.length) return html`<div class="empty-state">File is empty</div>`;
 
-  const mergedRef = (el) => { if (ref) ref.current = el; };
+  const mergedRef = (el) => { if (containerRef) containerRef.current = el; };
 
   return html`
     <div class="diff-container" ref=${mergedRef}>

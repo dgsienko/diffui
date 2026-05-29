@@ -54,7 +54,7 @@ function SplitLine({ line, side, onRightClick }) {
   `;
 }
 
-export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, reviewed, ref }) {
+export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, reviewed, containerRef }) {
   const [commentingLine, setCommentingLine] = useState(null);
   const leftRef = useRef(null);
   const rightRef = useRef(null);
@@ -79,7 +79,7 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
 
   if (!splitData) return html`<div class="empty-state">No diff data</div>`;
 
-  const mergedRef = (el) => { if (ref) ref.current = el; };
+  const mergedRef = (el) => { if (containerRef) containerRef.current = el; };
 
   return html`
     <div class="split-container" ref=${mergedRef}>
