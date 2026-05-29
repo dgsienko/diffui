@@ -8,7 +8,7 @@ import { SettingsPanel } from './components/SettingsPanel.js';
 import { SearchBar } from './components/SearchBar.js';
 import { ToastContainer, showToast } from './components/Toast.js';
 import { ShortcutOverlay } from './components/ShortcutOverlay.js';
-import { DiffStatsBar } from './components/DiffStatsBar.js';
+
 import { FileTree } from './components/FileTree.js';
 import { SplitDiffViewer } from './components/SplitDiffViewer.js';
 import { FullFileViewer } from './components/FullFileViewer.js';
@@ -382,7 +382,6 @@ function App() {
         onClose=${() => { setShowSearch(false); setSearchTerm(''); }}
       />
     `}
-    <${DiffStatsBar} files=${visibleFiles} />
     <${FileTabs}
       files=${visibleFiles}
       activeFile=${activeFile}
