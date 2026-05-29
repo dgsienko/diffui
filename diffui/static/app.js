@@ -188,6 +188,10 @@ function App() {
     if (activeFileRef.current && diffRef.current) {
       scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
     }
+    const cacheKey = `${path}:${viewRef.current}:c${contextRef.current}`;
+    if (!diffCache.current.has(cacheKey)) {
+      setDiffData(null);
+    }
     setActiveFile(path);
     fetchDiff(path);
   }, [fetchDiff]);
@@ -282,7 +286,8 @@ function App() {
       }
       fetchDiff(af, next);
     }
-    showToast(next >= 9999 ? 'Showing full context' : `Expanded to ${next} lines of context`);
+    const label = next >= 9999 ? 'Showing full context' : next <= 3 ? 'Default context (3 lines)' : `${direction === 'collapse' ? 'Collapsed' : 'Expanded'} to ${next} lines of context`;
+    showToast(label);
   }, [contextLines, fetchDiff]);
 
   const handleCopyGitLabLink = useCallback(() => {
@@ -321,7 +326,7 @@ function App() {
         const next = e.key === 'ArrowLeft'
           ? (idx - 1 + vf.length) % vf.length
           : (idx + 1) % vf.length;
-        setActiveFile(vf[next].path);
+        handleFileSelect(vf[next].path);
         e.preventDefault();
       } else if (e.key === 'r') {
         handleToggleReview();
