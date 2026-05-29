@@ -338,7 +338,20 @@ mark {
   flex-shrink: 0;
   display: flex;
   gap: 16px;
-  flex-wrap: wrap;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.legend-items {
+  display: flex;
+  gap: 16px;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+}
+
+.legend-fixed {
+  flex-shrink: 0;
 }
 
 .legend kbd {

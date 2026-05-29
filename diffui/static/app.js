@@ -473,15 +473,18 @@ function App() {
       <${ShortcutOverlay} onClose=${() => setShowShortcuts(false)} />
     `}
     <div class="legend">
-      <span><kbd>←</kbd><kbd>→</kbd> prev/next file</span>
-      <span><kbd>j</kbd><kbd>k</kbd> next/prev hunk</span>
-      <span><kbd>r</kbd> toggle reviewed</span>
-      <span><kbd>a</kbd> show/hide reviewed</span>
-      <span><kbd>y</kbd> copy path</span>
-      <span><kbd>Ctrl+F</kbd> search</span>
-      <span><kbd>Ctrl+Click</kbd> open in editor</span>
-      <span><kbd>Right-Click</kbd> add comment</span>
-      <span><kbd>?</kbd> shortcuts</span>
+      <div class="legend-items">
+        <span><kbd>←</kbd><kbd>→</kbd> prev/next file</span>
+        <span><kbd>j</kbd><kbd>k</kbd> next/prev hunk</span>
+        <span><kbd>r</kbd> toggle reviewed</span>
+        <span><kbd>a</kbd> show/hide reviewed</span>
+        <span><kbd>y</kbd> copy path</span>
+        <span><kbd>Y</kbd> copy GitLab link</span>
+        <span><kbd>Ctrl+F</kbd> search</span>
+        <span><kbd>Ctrl+Click</kbd> open in editor</span>
+        <span><kbd>Right-Click</kbd> add comment</span>
+      </div>
+      <span class="legend-fixed"><kbd>?</kbd> shortcuts</span>
     </div>
     <${ToastContainer} />
   `;
