@@ -475,7 +475,7 @@ function App() {
       <span><kbd>Ctrl+F</kbd> search</span>
       <span><kbd>Ctrl+Click</kbd> open in editor</span>
       <span><kbd>Right-Click</kbd> add comment</span>
-      <span><kbd>?</kbd> shortcuts</span>
+      <span><kbd>Shift+/</kbd> shortcuts</span>
     </div>
     <${ToastContainer} />
   `;
