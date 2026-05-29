@@ -726,6 +726,7 @@ mark {
 
 .split-pane {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: auto;
   border-right: 1px solid var(--border);
@@ -750,6 +751,8 @@ mark {
   line-height: 20px;
   padding: 0 8px;
   white-space: pre;
+  width: fit-content;
+  min-width: 100%;
 }
 
 .split-line:hover { background: var(--hover-bg); }
