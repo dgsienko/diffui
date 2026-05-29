@@ -105,15 +105,7 @@ class TestLoadSaveJson:
 class TestDiffStat:
     def test_simple_diff(self):
         diff = (
-            "diff --git a/f b/f\n"
-            "--- a/f\n"
-            "+++ b/f\n"
-            "@@ -1,3 +1,4 @@\n"
-            " line1\n"
-            "-line2\n"
-            "+line2_new\n"
-            "+line2_extra\n"
-            " line3\n"
+            "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1,3 +1,4 @@\n line1\n-line2\n+line2_new\n+line2_extra\n line3\n"
         )
         adds, dels = diff_stat(diff)
         assert adds == 2
@@ -141,3 +133,53 @@ class TestDiffStat:
         adds, dels = diff_stat(diff)
         assert adds == 1
         assert dels == 1
+
+
+class TestResolveRepos:
+    def test_from_current_dir(self):
+        from diffui.git_utils import resolve_repos
+
+        repos, idx = resolve_repos()
+        assert len(repos) >= 1
+        assert 0 <= idx < len(repos)
+
+    def test_explicit_paths(self):
+        from pathlib import Path
+
+        from diffui.git_utils import resolve_repos
+
+        repo_path = str(Path(__file__).parent.parent)
+        repos, idx = resolve_repos([repo_path])
+        assert len(repos) == 1
+        assert idx == 0
+        assert repos[0].name == "diffui"
+
+    def test_deduplicates(self):
+        from pathlib import Path
+
+        from diffui.git_utils import resolve_repos
+
+        repo_path = str(Path(__file__).parent.parent)
+        repos, idx = resolve_repos([repo_path, repo_path])
+        assert len(repos) == 1
+
+
+class TestGetDiffNumstat:
+    def test_returns_dict(self):
+        from diffui.git_utils import get_diff_numstat, get_merge_base, set_active_repo
+
+        root = Path(__file__).parent.parent
+        set_active_repo(root)
+        try:
+            from diffui.git_utils import get_main_branch
+
+            main = get_main_branch()
+            base = get_merge_base(main)
+            stats = get_diff_numstat(base)
+            assert isinstance(stats, dict)
+            for path, (adds, dels) in stats.items():
+                assert isinstance(path, str)
+                assert isinstance(adds, int)
+                assert isinstance(dels, int)
+        except RuntimeError:
+            pytest.skip("No merge base available")

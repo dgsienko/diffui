@@ -114,7 +114,7 @@ directories.
 # Install with dev deps
 pipx inject diffui pytest ruff
 
-# Run tests (81 tests)
+# Run tests (122 tests)
 cd ~/code/diffui && pytest
 
 # Lint
@@ -140,7 +140,10 @@ diffui/
 │   └── theme_css.py    # CSS custom property generator
 ├── static/             # Preact frontend (web UI)
 │   ├── app.js          # Main app component
-│   ├── components/     # UI components
+│   ├── components/     # TopBar, FileTabs, DiffViewer, SplitDiffViewer,
+│   │                   #   FullFileViewer, FileTree, CommentBox,
+│   │                   #   CommentDisplay, SearchBar, SettingsPanel,
+│   │                   #   Minimap, ShortcutOverlay, Toast
 │   ├── index.html      # Shell page
 │   └── style.css       # Styles using CSS custom properties
 ├── themes/
@@ -148,7 +151,9 @@ diffui/
 │   ├── definitions.py  # 10 theme definitions
 │   └── css.py          # Textual CSS template generator
 └── tests/
-    ├── test_diff.py    # Diff parsing tests (49 tests)
-    ├── test_git_utils.py # Persistence and utility tests (17 tests)
-    └── test_themes.py  # Theme definitions and CSS tests (16 tests)
+    ├── test_diff.py        # Diff parsing tests (49 tests)
+    ├── test_git_utils.py   # Persistence and utility tests (24 tests)
+    ├── test_highlight.py   # HTML highlight adapter tests (19 tests)
+    ├── test_server.py      # API route tests (14 tests)
+    └── test_themes.py      # Theme definitions and CSS tests (16 tests)
 ```

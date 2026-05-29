@@ -113,21 +113,27 @@ diffui                               # Web UI (from any git repo)
 diffui --open                        # Web UI + open in browser
 diffui-tui                           # Terminal UI
 diffui --comments                    # Dump comments to stdout
-pytest                               # Run tests (81 tests)
+pytest                               # Run tests (122 tests)
 ruff check diffui/ tests/           # Lint
 ```
 
 ## Testing
 
 Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
-`themes/`). No Textual app tests — would require `app.run_test()` with
-a headless terminal.
+`themes/`) and the web server (`server/`). No Textual app tests —
+would require `app.run_test()` with a headless terminal.
 
 - `tests/test_diff.py` — 49 tests: line classification, number parsing,
   hunk splitting, prefix stripping, lexer selection, syntax highlighting,
   word diff ranges, pair diff lines
-- `tests/test_git_utils.py` — 17 tests: short_name, _safe_name, JSON
-  load/save roundtrips, diff_stat counting
+- `tests/test_git_utils.py` — 24 tests: short_name, _safe_name, JSON
+  load/save roundtrips, diff_stat counting, resolve_repos, get_diff_numstat
+- `tests/test_highlight.py` — 19 tests: highlight_line_html escaping and
+  coloring, _apply_word_highlights with spans/entities/malformed HTML,
+  parse_diff_to_json structure, highlight_file_to_json
+- `tests/test_server.py` — 14 tests: CSS vars generation, all API routes
+  (repos, branch, commits, files, diff, themes, settings, comments CRUD,
+  review toggle, static files)
 - `tests/test_themes.py` — 16 tests: all themes have valid hex colors,
   unique names, syntax maps; CSS generation; theme state get/set
 

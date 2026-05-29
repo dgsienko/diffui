@@ -103,3 +103,32 @@ class TestParseDiffToJson:
             for line in hunk["lines"]:
                 assert "index" in line
                 assert isinstance(line["index"], int)
+
+
+class TestHighlightFileToJson:
+    def test_empty_content(self):
+        from diffui.server.highlight import highlight_file_to_json
+
+        result = highlight_file_to_json("", "", "f.py", CATPPUCCIN_MOCHA)
+        assert result["lines"] == []
+        assert result["total_lines"] == 0
+
+    def test_basic_file(self):
+        from diffui.server.highlight import highlight_file_to_json
+
+        content = "line one\nline two\nline three\n"
+        result = highlight_file_to_json(content, "", "f.txt", CATPPUCCIN_MOCHA)
+        assert result["total_lines"] == 3
+        assert len(result["lines"]) == 3
+        assert result["lines"][0]["num"] == 1
+        assert result["lines"][2]["num"] == 3
+        assert all(l["type"] == "context" for l in result["lines"])
+
+    def test_with_diff_marks_added_lines(self):
+        from diffui.server.highlight import highlight_file_to_json
+
+        content = "old line\nnew line\n"
+        diff = "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1,2 @@\n old line\n+new line\n"
+        result = highlight_file_to_json(content, diff, "f.txt", CATPPUCCIN_MOCHA)
+        assert result["lines"][1]["type"] == "add"
+        assert result["adds"] == 1
