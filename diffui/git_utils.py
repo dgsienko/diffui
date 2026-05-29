@@ -37,31 +37,28 @@ def resolve_repo_root(path: str | Path) -> Path:
     return Path(result.stdout.strip())
 
 
-def repo_has_changes(repo_root: Path) -> bool:
+def _git_at(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", "-C", str(repo_root), *args], capture_output=True, text=True)
+
+
+def _detect_main_branch(repo_root: Path) -> str:
     for candidate in ("main", "master"):
-        result = subprocess.run(
-            ["git", "-C", str(repo_root), "rev-parse", "--verify", f"refs/heads/{candidate}"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            main = candidate
-            break
-    else:
-        main = "main"
-    base = subprocess.run(
-        ["git", "-C", str(repo_root), "merge-base", main, "HEAD"],
-        capture_output=True,
-        text=True,
-    )
+        if _git_at(repo_root, "rev-parse", "--verify", f"refs/heads/{candidate}").returncode == 0:
+            return candidate
+    result = _git_at(repo_root, "rev-parse", "--abbrev-ref", "origin/HEAD")
+    if result.returncode == 0:
+        branch = result.stdout.strip().replace("origin/", "")
+        if branch and branch != "HEAD":
+            return branch
+    return "main"
+
+
+def repo_has_changes(repo_root: Path) -> bool:
+    main = _detect_main_branch(repo_root)
+    base = _git_at(repo_root, "merge-base", main, "HEAD")
     if base.returncode != 0:
         return False
-    diff = subprocess.run(
-        ["git", "-C", str(repo_root), "diff", "--quiet", base.stdout.strip()],
-        capture_output=True,
-        text=True,
-    )
-    return diff.returncode != 0
+    return _git_at(repo_root, "diff", "--quiet", base.stdout.strip()).returncode != 0
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
@@ -109,16 +106,7 @@ def get_repo_root() -> Path:
 
 
 def get_main_branch() -> str:
-    for candidate in ("main", "master"):
-        result = _git("rev-parse", "--verify", f"refs/heads/{candidate}")
-        if result.returncode == 0:
-            return candidate
-    result = _git("rev-parse", "--abbrev-ref", "origin/HEAD")
-    if result.returncode == 0:
-        branch = result.stdout.strip().replace("origin/", "")
-        if branch and branch != "HEAD":
-            return branch
-    return "main"
+    return _detect_main_branch(get_repo_root())
 
 
 def get_merge_base(main_branch: str) -> str:

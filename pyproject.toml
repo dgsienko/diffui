@@ -5,10 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "diffui"
 version = "0.1.0"
-description = "Terminal UI for reviewing AI agent diffs"
+description = "UI for reviewing AI agent diffs"
 requires-python = ">=3.10"
 dependencies = [
     "textual>=1.0.0",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.28",
+    "pygments>=2.17",
+    "rich>=13.0",
 ]
 
 [project.optional-dependencies]
@@ -19,6 +23,7 @@ dev = [
 
 [project.scripts]
 diffui = "diffui.cli:main"
+diffui-tui = "diffui.cli_tui:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

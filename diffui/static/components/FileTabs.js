@@ -1,0 +1,33 @@
+import { h } from 'preact';
+import { useEffect, useRef } from 'preact/hooks';
+import htm from 'htm';
+
+const html = htm.bind(h);
+
+export function FileTabs({ files, activeFile, onSelect }) {
+  const activeRef = useRef(null);
+
+  useEffect(() => {
+    if (activeRef.current) {
+      activeRef.current.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [activeFile]);
+
+  if (!files.length) return null;
+
+  return html`
+    <div class="tab-bar">
+      ${files.map(f => html`
+        <div
+          ref=${f.path === activeFile ? activeRef : null}
+          class=${'tab' + (f.path === activeFile ? ' active' : '') + (f.reviewed ? ' reviewed' : '')}
+          onClick=${() => onSelect(f.path)}
+          title=${f.path}
+        >
+          ${f.reviewed ? '✓ ' : ''}${f.short_name}
+          ${f.comment_count > 0 ? html` <span style="color: var(--accent)">(${f.comment_count})</span>` : ''}
+        </div>
+      `)}
+    </div>
+  `;
+}
