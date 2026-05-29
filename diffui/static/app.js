@@ -38,6 +38,7 @@ function App() {
   const diffRef = useRef(null);
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
+  const hoveredLineRef = useRef(null);
   const latestCallbacks = useRef({});
   const activeFileRef = useRef(activeFile);
   activeFileRef.current = activeFile;
@@ -305,12 +306,7 @@ function App() {
       base = remote.replace(/\.git$/, '');
     }
     const ref = b.head_sha ? b.head_sha.slice(0, 12) : b.name;
-    let lineNum = null;
-    const hovered = document.querySelector('.diff-line:hover, .split-line:hover');
-    if (hovered) {
-      const gutterNew = hovered.querySelector('.gutter-new, .split-gutter');
-      if (gutterNew) lineNum = parseInt(gutterNew.textContent);
-    }
+    const lineNum = hoveredLineRef.current;
     const url = `${base}/-/blob/${ref}/${af}${lineNum ? '#L' + lineNum : ''}`;
     navigator.clipboard.writeText(url);
     showToast(lineNum ? `GitLab link copied (line ${lineNum})` : 'GitLab link copied');
@@ -455,6 +451,7 @@ function App() {
                     onOpenInEditor=${handleOpenInEditor}
                     onExpandContext=${handleExpandContext}
                     contextLines=${contextLines}
+                    onLineHover=${(num) => { hoveredLineRef.current = num; }}
                     reviewed=${files.find(f => f.path === activeFile)?.reviewed}
                   />`
                 : html`<div class="loading">Loading...</div>`

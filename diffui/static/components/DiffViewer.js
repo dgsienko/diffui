@@ -47,7 +47,7 @@ function highlightSearch(html, term) {
   return result;
 }
 
-function DiffLine({ line, searchTerm, onRightClick, onCtrlClick }) {
+function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover }) {
   const typeClass = {
     add: 'add',
     remove: 'remove',
@@ -79,6 +79,8 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick }) {
       class=${'diff-line ' + typeClass + (isMatch ? ' search-match' : '')}
       onClick=${handleClick}
       onContextMenu=${handleContext}
+      onMouseEnter=${() => onLineHover && onLineHover(parseInt(line.new_num) || parseInt(line.old_num) || null)}
+      onMouseLeave=${() => onLineHover && onLineHover(null)}
     >
       <div class="diff-gutter">
         <span class="gutter-old">${line.old_num || ''}</span>
@@ -91,7 +93,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick }) {
   `;
 }
 
-function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onAddComment, onDeleteComment, onEditComment, onReplyComment, commentingLine, setCommentingLine, filePath }) {
+function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, commentingLine, setCommentingLine, filePath }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return html`
@@ -109,6 +111,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onAddComm
               searchTerm=${searchTerm}
               onRightClick=${onRightClick}
               onCtrlClick=${onCtrlClick}
+              onLineHover=${onLineHover}
             />
             ${lineComments.map(c => html`
               <${CommentDisplay}
@@ -136,7 +139,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onAddComm
   `;
 }
 
-export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onOpenInEditor, onExpandContext, contextLines, reviewed, containerRef }) {
+export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onOpenInEditor, onExpandContext, contextLines, onLineHover, reviewed, containerRef }) {
   const [commentingLine, setCommentingLine] = useState(null);
 
   const handleRightClick = (line) => {
@@ -190,6 +193,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           setCommentingLine=${setCommentingLine}
           onRightClick=${handleRightClick}
           onCtrlClick=${handleCtrlClick}
+          onLineHover=${onLineHover}
           onAddComment=${onAddComment}
           onDeleteComment=${onDeleteComment}
           onEditComment=${onEditComment}
