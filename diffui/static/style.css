@@ -44,54 +44,73 @@ html, body {
 .top-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  justify-content: space-between;
+  padding: 8px 12px;
   background: var(--bg-dark);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  gap: 8px;
 }
 
-.top-bar select {
+.top-bar-left, .top-bar-center, .top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-bar-left { flex: 1; min-width: 0; }
+.top-bar-center { flex-shrink: 0; }
+.top-bar-right { flex-shrink: 0; }
+
+.top-bar-select {
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 6px 12px;
+  padding: 5px 10px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
   min-width: 0;
 }
 
-.top-bar select:hover {
-  border-color: var(--accent);
-}
+.top-bar-select:hover { border-color: var(--accent); }
+.top-bar-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.top-bar-select:disabled { opacity: 0.4; cursor: default; }
 
-.top-bar select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
+.repo-select { flex: 1; max-width: 220px; }
+.view-select { flex: 1; max-width: 260px; }
+.comment-select { flex: 0 0 auto; max-width: 200px; }
 
-.repo-select {
-  flex: 2;
-  max-width: 300px;
-}
-
-.view-select {
-  flex: 2;
-  max-width: 300px;
-}
-
-.branch-label {
+.top-bar-badge {
   color: var(--fg-muted);
-  margin-left: auto;
+  font-size: 11px;
   white-space: nowrap;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px 8px;
 }
 
-.file-counter {
+.branch-pill {
   color: var(--fg-muted);
+  font-size: 11px;
   white-space: nowrap;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px 10px;
+}
+
+.branch-repo {
+  color: var(--accent);
+  margin-right: 4px;
+}
+
+.branch-repo::after {
+  content: '/';
+  color: var(--fg-muted);
+  margin-left: 4px;
 }
 
 /* --- File tabs --- */

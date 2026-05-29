@@ -217,7 +217,8 @@ function App() {
         comment: commentText,
       }),
     });
-    showToast('Comment added', 'success');
+    const shortName = filePath.split('/').pop();
+    showToast(`Comment added to ${shortName}`, 'success');
     await Promise.all([fetchComments(), fetchFiles()]);
   }, [fetchComments, fetchFiles]);
 
@@ -378,12 +379,14 @@ function App() {
       fileCount=${files.length}
       reviewedCount=${reviewedCount}
       showReviewed=${showReviewed}
+      comments=${comments}
       onViewChange=${handleViewChange}
       onRepoSwitch=${handleRepoSwitch}
       diffMode=${diffMode}
       onDiffModeChange=${setDiffMode}
       onToggleReviewed=${() => setShowReviewed(v => !v)}
       onOpenSettings=${() => setShowSettings(v => !v)}
+      onCommentSelect=${handleFileSelect}
     />
     ${showSearch && html`
       <${SearchBar}
