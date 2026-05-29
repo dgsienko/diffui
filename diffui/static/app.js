@@ -71,12 +71,13 @@ function App() {
     const res = await fetch(`/api/files?view=${currentView}`);
     const data = await res.json();
     setFiles(data);
-    if (data.length > 0 && (!activeFile || !data.find(f => f.path === activeFile))) {
+    const current = activeFileRef.current;
+    if (data.length > 0 && (!current || !data.find(f => f.path === current))) {
       const firstUnreviewed = data.find(f => !f.reviewed);
       setActiveFile((firstUnreviewed || data[0]).path);
     }
     setLoading(false);
-  }, [view, activeFile]);
+  }, [view]);
 
   const diffAbort = useRef(null);
   const fetchDiff = useCallback(async (path, ctx) => {
@@ -191,8 +192,9 @@ function App() {
   }, []);
 
   const handleToggleReview = useCallback(async () => {
-    if (!activeFile) return;
-    const r = await fetch(`/api/reviewed/${encodeURIComponent(activeFile)}`, { method: 'POST' });
+    const af = activeFileRef.current;
+    if (!af) return;
+    const r = await fetch(`/api/reviewed/${encodeURIComponent(af)}`, { method: 'POST' });
     const data = await r.json();
     showToast(data.reviewed ? 'Marked as reviewed' : 'Marked as unreviewed', 'success');
     await fetchFiles();
@@ -256,26 +258,34 @@ function App() {
   }, []);
 
   const handleCopyPath = useCallback(() => {
-    if (activeFile) {
-      navigator.clipboard.writeText(activeFile);
-      showToast(`Copied: ${activeFile}`);
+    const af = activeFileRef.current;
+    if (af) {
+      navigator.clipboard.writeText(af);
+      showToast(`Copied: ${af}`);
     }
-  }, [activeFile]);
+  }, []);
 
   const handleExpandContext = useCallback(() => {
     const levels = [3, 10, 50, 9999];
     const next = levels.find(l => l > contextLines) || 9999;
     setContextLines(next);
-    for (const key of [...diffCache.current.keys()]) {
-      if (key.startsWith(`${activeFile}:`)) diffCache.current.delete(key);
+    const af = activeFileRef.current;
+    if (af) {
+      for (const key of [...diffCache.current.keys()]) {
+        if (key.startsWith(`${af}:`)) diffCache.current.delete(key);
+      }
+      fetchDiff(af, next);
     }
-    if (activeFile) fetchDiff(activeFile, next);
     showToast(next >= 9999 ? 'Showing full context' : `Expanded to ${next} lines of context`);
-  }, [contextLines, activeFile, fetchDiff]);
+  }, [contextLines, fetchDiff]);
 
+  const branchRef = useRef(branch);
+  branchRef.current = branch;
   const handleCopyGitLabLink = useCallback(() => {
-    if (!activeFile || !branch?.remote_url) return;
-    const remote = branch.remote_url;
+    const af = activeFileRef.current;
+    const b = branchRef.current;
+    if (!af || !b?.remote_url) return;
+    const remote = b.remote_url;
     let base;
     if (remote.startsWith('git@')) {
       const hostPath = remote.split(':')[1].replace(/\.git$/, '');
@@ -284,26 +294,31 @@ function App() {
     } else {
       base = remote.replace(/\.git$/, '');
     }
-    const ref = branch.head_sha ? branch.head_sha.slice(0, 12) : branch.name;
-    const url = `${base}/-/blob/${ref}/${activeFile}`;
+    const ref = b.head_sha ? b.head_sha.slice(0, 12) : b.name;
+    const url = `${base}/-/blob/${ref}/${af}`;
     navigator.clipboard.writeText(url);
     showToast('GitLab link copied');
-  }, [activeFile, branch]);
+  }, []);
 
   const visibleFiles = useMemo(() => showReviewed ? files : files.filter(f => !f.reviewed), [files, showReviewed]);
 
-  // Keyboard shortcuts
+  const visibleFilesRef = useRef(visibleFiles);
+  visibleFilesRef.current = visibleFiles;
+
+  // Keyboard shortcuts — stable effect, reads current values via refs
   useEffect(() => {
     const handler = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        const idx = visibleFiles.findIndex(f => f.path === activeFile);
+        const vf = visibleFilesRef.current;
+        const af = activeFileRef.current;
+        const idx = vf.findIndex(f => f.path === af);
         if (idx === -1) return;
         const next = e.key === 'ArrowLeft'
-          ? (idx - 1 + visibleFiles.length) % visibleFiles.length
-          : (idx + 1) % visibleFiles.length;
-        setActiveFile(visibleFiles[next].path);
+          ? (idx - 1 + vf.length) % vf.length
+          : (idx + 1) % vf.length;
+        setActiveFile(vf[next].path);
         e.preventDefault();
       } else if (e.key === 'r') {
         handleToggleReview();
@@ -342,7 +357,7 @@ function App() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [visibleFiles, activeFile, handleToggleReview, handleCopyPath]);
+  }, []);
 
   const reviewedCount = files.filter(f => f.reviewed).length;
 
