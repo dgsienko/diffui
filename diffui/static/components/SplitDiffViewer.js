@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useRef } from 'preact/hooks';
+import { useState, useRef, useMemo } from 'preact/hooks';
 import htm from 'htm';
 import { CommentBox } from './CommentBox.js';
 import { CommentDisplay } from './CommentDisplay.js';
@@ -69,7 +69,15 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
 
   const handleRightClick = (line) => setCommentingLine(line.index);
 
-  if (!data?.hunks) return html`<div class="empty-state">No diff data</div>`;
+  const splitData = useMemo(() => {
+    if (!data?.hunks) return null;
+    return data.hunks.map(hunk => ({
+      header: hunk.header,
+      ...splitHunkLines(hunk.lines.filter(l => l.type !== 'hunk' && l.type !== 'meta')),
+    }));
+  }, [data]);
+
+  if (!splitData) return html`<div class="empty-state">No diff data</div>`;
 
   const mergedRef = (el) => { if (ref) ref.current = el; };
 
@@ -87,17 +95,14 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
       </div>
       <div class="split-panes">
         <div class="split-pane" ref=${leftRef} onScroll=${() => syncScroll(leftRef, rightRef)}>
-          ${data.hunks.map(hunk => {
-            const { left } = splitHunkLines(hunk.lines.filter(l => l.type !== 'hunk' && l.type !== 'meta'));
-            return html`
-              <div class="split-hunk-header">${hunk.header}</div>
-              ${left.map(line => html`<${SplitLine} line=${line} side="left" onRightClick=${handleRightClick} />`)}
-            `;
-          })}
+          ${splitData.map(s => html`
+            <div class="split-hunk-header">${s.header}</div>
+            ${s.left.map(line => html`<${SplitLine} line=${line} side="left" onRightClick=${handleRightClick} />`)}
+          `)}
         </div>
         <div class="split-pane" ref=${rightRef} onScroll=${() => syncScroll(rightRef, leftRef)}>
-          ${data.hunks.map(hunk => {
-            const { right } = splitHunkLines(hunk.lines.filter(l => l.type !== 'hunk' && l.type !== 'meta'));
+          ${splitData.map(s => {
+            const { right } = s;
             return html`
               <div class="split-hunk-header">${hunk.header}</div>
               ${right.map((line, i) => {

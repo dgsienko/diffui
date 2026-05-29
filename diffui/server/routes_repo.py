@@ -14,6 +14,23 @@ from diffui.server.state import app_state
 router = APIRouter(prefix="/api")
 
 
+import time as _time
+
+_repo_changes_cache: dict[str, tuple[bool, float]] = {}
+_REPO_CACHE_TTL = 15
+
+
+def _cached_repo_has_changes(repo_root) -> bool:
+    key = str(repo_root)
+    cached = _repo_changes_cache.get(key)
+    now = _time.monotonic()
+    if cached and now - cached[1] < _REPO_CACHE_TTL:
+        return cached[0]
+    result = repo_has_changes(repo_root)
+    _repo_changes_cache[key] = (result, now)
+    return result
+
+
 @router.get("/repos")
 def list_repos():
     return [
@@ -21,7 +38,7 @@ def list_repos():
             "index": i,
             "name": r.name,
             "path": str(r),
-            "has_changes": repo_has_changes(r),
+            "has_changes": _cached_repo_has_changes(r),
             "active": i == app_state.active_repo_index,
         }
         for i, r in enumerate(app_state.repos)

@@ -1,5 +1,5 @@
 import { h, render } from 'preact';
-import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'preact/hooks';
 import htm from 'htm';
 import { TopBar } from './components/TopBar.js';
 import { FileTabs } from './components/FileTabs.js';
@@ -78,6 +78,7 @@ function App() {
     setLoading(false);
   }, [view, activeFile]);
 
+  const diffAbort = useRef(null);
   const fetchDiff = useCallback(async (path, ctx) => {
     if (!path) return;
     const c = ctx ?? contextLines;
@@ -85,11 +86,19 @@ function App() {
     const cached = diffCache.current.get(cacheKey);
     if (cached) {
       setDiffData(cached);
+      return;
     }
-    const res = await fetch(`/api/diff/${encodeURIComponent(path)}?view=${view}&context=${c}`);
-    const data = await res.json();
-    diffCache.current.set(cacheKey, data);
-    setDiffData(data);
+    if (diffAbort.current) diffAbort.current.abort();
+    const controller = new AbortController();
+    diffAbort.current = controller;
+    try {
+      const res = await fetch(`/api/diff/${encodeURIComponent(path)}?view=${view}&context=${c}`, { signal: controller.signal });
+      const data = await res.json();
+      diffCache.current.set(cacheKey, data);
+      if (!controller.signal.aborted) setDiffData(data);
+    } catch (e) {
+      if (e.name !== 'AbortError') throw e;
+    }
   }, [view, contextLines]);
 
   // Restore scroll position after diff renders
@@ -172,13 +181,14 @@ function App() {
     setLoading(false);
   }, [fetchRepos, fetchBranch, fetchCommits, fetchFiles, fetchComments]);
 
+  const activeFileRef = useRef(activeFile);
+  activeFileRef.current = activeFile;
   const handleFileSelect = useCallback((path) => {
-    // Save scroll position of current file
-    if (activeFile && diffRef.current) {
-      scrollPositions.current.set(activeFile, diffRef.current.scrollTop);
+    if (activeFileRef.current && diffRef.current) {
+      scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
     }
     setActiveFile(path);
-  }, [activeFile]);
+  }, []);
 
   const handleToggleReview = useCallback(async () => {
     if (!activeFile) return;
@@ -280,7 +290,7 @@ function App() {
     showToast('GitLab link copied');
   }, [activeFile, branch]);
 
-  const visibleFiles = showReviewed ? files : files.filter(f => !f.reviewed);
+  const visibleFiles = useMemo(() => showReviewed ? files : files.filter(f => !f.reviewed), [files, showReviewed]);
 
   // Keyboard shortcuts
   useEffect(() => {
