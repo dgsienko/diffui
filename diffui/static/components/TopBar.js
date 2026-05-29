@@ -21,11 +21,10 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
       ${showRepoSelect && html`
         <select
           class="repo-select"
-          value=${activeRepo?.index ?? 0}
           onChange=${(e) => onRepoSwitch(Number(e.target.value))}
         >
           ${repos.map(r => html`
-            <option value=${r.index}>
+            <option value=${r.index} selected=${r.active}>
               ${r.has_changes ? '● ' : '  '}${r.name}
             </option>
           `)}
