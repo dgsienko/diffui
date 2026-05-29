@@ -86,3 +86,13 @@ def list_files(view: str = "all"):
 def get_diff(path: str, view: str = "all"):
     diff_text = _get_diff(path, view)
     return parse_diff_to_json(diff_text, path, app_state.theme)
+
+
+@router.get("/file/{path:path}")
+def get_file(path: str, view: str = "all"):
+    from diffui.git_utils import get_file_content
+    from diffui.server.highlight import highlight_file_to_json
+
+    content = get_file_content(path)
+    diff_text = _get_diff(path, view)
+    return highlight_file_to_json(content, diff_text, path, app_state.theme)

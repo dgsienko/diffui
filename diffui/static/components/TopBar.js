@@ -3,7 +3,7 @@ import htm from 'htm';
 
 const html = htm.bind(h);
 
-export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount, showReviewed, onViewChange, onRepoSwitch, onToggleReviewed, onOpenSettings }) {
+export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount, showReviewed, diffMode, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings }) {
   const activeRepo = repos.find(r => r.active);
   const showRepoSelect = repos.length > 1;
 
@@ -39,6 +39,14 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
           <option value=${o.value}>${o.label}</option>
         `)}
       </select>
+      <div class="mode-toggle">
+        ${[['unified', 'Unified'], ['split', 'Split'], ['file', 'File']].map(([val, label]) => html`
+          <button
+            class=${'mode-btn' + (diffMode === val ? ' active' : '')}
+            onClick=${() => onDiffModeChange(val)}
+          >${label}</button>
+        `)}
+      </div>
       <button class="top-bar-btn" onClick=${onToggleReviewed}>
         ${showReviewed ? 'Hide reviewed' : 'Show all'}
       </button>

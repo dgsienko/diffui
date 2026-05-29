@@ -10,6 +10,8 @@ import { ToastContainer, showToast } from './components/Toast.js';
 import { ShortcutOverlay } from './components/ShortcutOverlay.js';
 import { DiffStatsBar } from './components/DiffStatsBar.js';
 import { FileTree } from './components/FileTree.js';
+import { SplitDiffViewer } from './components/SplitDiffViewer.js';
+import { FullFileViewer } from './components/FullFileViewer.js';
 
 const html = htm.bind(h);
 
@@ -30,6 +32,7 @@ function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showFileTree, setShowFileTree] = useState(false);
+  const [diffMode, setDiffMode] = useState('unified');
   const diffRef = useRef(null);
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
@@ -327,6 +330,8 @@ function App() {
       showReviewed=${showReviewed}
       onViewChange=${handleViewChange}
       onRepoSwitch=${handleRepoSwitch}
+      diffMode=${diffMode}
+      onDiffModeChange=${setDiffMode}
       onToggleReviewed=${() => setShowReviewed(v => !v)}
       onOpenSettings=${() => setShowSettings(v => !v)}
     />
@@ -354,23 +359,45 @@ function App() {
       `}
       ${loading
         ? html`<div class="loading">Loading...</div>`
-        : diffData
-          ? html`<${DiffViewer}
-              ref=${diffRef}
-              data=${diffData}
-              comments=${comments}
-              searchTerm=${searchTerm}
-              onToggleReview=${handleToggleReview}
-              onAddComment=${handleAddComment}
-              onDeleteComment=${handleDeleteComment}
-              onEditComment=${handleEditComment}
-              onReplyComment=${handleReplyComment}
-              onOpenInEditor=${handleOpenInEditor}
-              reviewed=${files.find(f => f.path === activeFile)?.reviewed}
-            />`
-          : files.length === 0
+        : !activeFile
+          ? files.length === 0
             ? html`<div class="empty-state">No changed files</div>`
             : html`<div class="loading">Select a file</div>`
+          : diffMode === 'file'
+            ? html`<${FullFileViewer}
+                ref=${diffRef}
+                filePath=${activeFile}
+                view=${view}
+                onToggleReview=${handleToggleReview}
+                reviewed=${files.find(f => f.path === activeFile)?.reviewed}
+              />`
+            : diffMode === 'split' && diffData
+              ? html`<${SplitDiffViewer}
+                  ref=${diffRef}
+                  data=${diffData}
+                  comments=${comments}
+                  onToggleReview=${handleToggleReview}
+                  onAddComment=${handleAddComment}
+                  onDeleteComment=${handleDeleteComment}
+                  onEditComment=${handleEditComment}
+                  onReplyComment=${handleReplyComment}
+                  reviewed=${files.find(f => f.path === activeFile)?.reviewed}
+                />`
+              : diffData
+                ? html`<${DiffViewer}
+                    ref=${diffRef}
+                    data=${diffData}
+                    comments=${comments}
+                    searchTerm=${searchTerm}
+                    onToggleReview=${handleToggleReview}
+                    onAddComment=${handleAddComment}
+                    onDeleteComment=${handleDeleteComment}
+                    onEditComment=${handleEditComment}
+                    onReplyComment=${handleReplyComment}
+                    onOpenInEditor=${handleOpenInEditor}
+                    reviewed=${files.find(f => f.path === activeFile)?.reviewed}
+                  />`
+                : html`<div class="loading">Loading...</div>`
       }
     </div>
     ${showSettings && html`

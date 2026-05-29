@@ -139,3 +139,44 @@ def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme) -> dict:
         result_hunks.append({"header": hunk_header[:80], "lines": result_lines})
 
     return {"file_path": file_path, "adds": adds, "dels": dels, "hunks": result_hunks}
+
+
+def highlight_file_to_json(content: str, diff_text: str, file_path: str, theme: Theme) -> dict:
+    if not content:
+        return {"file_path": file_path, "lines": [], "total_lines": 0, "adds": 0, "dels": 0}
+
+    lexer = get_lexer(file_path)
+    file_lines = content.splitlines()
+
+    changed_lines: dict[int, str] = {}
+    if diff_text:
+        numbers = parse_line_numbers(diff_text)
+        diff_lines = diff_text.splitlines()
+        for i, line in enumerate(diff_lines):
+            line_type = classify_line(line)
+            if i < len(numbers):
+                _, new_num = numbers[i]
+                if new_num and line_type == "add":
+                    changed_lines[int(new_num)] = "add"
+
+    adds, dels = diff_stat(diff_text) if diff_text else (0, 0)
+    result_lines: list[dict] = []
+    for i, line in enumerate(file_lines):
+        line_num = i + 1
+        code_html = highlight_line_html(line, lexer, theme.syntax)
+        line_type = changed_lines.get(line_num, "context")
+        result_lines.append(
+            {
+                "num": line_num,
+                "html": code_html,
+                "type": line_type,
+            }
+        )
+
+    return {
+        "file_path": file_path,
+        "lines": result_lines,
+        "total_lines": len(file_lines),
+        "adds": adds,
+        "dels": dels,
+    }

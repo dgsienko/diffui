@@ -1,0 +1,125 @@
+import { h } from 'preact';
+import { useState, useRef } from 'preact/hooks';
+import htm from 'htm';
+import { CommentBox } from './CommentBox.js';
+import { CommentDisplay } from './CommentDisplay.js';
+
+const html = htm.bind(h);
+
+function splitHunkLines(lines) {
+  const left = [];
+  const right = [];
+  for (const line of lines) {
+    if (line.type === 'remove') {
+      left.push(line);
+      right.push(null);
+    } else if (line.type === 'add') {
+      const lastRight = right.length - 1;
+      if (lastRight >= 0 && right[lastRight] === null) {
+        right[lastRight] = line;
+      } else {
+        left.push(null);
+        right.push(line);
+      }
+    } else {
+      left.push(line);
+      right.push(line);
+    }
+  }
+  return { left, right };
+}
+
+// All HTML content is server-generated from Pygments output — source code is
+// html.escape'd server-side in highlight.py before being wrapped in <span> tags.
+function SplitLine({ line, side, onRightClick }) {
+  if (!line) return html`<div class="split-line empty"></div>`;
+
+  const typeClass = line.type === 'add' ? 'add' : line.type === 'remove' ? 'remove' : '';
+  const num = side === 'left' ? line.old_num : line.new_num;
+
+  return html`
+    <div class=${'split-line ' + typeClass} onContextMenu=${(e) => { e.preventDefault(); onRightClick(line); }}>
+      <span class="split-gutter">${num || ''}</span>
+      <span class="split-code" dangerouslySetInnerHTML=${{ __html: line.html }}></span>
+    </div>
+  `;
+}
+
+export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, reviewed, ref }) {
+  const [commentingLine, setCommentingLine] = useState(null);
+  const leftRef = useRef(null);
+  const rightRef = useRef(null);
+  const syncing = useRef(false);
+
+  const syncScroll = (source, target) => {
+    if (syncing.current) return;
+    syncing.current = true;
+    if (target.current) target.current.scrollTop = source.current.scrollTop;
+    syncing.current = false;
+  };
+
+  const handleRightClick = (line) => setCommentingLine(line.index);
+
+  if (!data?.hunks) return html`<div class="empty-state">No diff data</div>`;
+
+  const mergedRef = (el) => { if (ref) ref.current = el; };
+
+  return html`
+    <div class="split-container" ref=${mergedRef}>
+      <div class="diff-file-header">
+        <div>
+          <span class="diff-file-path">${data.file_path}</span>
+          <span class="diff-stat-add">+${data.adds}</span>
+          <span class="diff-stat-del">-${data.dels}</span>
+        </div>
+        <button class=${'review-btn' + (reviewed ? ' reviewed' : '')} onClick=${onToggleReview}>
+          ${reviewed ? 'Mark unreviewed' : 'Mark reviewed'}
+        </button>
+      </div>
+      <div class="split-panes">
+        <div class="split-pane" ref=${leftRef} onScroll=${() => syncScroll(leftRef, rightRef)}>
+          ${data.hunks.map(hunk => {
+            const { left } = splitHunkLines(hunk.lines.filter(l => l.type !== 'hunk' && l.type !== 'meta'));
+            return html`
+              <div class="split-hunk-header">${hunk.header}</div>
+              ${left.map(line => html`<${SplitLine} line=${line} side="left" onRightClick=${handleRightClick} />`)}
+            `;
+          })}
+        </div>
+        <div class="split-pane" ref=${rightRef} onScroll=${() => syncScroll(rightRef, leftRef)}>
+          ${data.hunks.map(hunk => {
+            const { right } = splitHunkLines(hunk.lines.filter(l => l.type !== 'hunk' && l.type !== 'meta'));
+            return html`
+              <div class="split-hunk-header">${hunk.header}</div>
+              ${right.map((line, i) => {
+                const lineComments = line ? (comments[data.file_path] || []).filter(c => c.line_index === line.index) : [];
+                return html`
+                  <${SplitLine} line=${line} side="right" onRightClick=${handleRightClick} />
+                  ${lineComments.map(c => html`
+                    <${CommentDisplay}
+                      key=${c.id || c.line_index}
+                      comment=${c}
+                      onDelete=${() => onDeleteComment(data.file_path, c.id)}
+                      onEdit=${(text) => onEditComment(data.file_path, c.id, text)}
+                      onReply=${(text) => onReplyComment(data.file_path, c.id, text)}
+                    />
+                  `)}
+                  ${commentingLine === line?.index && html`
+                    <${CommentBox}
+                      onSubmit=${(text) => {
+                        const lineNum = parseInt(line.new_num) || parseInt(line.old_num) || null;
+                        onAddComment(data.file_path, line.index, line.text, lineNum, text);
+                        setCommentingLine(null);
+                      }}
+                      onCancel=${() => setCommentingLine(null)}
+                    />
+                  `}
+                `;
+              })}
+            `;
+          })}
+        </div>
+      </div>
+    </div>
+  `;
+}
