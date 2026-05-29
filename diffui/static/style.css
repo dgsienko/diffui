@@ -621,6 +621,70 @@ mark {
   background: var(--hover-bg);
 }
 
+/* --- Toasts --- */
+
+.toast-container {
+  position: fixed;
+  bottom: 40px;
+  right: 16px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  background: var(--bg-dark);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  animation: toast-in 0.2s ease-out;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.toast-success { border-left-color: #a6e3a1; }
+.toast-error { border-left-color: #f38ba8; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* --- Transitions --- */
+
+.tab {
+  transition: color 0.15s, background 0.15s, border-bottom-color 0.15s;
+}
+
+.settings-overlay {
+  transition: opacity 0.2s;
+}
+
+.settings-panel {
+  transition: transform 0.2s ease-out;
+}
+
+.search-bar {
+  animation: slide-down 0.15s ease-out;
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.comment-display, .comment-box {
+  animation: fade-in 0.15s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* --- Loading --- */
 
 .loading {

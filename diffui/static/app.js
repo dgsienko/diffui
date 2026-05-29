@@ -6,6 +6,7 @@ import { FileTabs } from './components/FileTabs.js';
 import { DiffViewer } from './components/DiffViewer.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
 import { SearchBar } from './components/SearchBar.js';
+import { ToastContainer, showToast } from './components/Toast.js';
 
 const html = htm.bind(h);
 
@@ -167,7 +168,9 @@ function App() {
 
   const handleToggleReview = useCallback(async () => {
     if (!activeFile) return;
-    await fetch(`/api/reviewed/${encodeURIComponent(activeFile)}`, { method: 'POST' });
+    const r = await fetch(`/api/reviewed/${encodeURIComponent(activeFile)}`, { method: 'POST' });
+    const data = await r.json();
+    showToast(data.reviewed ? 'Marked as reviewed' : 'Marked as unreviewed', 'success');
     await fetchFiles();
   }, [activeFile, fetchFiles]);
 
@@ -183,6 +186,7 @@ function App() {
         comment: commentText,
       }),
     });
+    showToast('Comment added', 'success');
     await Promise.all([fetchComments(), fetchFiles()]);
   }, [fetchComments, fetchFiles]);
 
@@ -228,7 +232,10 @@ function App() {
   }, []);
 
   const handleCopyPath = useCallback(() => {
-    if (activeFile) navigator.clipboard.writeText(activeFile);
+    if (activeFile) {
+      navigator.clipboard.writeText(activeFile);
+      showToast(`Copied: ${activeFile}`);
+    }
   }, [activeFile]);
 
   const visibleFiles = showReviewed ? files : files.filter(f => !f.reviewed);
@@ -341,7 +348,9 @@ function App() {
       <span><kbd>Ctrl+F</kbd> search</span>
       <span><kbd>Ctrl+Click</kbd> open in editor</span>
       <span><kbd>Right-Click</kbd> add comment</span>
+      <span><kbd>?</kbd> shortcuts</span>
     </div>
+    <${ToastContainer} />
   `;
 }
 
