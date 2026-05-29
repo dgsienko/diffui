@@ -34,8 +34,9 @@ diffui/
 │   └── theme_css.py    # generate_css_vars(theme) — CSS custom properties
 ├── static/             # Preact frontend (no build step, ESM imports via importmap)
 │   ├── app.js          # Root component, state management, SSE client, keyboard shortcuts
-│   ├── components/     # TopBar, FileTabs, DiffViewer, CommentBox, CommentDisplay,
-│   │                   #   SearchBar, SettingsPanel
+│   ├── components/     # TopBar, FileTabs, DiffViewer, SplitDiffViewer,
+│   │                   #   FullFileViewer, FileTree, CommentBox, CommentDisplay,
+│   │                   #   SearchBar, SettingsPanel, Minimap, ShortcutOverlay, Toast
 │   ├── index.html      # Shell page with importmap for preact/htm CDN
 │   └── style.css       # All styles via CSS custom properties (themed)
 └── themes/
