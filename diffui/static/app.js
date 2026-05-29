@@ -66,21 +66,6 @@ function App() {
     setComments(await res.json());
   }, []);
 
-  const fetchFiles = useCallback(async (v) => {
-    const currentView = v || view;
-    const res = await fetch(`/api/files?view=${currentView}`);
-    const data = await res.json();
-    setFiles(data);
-    const current = activeFileRef.current;
-    if (data.length > 0 && (!current || !data.find(f => f.path === current))) {
-      const firstUnreviewed = data.find(f => !f.reviewed);
-      const newActive = (firstUnreviewed || data[0]).path;
-      setActiveFile(newActive);
-      fetchDiff(newActive);
-    }
-    setLoading(false);
-  }, [view]);
-
   const contextRef = useRef(contextLines);
   contextRef.current = contextLines;
   const fetchDiff = useCallback(async (path, ctx) => {
@@ -100,6 +85,21 @@ function App() {
       setDiffData(data);
     }
   }, []);
+
+  const fetchFiles = useCallback(async (v) => {
+    const currentView = v || view;
+    const res = await fetch(`/api/files?view=${currentView}`);
+    const data = await res.json();
+    setFiles(data);
+    const current = activeFileRef.current;
+    if (data.length > 0 && (!current || !data.find(f => f.path === current))) {
+      const firstUnreviewed = data.find(f => !f.reviewed);
+      const newActive = (firstUnreviewed || data[0]).path;
+      setActiveFile(newActive);
+      fetchDiff(newActive);
+    }
+    setLoading(false);
+  }, [view, fetchDiff]);
 
   // Restore scroll position after diff renders
   useEffect(() => {
