@@ -20,8 +20,9 @@ from diffui.themes import ALL_THEMES
 _STATIC_DIR = Path(__file__).parent.parent / "static"
 
 
-def create_app(repos: list[Path]) -> FastAPI:
+def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:
     app_state.repos = repos
+    app_state.active_repo_index = active_index
     app_state.reload_repo_state()
 
     app = FastAPI(title="diffui")

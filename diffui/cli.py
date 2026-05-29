@@ -54,7 +54,7 @@ def main() -> None:
     from diffui.server.app import create_app
 
     port = _find_free_port()
-    app = create_app(repos)
+    app = create_app(repos, active_index=active_index)
 
     import uvicorn
 
