@@ -16,7 +16,7 @@ const SHORTCUTS = [
   { keys: 'Ctrl+Click', action: 'Open in editor' },
   { keys: 'Right-Click', action: 'Add comment' },
   { keys: 'Escape', action: 'Close panel / search' },
-  { keys: 'Shift+/', action: 'Toggle this overlay' },
+  { keys: '?', action: 'Toggle this overlay' },
 ];
 
 export function ShortcutOverlay({ onClose }) {
@@ -30,7 +30,7 @@ export function ShortcutOverlay({ onClose }) {
             <div class="shortcut-action">${s.action}</div>
           `)}
         </div>
-        <div class="shortcut-hint">Press <kbd>Shift+/</kbd> or <kbd>Escape</kbd> to close</div>
+        <div class="shortcut-hint">Press <kbd>?</kbd> or <kbd>Escape</kbd> to close</div>
       </div>
     </div>
   `;
