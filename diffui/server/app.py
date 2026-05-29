@@ -4,6 +4,7 @@ import asyncio
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from diffui.server.events import router as events_router
@@ -45,11 +46,11 @@ def create_app(repos: list[Path]) -> FastAPI:
 
         return {"css": generate_css_vars(app_state.theme)}
 
-    @app.get("/", response_class=FastAPI)
-    def index():
-        from fastapi.responses import HTMLResponse
+    _index_html = (_STATIC_DIR / "index.html").read_text()
 
-        return HTMLResponse((_STATIC_DIR / "index.html").read_text())
+    @app.get("/", response_class=HTMLResponse)
+    def index():
+        return HTMLResponse(_index_html)
 
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
     return app

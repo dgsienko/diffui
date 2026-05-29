@@ -16,10 +16,10 @@ def main() -> None:
 
     from diffui.app import DiffUI
 
-    repos = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
+    repo_args = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
 
     try:
-        DiffUI(repos=repos or None).run()
+        DiffUI(repos=repo_args or None).run()
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

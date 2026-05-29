@@ -37,10 +37,27 @@ def resolve_repo_root(path: str | Path) -> Path:
     return Path(result.stdout.strip())
 
 
+def resolve_repos(paths: list[str] | None = None) -> tuple[list[Path], int]:
+    if paths:
+        seen: set[Path] = set()
+        repos: list[Path] = []
+        for p in paths:
+            root = resolve_repo_root(Path(p).expanduser().resolve())
+            if root not in seen:
+                seen.add(root)
+                repos.append(root)
+        return repos, 0
+    current = resolve_repo_root(Path.cwd())
+    siblings = discover_sibling_repos(current)
+    repos = siblings if len(siblings) > 1 else [current]
+    return repos, repos.index(current)
+
+
 def _git_at(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", "-C", str(repo_root), *args], capture_output=True, text=True)
 
 
+@functools.lru_cache(maxsize=32)
 def _detect_main_branch(repo_root: Path) -> str:
     for candidate in ("main", "master"):
         if _git_at(repo_root, "rev-parse", "--verify", f"refs/heads/{candidate}").returncode == 0:

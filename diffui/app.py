@@ -26,7 +26,6 @@ from diffui.git_utils import (
     _comments_path,
     clear_branch_cache,
     current_branch,
-    discover_sibling_repos,
     get_branch_commits,
     get_changed_files,
     get_commit_diff,
@@ -43,7 +42,7 @@ from diffui.git_utils import (
     load_reviewed,
     load_settings,
     repo_has_changes,
-    resolve_repo_root,
+    resolve_repos,
     save_comments,
     save_reviewed,
     save_settings,
@@ -105,20 +104,7 @@ class DiffUI(App):
 
         super().__init__()
 
-        if repos:
-            seen: set[Path] = set()
-            self._repos: list[Path] = []
-            for p in repos:
-                root = resolve_repo_root(Path(p).expanduser().resolve())
-                if root not in seen:
-                    seen.add(root)
-                    self._repos.append(root)
-            self._active_repo_index = 0
-        else:
-            current = resolve_repo_root(Path.cwd())
-            siblings = discover_sibling_repos(current)
-            self._repos = siblings if len(siblings) > 1 else [current]
-            self._active_repo_index = self._repos.index(current)
+        self._repos, self._active_repo_index = resolve_repos(repos)
         set_active_repo(self._repos[self._active_repo_index])
 
         self._theme_index = theme_index

@@ -2,14 +2,10 @@ from __future__ import annotations
 
 import socket
 import sys
-import threading
-import webbrowser
-from pathlib import Path
 
 from diffui.git_utils import (
-    discover_sibling_repos,
     load_comments,
-    resolve_repo_root,
+    resolve_repos,
     set_active_repo,
 )
 
@@ -49,21 +45,7 @@ def main() -> None:
     repo_args = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
 
     try:
-        if repo_args:
-            seen: set[Path] = set()
-            repos: list[Path] = []
-            for p in repo_args:
-                root = resolve_repo_root(Path(p).expanduser().resolve())
-                if root not in seen:
-                    seen.add(root)
-                    repos.append(root)
-            active_index = 0
-        else:
-            current = resolve_repo_root(Path.cwd())
-            siblings = discover_sibling_repos(current)
-            repos = siblings if len(siblings) > 1 else [current]
-            active_index = repos.index(current)
-
+        repos, active_index = resolve_repos(repo_args or None)
         set_active_repo(repos[active_index])
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -79,6 +61,9 @@ def main() -> None:
     url = f"http://localhost:{port}"
     print(f"diffui running at {url}", file=sys.stderr)
     if "--open" in sys.argv:
+        import threading
+        import webbrowser
+
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
