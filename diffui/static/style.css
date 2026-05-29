@@ -716,16 +716,21 @@ mark {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .split-panes {
   display: flex;
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .split-pane {
-  flex: 1;
+  flex: 1 1 0;
+  width: 0;
   min-width: 0;
   overflow-y: auto;
   overflow-x: auto;
