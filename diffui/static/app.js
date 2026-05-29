@@ -79,7 +79,6 @@ function App() {
     setLoading(false);
   }, [view]);
 
-  const diffAbort = useRef(null);
   const fetchDiff = useCallback(async (path, ctx) => {
     if (!path) return;
     const c = ctx ?? contextLines;
@@ -89,16 +88,11 @@ function App() {
       setDiffData(cached);
       return;
     }
-    if (diffAbort.current) diffAbort.current.abort();
-    const controller = new AbortController();
-    diffAbort.current = controller;
-    try {
-      const res = await fetch(`/api/diff/${encodeURIComponent(path)}?view=${view}&context=${c}`, { signal: controller.signal });
-      const data = await res.json();
-      diffCache.current.set(cacheKey, data);
-      if (!controller.signal.aborted) setDiffData(data);
-    } catch (e) {
-      if (e.name !== 'AbortError') throw e;
+    const res = await fetch(`/api/diff/${encodeURIComponent(path)}?view=${view}&context=${c}`);
+    const data = await res.json();
+    diffCache.current.set(cacheKey, data);
+    if (activeFileRef.current === path) {
+      setDiffData(data);
     }
   }, [view, contextLines]);
 
@@ -187,6 +181,9 @@ function App() {
   const handleFileSelect = useCallback((path) => {
     if (activeFileRef.current && diffRef.current) {
       scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
+    }
+    if (path !== activeFileRef.current) {
+      setDiffData(null);
     }
     setActiveFile(path);
   }, []);
