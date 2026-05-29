@@ -39,6 +39,15 @@ function App() {
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
   const latestCallbacks = useRef({});
+  const activeFileRef = useRef(activeFile);
+  activeFileRef.current = activeFile;
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const contextRef = useRef(contextLines);
+  contextRef.current = contextLines;
+  const branchRef = useRef(branch);
+  branchRef.current = branch;
+  const visibleFilesRef = useRef([]);
 
   const fetchTheme = useCallback(async () => {
     const res = await fetch('/api/theme/css');
@@ -66,8 +75,6 @@ function App() {
     setComments(await res.json());
   }, []);
 
-  const contextRef = useRef(contextLines);
-  contextRef.current = contextLines;
   const fetchDiff = useCallback(async (path, ctx) => {
     if (!path) return;
     const c = ctx ?? contextRef.current;
@@ -116,9 +123,6 @@ function App() {
   useEffect(() => {
     Promise.all([fetchTheme(), fetchRepos(), fetchBranch(), fetchCommits(), fetchFiles(), fetchComments()]);
   }, []);
-
-  const viewRef = useRef(view);
-  viewRef.current = view;
 
   useEffect(() => {
     if (themeCss) {
@@ -180,8 +184,6 @@ function App() {
     setLoading(false);
   }, [fetchRepos, fetchBranch, fetchCommits, fetchFiles, fetchComments]);
 
-  const activeFileRef = useRef(activeFile);
-  activeFileRef.current = activeFile;
   const handleFileSelect = useCallback((path) => {
     if (activeFileRef.current && diffRef.current) {
       scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
@@ -278,8 +280,6 @@ function App() {
     showToast(next >= 9999 ? 'Showing full context' : `Expanded to ${next} lines of context`);
   }, [contextLines, fetchDiff]);
 
-  const branchRef = useRef(branch);
-  branchRef.current = branch;
   const handleCopyGitLabLink = useCallback(() => {
     const af = activeFileRef.current;
     const b = branchRef.current;
@@ -301,7 +301,6 @@ function App() {
 
   const visibleFiles = useMemo(() => showReviewed ? files : files.filter(f => !f.reviewed), [files, showReviewed]);
 
-  const visibleFilesRef = useRef(visibleFiles);
   visibleFilesRef.current = visibleFiles;
 
   // Keyboard shortcuts — stable effect, reads current values via refs
