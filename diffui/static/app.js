@@ -119,6 +119,7 @@ function App() {
           diffCache.current.clear();
           fetchFiles();
           fetchCommits();
+          fetchRepos();
           if (activeFile) fetchDiff(activeFile);
         }
         if (events.includes('comments_changed')) {
@@ -126,8 +127,10 @@ function App() {
         }
       } catch {}
     };
-    return () => es.close();
-  }, [fetchFiles, fetchCommits, fetchComments, fetchDiff, activeFile]);
+    // Refresh sibling repo states periodically (they aren't covered by SSE)
+    const repoInterval = setInterval(fetchRepos, 30000);
+    return () => { es.close(); clearInterval(repoInterval); };
+  }, [fetchFiles, fetchCommits, fetchComments, fetchDiff, fetchRepos, activeFile]);
 
   const handleViewChange = useCallback(async (newView) => {
     setView(newView);
