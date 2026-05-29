@@ -1029,6 +1029,63 @@ mark {
   color: var(--fg-muted);
 }
 
+/* --- Minimap --- */
+
+.minimap {
+  width: 14px;
+  flex-shrink: 0;
+  background: var(--bg-dark);
+  border-left: 1px solid var(--border);
+  position: relative;
+  cursor: pointer;
+}
+
+.minimap-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.minimap-mark {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 2px;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.minimap-add { background: #a6e3a1; }
+.minimap-del { background: #f38ba8; }
+.minimap-comment { background: var(--accent); }
+
+/* --- Expand Context --- */
+
+.diff-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.expand-ctx-btn {
+  background: var(--bg);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.expand-ctx-btn:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
 /* --- Loading --- */
 
 .loading {

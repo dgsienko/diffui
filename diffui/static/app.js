@@ -12,6 +12,7 @@ import { DiffStatsBar } from './components/DiffStatsBar.js';
 import { FileTree } from './components/FileTree.js';
 import { SplitDiffViewer } from './components/SplitDiffViewer.js';
 import { FullFileViewer } from './components/FullFileViewer.js';
+import { Minimap } from './components/Minimap.js';
 
 const html = htm.bind(h);
 
@@ -33,6 +34,7 @@ function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showFileTree, setShowFileTree] = useState(false);
   const [diffMode, setDiffMode] = useState('unified');
+  const [contextLines, setContextLines] = useState(3);
   const diffRef = useRef(null);
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
@@ -75,18 +77,19 @@ function App() {
     setLoading(false);
   }, [view, activeFile]);
 
-  const fetchDiff = useCallback(async (path) => {
+  const fetchDiff = useCallback(async (path, ctx) => {
     if (!path) return;
-    const cacheKey = `${path}:${view}`;
+    const c = ctx ?? contextLines;
+    const cacheKey = `${path}:${view}:c${c}`;
     const cached = diffCache.current.get(cacheKey);
     if (cached) {
       setDiffData(cached);
     }
-    const res = await fetch(`/api/diff/${encodeURIComponent(path)}?view=${view}`);
+    const res = await fetch(`/api/diff/${encodeURIComponent(path)}?view=${view}&context=${c}`);
     const data = await res.json();
     diffCache.current.set(cacheKey, data);
     setDiffData(data);
-  }, [view]);
+  }, [view, contextLines]);
 
   // Restore scroll position after diff renders
   useEffect(() => {
@@ -246,6 +249,15 @@ function App() {
     }
   }, [activeFile]);
 
+  const handleExpandContext = useCallback(() => {
+    const levels = [3, 10, 50, 9999];
+    const next = levels.find(l => l > contextLines) || 9999;
+    setContextLines(next);
+    diffCache.current.clear();
+    if (activeFile) fetchDiff(activeFile, next);
+    showToast(next >= 9999 ? 'Showing full context' : `Expanded to ${next} lines of context`);
+  }, [contextLines, activeFile, fetchDiff]);
+
   const handleCopyGitLabLink = useCallback(() => {
     if (!activeFile || !branch?.remote_url) return;
     const remote = branch.remote_url;
@@ -395,10 +407,15 @@ function App() {
                     onEditComment=${handleEditComment}
                     onReplyComment=${handleReplyComment}
                     onOpenInEditor=${handleOpenInEditor}
+                    onExpandContext=${handleExpandContext}
+                    contextLines=${contextLines}
                     reviewed=${files.find(f => f.path === activeFile)?.reviewed}
                   />`
                 : html`<div class="loading">Loading...</div>`
       }
+      ${diffMode === 'unified' && diffData && html`
+        <${Minimap} diffData=${diffData} comments=${comments} containerRef=${diffRef} />
+      `}
     </div>
     ${showSettings && html`
       <${SettingsPanel}

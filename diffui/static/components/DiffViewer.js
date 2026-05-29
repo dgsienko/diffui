@@ -94,7 +94,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onAddComm
   `;
 }
 
-export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onOpenInEditor, reviewed, ref }) {
+export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onOpenInEditor, onExpandContext, contextLines, reviewed, ref }) {
   const [commentingLine, setCommentingLine] = useState(null);
   const containerRef = useRef(null);
 
@@ -123,9 +123,16 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           <span class="diff-stat-add">+${data.adds}</span>
           <span class="diff-stat-del">-${data.dels}</span>
         </div>
-        <button class=${'review-btn' + (reviewed ? ' reviewed' : '')} onClick=${onToggleReview}>
-          ${reviewed ? 'Mark unreviewed' : 'Mark reviewed'}
-        </button>
+        <div class="diff-header-actions">
+          ${onExpandContext && contextLines < 9999 && html`
+            <button class="expand-ctx-btn" onClick=${onExpandContext}>
+              Expand context
+            </button>
+          `}
+          <button class=${'review-btn' + (reviewed ? ' reviewed' : '')} onClick=${onToggleReview}>
+            ${reviewed ? 'Mark unreviewed' : 'Mark reviewed'}
+          </button>
+        </div>
       </div>
       ${data.hunks.map((hunk, i) => html`
         <${Hunk}

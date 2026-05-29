@@ -24,20 +24,20 @@ def clear_diff_cache() -> None:
     _diff_cache.clear()
 
 
-def _get_diff(path: str, view: str) -> str:
+def _get_diff(path: str, view: str, context: int = 3) -> str:
     repo_id = str(get_repo_root())
     merge_base = app_state.merge_base
     mtime = get_file_mtime(path)
-    cache_key = (repo_id, merge_base, path, view, mtime)
+    cache_key = (repo_id, merge_base, path, f"{view}:c{context}", mtime)
     if cache_key in _diff_cache:
         return _diff_cache[cache_key]
     if view == "all":
-        result = get_full_diff(merge_base, path)
+        result = get_full_diff(merge_base, path, context)
     elif view == "working":
-        result = get_working_diff(path)
+        result = get_working_diff(path, context)
     else:
-        result = get_commit_diff(view, path)
-    stale = next((k for k in _diff_cache if k[2] == path and k[3] == view), None)
+        result = get_commit_diff(view, path, context)
+    stale = next((k for k in _diff_cache if k[2] == path and k[3] == f"{view}:c{context}"), None)
     if stale is not None:
         del _diff_cache[stale]
     if len(_diff_cache) >= _MAX_CACHE:
@@ -83,8 +83,8 @@ def list_files(view: str = "all"):
 
 
 @router.get("/diff/{path:path}")
-def get_diff(path: str, view: str = "all"):
-    diff_text = _get_diff(path, view)
+def get_diff(path: str, view: str = "all", context: int = 3):
+    diff_text = _get_diff(path, view, context)
     return parse_diff_to_json(diff_text, path, app_state.theme)
 
 
