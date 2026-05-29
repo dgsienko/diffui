@@ -38,6 +38,7 @@ function App() {
   const diffRef = useRef(null);
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
+  const latestCallbacks = useRef({});
 
   const fetchTheme = useCallback(async () => {
     const res = await fetch('/api/theme/css');
@@ -101,6 +102,8 @@ function App() {
     }
   }, [diffData, activeFile]);
 
+  latestCallbacks.current = { fetchFiles, fetchCommits, fetchComments, fetchDiff, fetchRepos, activeFile };
+
   useEffect(() => {
     Promise.all([fetchTheme(), fetchRepos(), fetchBranch(), fetchCommits(), fetchFiles(), fetchComments()]);
   }, []);
@@ -121,28 +124,28 @@ function App() {
     }
   }, [themeCss]);
 
-  // SSE real-time updates
+  // SSE real-time updates — use ref to avoid reconnecting on every callback change
   useEffect(() => {
     const es = new EventSource('/api/events');
     es.onmessage = (e) => {
       try {
         const { events } = JSON.parse(e.data);
+        const cb = latestCallbacks.current;
         if (events.includes('git_changed') || events.includes('files_changed')) {
           diffCache.current.clear();
-          fetchFiles();
-          fetchCommits();
-          fetchRepos();
-          if (activeFile) fetchDiff(activeFile);
+          cb.fetchFiles();
+          cb.fetchCommits();
+          cb.fetchRepos();
+          if (cb.activeFile) cb.fetchDiff(cb.activeFile);
         }
         if (events.includes('comments_changed')) {
-          fetchComments();
+          cb.fetchComments();
         }
       } catch {}
     };
-    // Refresh sibling repo states periodically (they aren't covered by SSE)
-    const repoInterval = setInterval(fetchRepos, 30000);
+    const repoInterval = setInterval(() => latestCallbacks.current.fetchRepos(), 30000);
     return () => { es.close(); clearInterval(repoInterval); };
-  }, [fetchFiles, fetchCommits, fetchComments, fetchDiff, fetchRepos, activeFile]);
+  }, []);
 
   const handleViewChange = useCallback(async (newView) => {
     setView(newView);
