@@ -1,11 +1,16 @@
 # diffui
 
-Terminal UI for reviewing AI agent diffs, built with Python + Textual.
+UI for reviewing AI agent diffs. Two frontends sharing the same backend:
+- **Web UI** (`diffui`) — FastAPI + Preact, opens in browser
+- **TUI** (`diffui-tui`) — Textual, runs in terminal
 
 ## Tech Stack
 
-- **Python 3.10+**, **Textual 8.x** (TUI framework)
-- **Pygments** for syntax highlighting (bundled with Textual)
+- **Python 3.10+**
+- **FastAPI + uvicorn** (web UI server)
+- **Preact + HTM** (web UI frontend, no build step)
+- **Textual** (TUI framework)
+- **Pygments** for syntax highlighting
 - Git operations via `subprocess` (no gitpython dependency)
 - Installed globally via `pipx install -e .`
 
@@ -13,13 +18,26 @@ Terminal UI for reviewing AI agent diffs, built with Python + Textual.
 
 ```text
 diffui/
-├── cli.py              # Entry point — --comments dumps to stdout, else launches TUI
-├── app.py              # DiffUI app — compose, polling, tab management, event handlers
-├── widgets.py          # Widget classes — DiffLine, DiffViewer, FullFileViewer, comments,
-│                       #   search, settings panel, file tree sidebar
+├── cli.py              # Web UI entry point — starts FastAPI server
+├── cli_tui.py          # TUI entry point — launches Textual app
+├── app.py              # Textual TUI app class
+├── widgets.py          # TUI widget classes
 ├── diff.py             # Pure functions — diff parsing, line classification, syntax
 │                       #   highlighting, word-level diff ranges
-├── git_utils.py        # Git subprocess helpers, state persistence, diff_stat
+├── git_utils.py        # Git subprocess helpers, state persistence, repo discovery
+├── server/             # FastAPI backend (web UI)
+│   ├── app.py          # App factory — mounts routes, static files, SSE poller
+│   ├── events.py       # SSE endpoint + background poller (3s git/file/comment mtime checks)
+│   ├── highlight.py    # Pygments-to-HTML adapter, word highlight overlay
+│   ├── routes_*.py     # API routes (repos, diffs, comments, review, settings)
+│   ├── state.py        # AppState singleton — shared server state
+│   └── theme_css.py    # generate_css_vars(theme) — CSS custom properties
+├── static/             # Preact frontend (no build step, ESM imports via importmap)
+│   ├── app.js          # Root component, state management, SSE client, keyboard shortcuts
+│   ├── components/     # TopBar, FileTabs, DiffViewer, CommentBox, CommentDisplay,
+│   │                   #   SearchBar, SettingsPanel
+│   ├── index.html      # Shell page with importmap for preact/htm CDN
+│   └── style.css       # All styles via CSS custom properties (themed)
 └── themes/
     ├── __init__.py     # Theme state (get/set_current_theme), re-exports
     ├── theme.py        # Theme dataclass (30+ color fields)
@@ -27,35 +45,45 @@ diffui/
     └── css.py          # generate_css(theme) — Textual CSS template
 ```
 
-### Key Patterns
+### Shared Patterns
 
-- **Lazy tab loading** — only the active tab builds a DiffViewer. Others
-  use `LazyPlaceholder` and compose on activation.
-- **Diff caching** — `_diff_cache` keyed by `(file, view, mtime)`. Clears
-  when files or git state change.
-- **Background polling** — `@work(thread=True, exclusive=True)` polls
-  `.git/HEAD`, `.git/index`, and `.git/refs/heads/{branch}` mtimes +
-  file stats every 3 seconds. Results posted to main thread via
-  `call_from_thread`.
-- **Incremental refresh** — when the file list hasn't changed, only tab
-  labels and counters update (no DOM teardown).
-- **Pre-warm** — after activating a tab, the adjacent tab's diff is
-  pre-cached so switching is instant.
-- **Theme switching** — writes CSS to a temp file, copies+reparses the
-  stylesheet, calls `stylesheet.update()` on all screens.
+- **Multi-repo discovery** — `resolve_repos()` in `git_utils.py` scans
+  the parent directory for sibling git repos. Both frontends use this.
 - **Branch-scoped state** — reviewed status and comments stored at
   `~/.config/diffui/{repo}/{branch}/`. `get_repo_root()` and
   `_cached_current_branch()` are `lru_cache`'d.
-- **Comment threads** — comments have `author`/`author_type` fields.
-  Replies are structured dicts. Edit locking: user content is editable
-  until an agent replies to the thread.
+- **Comment threads** — comments have `id` (UUID), `author`/`author_type`
+  fields. Replies are structured dicts. Edit locking: user content is
+  editable until an agent replies to the thread.
 - **Word-level diff** — `pair_diff_lines` matches consecutive remove/add
   pairs and `word_diff_ranges` uses `difflib.SequenceMatcher` to find
-  changed word spans, highlighted with `bold underline`.
-- **DiffLine as Horizontal** — gutter (fixed 13-char) and code (1fr) are
-  separate Static children, so wrapped lines indent correctly past the
-  gutter. FullFileViewer uses a lighter single-Static per line for
-  performance.
+  changed word spans.
+- **Worktree support** — `get_git_dir()` resolves the actual `.git`
+  directory for both regular repos and worktrees.
+
+### Web UI Patterns
+
+- **SSE live updates** — `events.py` polls git state every 3s in a
+  background thread, pushes events to connected `EventSource` clients.
+- **Diff caching** — server-side `_diff_cache` keyed by
+  `(repo, merge_base, path, view, mtime)`. Client-side `diffCache` Map
+  for instant tab switching with stale-while-revalidate.
+- **Scroll persistence** — client saves/restores scroll positions per
+  file in a Map.
+- **Theme switching** — server generates CSS custom properties from
+  Theme dataclass fields. Client injects a `<style>` tag.
+- **No build step** — Preact + HTM loaded via importmap from CDN. All
+  frontend ships as plain `.js`/`.css`/`.html` in the Python package.
+
+### TUI Patterns
+
+- **Lazy tab loading** — only the active tab builds a DiffViewer. Others
+  use `LazyPlaceholder` and compose on activation.
+- **Background polling** — `@work(thread=True, exclusive=True)` polls
+  git mtimes every 3 seconds. Results posted to main thread via
+  `call_from_thread`.
+- **Theme switching** — writes CSS to a temp file, copies+reparses the
+  stylesheet, calls `stylesheet.update()` on all screens.
 
 ### Things to Know
 
@@ -81,7 +109,9 @@ diffui/
 
 ```bash
 pipx install -e .                    # Install (editable)
-diffui                               # Run (from any git repo)
+diffui                               # Web UI (from any git repo)
+diffui --open                        # Web UI + open in browser
+diffui-tui                           # Terminal UI
 diffui --comments                    # Dump comments to stdout
 pytest                               # Run tests (81 tests)
 ruff check diffui/ tests/           # Lint
@@ -120,8 +150,8 @@ All in `~/.config/diffui/`:
 | `{repo}/{branch}/reviewed.json` | Per-branch | `{"path": mtime}` |
 | `{repo}/{branch}/comments.json` | Per-branch | `{"path": [{...}]}` |
 
-Comment objects: `file_path`, `file_line_num`, `line_text`, `comment`,
-`author`, `author_type`, `timestamp`, `replies[]`.
+Comment objects: `id` (UUID), `file_path`, `file_line_num`, `line_text`,
+`comment`, `author`, `author_type`, `timestamp`, `replies[]`.
 
 Reply objects: `text`, `author`, `author_type`.
 

@@ -1,8 +1,7 @@
 # diffui
 
-Terminal UI for reviewing AI agent diffs. Inspired by the diff review
-experience in GitHub, GitLab, Supacode, and similar tools — but in your
-terminal.
+UI for reviewing AI agent diffs. Comes in two flavors: a web UI
+(default) and a terminal TUI.
 
 ## Install
 
@@ -15,16 +14,21 @@ pipx install -e ~/code/diffui
 `cd` into any git repo on a feature branch and run:
 
 ```bash
-diffui
+diffui              # Web UI — starts a local server, prints the URL
+diffui-tui          # Terminal UI — runs in the terminal via Textual
 ```
 
 diffui shows all files changed on the current branch (vs the merge base
 with main/master) in a tabbed, syntax-highlighted diff viewer.
 
+Sibling repos in the same parent directory are auto-discovered and
+available via a dropdown switcher.
+
 ### CLI flags
 
 ```bash
-diffui --comments    # Dump all comments to stdout (no TUI)
+diffui --comments    # Dump all comments to stdout
+diffui --open        # Web UI: also open the URL in a browser
 ```
 
 ## Features
@@ -121,17 +125,28 @@ ruff check diffui/ tests/
 
 ```text
 diffui/
-├── cli.py              # Entry point, --comments flag
-├── app.py              # DiffUI app class
-├── widgets.py          # UI widgets (DiffLine, DiffViewer, comments,
-│                       #   search, settings, file tree)
+├── cli.py              # Web UI entry point
+├── cli_tui.py          # TUI entry point
+├── app.py              # Textual TUI app class
+├── widgets.py          # TUI widgets
 ├── diff.py             # Diff parsing, syntax highlighting, word diff
 ├── git_utils.py        # Git operations and state persistence
+├── server/             # FastAPI backend (web UI)
+│   ├── app.py          # FastAPI app factory
+│   ├── events.py       # SSE poller for live updates
+│   ├── highlight.py    # Pygments-to-HTML adapter
+│   ├── routes_*.py     # API routes (repos, diffs, comments, review, settings)
+│   ├── state.py        # Shared app state
+│   └── theme_css.py    # CSS custom property generator
+├── static/             # Preact frontend (web UI)
+│   ├── app.js          # Main app component
+│   ├── components/     # UI components
+│   ├── index.html      # Shell page
+│   └── style.css       # Styles using CSS custom properties
 ├── themes/
-│   ├── __init__.py     # Theme state management and re-exports
 │   ├── theme.py        # Theme dataclass
 │   ├── definitions.py  # 10 theme definitions
-│   └── css.py          # CSS template generator
+│   └── css.py          # Textual CSS template generator
 └── tests/
     ├── test_diff.py    # Diff parsing tests (49 tests)
     ├── test_git_utils.py # Persistence and utility tests (17 tests)
