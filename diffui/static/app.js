@@ -9,6 +9,7 @@ import { SearchBar } from './components/SearchBar.js';
 import { ToastContainer, showToast } from './components/Toast.js';
 import { ShortcutOverlay } from './components/ShortcutOverlay.js';
 import { DiffStatsBar } from './components/DiffStatsBar.js';
+import { FileTree } from './components/FileTree.js';
 
 const html = htm.bind(h);
 
@@ -28,6 +29,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showFileTree, setShowFileTree] = useState(false);
   const diffRef = useRef(null);
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
@@ -241,6 +243,23 @@ function App() {
     }
   }, [activeFile]);
 
+  const handleCopyGitLabLink = useCallback(() => {
+    if (!activeFile || !branch?.remote_url) return;
+    const remote = branch.remote_url;
+    let base;
+    if (remote.startsWith('git@')) {
+      const hostPath = remote.split(':')[1].replace(/\.git$/, '');
+      const host = remote.split('@')[1].split(':')[0];
+      base = `https://${host}/${hostPath}`;
+    } else {
+      base = remote.replace(/\.git$/, '');
+    }
+    const ref = branch.head_sha ? branch.head_sha.slice(0, 12) : branch.name;
+    const url = `${base}/-/blob/${ref}/${activeFile}`;
+    navigator.clipboard.writeText(url);
+    showToast('GitLab link copied');
+  }, [activeFile, branch]);
+
   const visibleFiles = showReviewed ? files : files.filter(f => !f.reviewed);
 
   // Keyboard shortcuts
@@ -262,6 +281,10 @@ function App() {
         setShowReviewed(v => !v);
       } else if (e.key === 'y') {
         handleCopyPath();
+      } else if (e.key === 'Y') {
+        handleCopyGitLabLink();
+      } else if (e.key === 'b') {
+        setShowFileTree(v => !v);
       } else if (e.key === 'j' || e.key === 'k') {
         const container = diffRef.current;
         if (!container) return;
@@ -320,26 +343,36 @@ function App() {
       activeFile=${activeFile}
       onSelect=${handleFileSelect}
     />
-    ${loading
-      ? html`<div class="loading">Loading...</div>`
-      : diffData
-        ? html`<${DiffViewer}
-            ref=${diffRef}
-            data=${diffData}
-            comments=${comments}
-            searchTerm=${searchTerm}
-            onToggleReview=${handleToggleReview}
-            onAddComment=${handleAddComment}
-            onDeleteComment=${handleDeleteComment}
-            onEditComment=${handleEditComment}
-            onReplyComment=${handleReplyComment}
-            onOpenInEditor=${handleOpenInEditor}
-            reviewed=${files.find(f => f.path === activeFile)?.reviewed}
-          />`
-        : files.length === 0
-          ? html`<div class="empty-state">No changed files</div>`
-          : html`<div class="loading">Select a file</div>`
-    }
+    <div class="main-content">
+      ${showFileTree && html`
+        <${FileTree}
+          files=${visibleFiles}
+          activeFile=${activeFile}
+          onSelect=${handleFileSelect}
+          onClose=${() => setShowFileTree(false)}
+        />
+      `}
+      ${loading
+        ? html`<div class="loading">Loading...</div>`
+        : diffData
+          ? html`<${DiffViewer}
+              ref=${diffRef}
+              data=${diffData}
+              comments=${comments}
+              searchTerm=${searchTerm}
+              onToggleReview=${handleToggleReview}
+              onAddComment=${handleAddComment}
+              onDeleteComment=${handleDeleteComment}
+              onEditComment=${handleEditComment}
+              onReplyComment=${handleReplyComment}
+              onOpenInEditor=${handleOpenInEditor}
+              reviewed=${files.find(f => f.path === activeFile)?.reviewed}
+            />`
+          : files.length === 0
+            ? html`<div class="empty-state">No changed files</div>`
+            : html`<div class="loading">Select a file</div>`
+      }
+    </div>
     ${showSettings && html`
       <${SettingsPanel}
         onChange=${handleSettingsChange}

@@ -231,6 +231,37 @@ def get_file_content(path: str) -> str:
         return ""
 
 
+def get_remote_url() -> str:
+    result = _git("remote", "get-url", "origin")
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def get_head_sha() -> str:
+    result = _git("rev-parse", "HEAD")
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def build_remote_permalink(file_path: str, line_num: int | None = None) -> str:
+    remote = get_remote_url()
+    if not remote:
+        return ""
+    if remote.startswith("git@"):
+        host_path = remote.split(":", 1)[1].removesuffix(".git")
+        host = remote.split("@")[1].split(":")[0]
+        base = f"https://{host}/{host_path}"
+    elif remote.startswith("https://") or remote.startswith("http://"):
+        base = remote.removesuffix(".git")
+    else:
+        return ""
+    sha = get_head_sha()
+    branch = current_branch()
+    ref = sha[:12] if sha else branch
+    url = f"{base}/-/blob/{ref}/{file_path}"
+    if line_num:
+        url += f"#L{line_num}"
+    return url
+
+
 def get_git_user_name() -> str:
     result = _git("config", "user.name")
     name = result.stdout.strip()

@@ -685,6 +685,127 @@ mark {
   to { opacity: 1; }
 }
 
+/* --- Main Layout --- */
+
+.main-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* --- File Tree --- */
+
+.file-tree {
+  width: 260px;
+  min-width: 200px;
+  max-width: 350px;
+  background: var(--bg-dark);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  animation: slide-right 0.15s ease-out;
+}
+
+@keyframes slide-right {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.file-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.file-tree-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.file-tree-close {
+  background: none;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.file-tree-close:hover { color: var(--fg); }
+
+.file-tree-content {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+
+.tree-dir-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 12px;
+  user-select: none;
+}
+
+.tree-dir-header:hover { color: var(--fg); }
+
+.tree-dir-arrow { font-size: 10px; width: 12px; }
+
+.tree-dir-name { flex: 1; }
+
+.tree-badge {
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 8px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 16px;
+  text-align: center;
+}
+
+.tree-badge.comment {
+  background: var(--comment-accent);
+}
+
+.tree-dir-files {
+  padding-left: 8px;
+}
+
+.tree-file {
+  padding: 3px 12px 3px 20px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 4px;
+  margin: 0 4px;
+}
+
+.tree-file:hover { background: var(--hover-bg); }
+
+.tree-active {
+  background: var(--hover-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tree-reviewed { opacity: 0.5; }
+
+.tree-comment-count {
+  color: var(--accent);
+  margin-left: 4px;
+  font-size: 11px;
+}
+
 /* --- Diff Stats Bar --- */
 
 .stats-bar {

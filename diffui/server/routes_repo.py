@@ -44,11 +44,15 @@ async def switch_repo(body: dict):
 
 @router.get("/branch")
 def get_branch():
+    from diffui.git_utils import get_head_sha, get_remote_url
+
     return {
         "name": current_branch(),
         "main_branch": get_main_branch(),
         "merge_base": app_state.merge_base,
         "repo_name": get_repo_root().name,
+        "remote_url": get_remote_url(),
+        "head_sha": get_head_sha(),
     }
 
 
