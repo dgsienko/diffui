@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from diffui.server.theme_css import generate_css_vars
-from diffui.themes.definitions import CATPPUCCIN_MOCHA, GITHUB_DARK
+from diffui.themes.definitions import ALL_THEMES, CATPPUCCIN_MOCHA, GITHUB_DARK
 
 
 class TestGenerateCssVars:
@@ -37,7 +37,7 @@ class TestGenerateCssVars:
         assert mocha != github
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def _server_app():
     from diffui.git_utils import resolve_repo_root, set_active_repo
     from diffui.server.app import create_app
@@ -105,7 +105,7 @@ class TestServerRoutes:
         r = _server_app.get("/api/themes")
         assert r.status_code == 200
         data = r.json()
-        assert len(data) == 10
+        assert len(data) == len(ALL_THEMES)
         assert all("name" in t for t in data)
 
     def test_theme_css(self, _server_app):
@@ -119,13 +119,14 @@ class TestServerRoutes:
         original = r.json()
         assert "editor" in original
 
-        r = _server_app.put("/api/settings", json={"editor": "nvim"})
-        assert r.status_code == 200
+        try:
+            r = _server_app.put("/api/settings", json={"editor": "nvim"})
+            assert r.status_code == 200
 
-        r = _server_app.get("/api/settings")
-        assert r.json()["editor"] == "nvim"
-
-        _server_app.put("/api/settings", json={"editor": original["editor"]})
+            r = _server_app.get("/api/settings")
+            assert r.json()["editor"] == "nvim"
+        finally:
+            _server_app.put("/api/settings", json={"editor": original["editor"]})
 
     def test_comments(self, _server_app):
         r = _server_app.get("/api/comments")
@@ -142,25 +143,25 @@ class TestServerRoutes:
         )
         assert r.status_code == 200
 
-        comments = _server_app.get("/api/comments").json()
-        assert "_test_.py" in comments
-        comment = comments["_test_.py"][0]
-        assert comment["comment"] == "test comment"
-        assert "id" in comment
-        cid = comment["id"]
+        try:
+            comments = _server_app.get("/api/comments").json()
+            assert "_test_.py" in comments
+            comment = comments["_test_.py"][0]
+            assert comment["comment"] == "test comment"
+            assert "id" in comment
+            cid = comment["id"]
 
-        r = _server_app.put(f"/api/comments/_test_.py/{cid}", json={"comment": "edited"})
-        assert r.status_code == 200
-        assert _server_app.get("/api/comments").json()["_test_.py"][0]["comment"] == "edited"
+            r = _server_app.put(f"/api/comments/_test_.py/{cid}", json={"comment": "edited"})
+            assert r.status_code == 200
+            assert _server_app.get("/api/comments").json()["_test_.py"][0]["comment"] == "edited"
 
-        r = _server_app.post(f"/api/comments/_test_.py/{cid}/reply", json={"text": "reply"})
-        assert r.status_code == 200
-        assert len(_server_app.get("/api/comments").json()["_test_.py"][0]["replies"]) == 1
-
-        r = _server_app.delete(f"/api/comments/_test_.py/{cid}")
-        assert r.status_code == 200
-        comments = _server_app.get("/api/comments").json()
-        assert "_test_.py" not in comments
+            r = _server_app.post(f"/api/comments/_test_.py/{cid}/reply", json={"text": "reply"})
+            assert r.status_code == 200
+            assert len(_server_app.get("/api/comments").json()["_test_.py"][0]["replies"]) == 1
+        finally:
+            comments = _server_app.get("/api/comments").json()
+            for c in comments.get("_test_.py", []):
+                _server_app.delete(f"/api/comments/_test_.py/{c['id']}")
 
     def test_review_toggle(self, _server_app):
         files = _server_app.get("/api/files?view=all").json()
