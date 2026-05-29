@@ -16,6 +16,13 @@ def generate_css(t: Theme) -> str:
         background: {t.bg_dark};
     }}
 
+    #repo-select {{
+        height: 3;
+        margin: 0 1;
+        width: 5fr;
+        min-width: 35;
+    }}
+
     #view-select {{
         height: 3;
         margin: 0 1;

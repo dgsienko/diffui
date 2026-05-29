@@ -7,9 +7,77 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+_active_repo_root: Path | None = None
+
+
+def set_active_repo(path: Path) -> None:
+    global _active_repo_root
+    _active_repo_root = path
+    get_repo_root.cache_clear()
+    _cached_current_branch.cache_clear()
+
+
+def discover_sibling_repos(current_root: Path) -> list[Path]:
+    parent = current_root.parent
+    repos = []
+    for child in sorted(parent.iterdir()):
+        if child.is_dir() and (child / ".git").exists():
+            repos.append(child)
+    return repos
+
+
+def resolve_repo_root(path: str | Path) -> Path:
+    result = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Not a git repository: {path}")
+    return Path(result.stdout.strip())
+
+
+def repo_has_changes(repo_root: Path) -> bool:
+    for candidate in ("main", "master"):
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--verify", f"refs/heads/{candidate}"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            main = candidate
+            break
+    else:
+        main = "main"
+    base = subprocess.run(
+        ["git", "-C", str(repo_root), "merge-base", main, "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if base.returncode != 0:
+        return False
+    diff = subprocess.run(
+        ["git", "-C", str(repo_root), "diff", "--quiet", base.stdout.strip()],
+        capture_output=True,
+        text=True,
+    )
+    return diff.returncode != 0
+
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", *args], capture_output=True, text=True)
+    cmd = ["git"]
+    if _active_repo_root:
+        cmd.extend(["-C", str(_active_repo_root)])
+    cmd.extend(args)
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def get_git_dir() -> Path:
+    result = _git("rev-parse", "--git-dir")
+    if result.returncode != 0:
+        return get_repo_root() / ".git"
+    git_dir = result.stdout.strip()
+    return Path(git_dir) if Path(git_dir).is_absolute() else get_repo_root() / git_dir
 
 
 def _load_json(path: Path, default: Any = None) -> Any:
@@ -32,6 +100,8 @@ class Commit:
 
 @functools.lru_cache(maxsize=1)
 def get_repo_root() -> Path:
+    if _active_repo_root is not None:
+        return _active_repo_root
     result = _git("rev-parse", "--show-toplevel")
     if result.returncode != 0:
         raise RuntimeError("Not in a git repository")
@@ -110,11 +180,7 @@ def _diff_untracked(path: str) -> str:
         return ""
     lines = content.splitlines()
     header = (
-        f"diff --git a/{path} b/{path}\n"
-        f"new file mode 100644\n"
-        f"--- /dev/null\n"
-        f"+++ b/{path}\n"
-        f"@@ -0,0 +1,{len(lines)} @@\n"
+        f"diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}\n@@ -0,0 +1,{len(lines)} @@\n"
     )
     body = "\n".join(f"+{line}" for line in lines) + "\n"
     return header + body

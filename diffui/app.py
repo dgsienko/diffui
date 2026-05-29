@@ -26,11 +26,13 @@ from diffui.git_utils import (
     _comments_path,
     clear_branch_cache,
     current_branch,
+    discover_sibling_repos,
     get_branch_commits,
     get_changed_files,
     get_commit_diff,
     get_file_mtime,
     get_full_diff,
+    get_git_dir,
     get_git_user_name,
     get_main_branch,
     get_merge_base,
@@ -40,9 +42,12 @@ from diffui.git_utils import (
     load_comments,
     load_reviewed,
     load_settings,
+    repo_has_changes,
+    resolve_repo_root,
     save_comments,
     save_reviewed,
     save_settings,
+    set_active_repo,
     short_name,
 )
 from diffui.themes import ALL_THEMES, CATPPUCCIN_MOCHA, Theme, generate_css, set_current_theme
@@ -70,7 +75,6 @@ def _write_css(theme: Theme) -> None:
 
 
 class DiffUI(App):
-
     CSS_PATH = str(_CSS_FILE)
 
     BINDINGS = [
@@ -91,7 +95,7 @@ class DiffUI(App):
 
     TITLE = "diffui"
 
-    def __init__(self) -> None:
+    def __init__(self, repos: list[str] | None = None) -> None:
         saved = load_settings()
         theme_name = saved.get("theme", CATPPUCCIN_MOCHA.name)
         theme_index = next((i for i, t in enumerate(ALL_THEMES) if t.name == theme_name), 0)
@@ -100,7 +104,23 @@ class DiffUI(App):
         _write_css(ALL_THEMES[theme_index])
 
         super().__init__()
-        self._repo_root = get_repo_root()
+
+        if repos:
+            seen: set[Path] = set()
+            self._repos: list[Path] = []
+            for p in repos:
+                root = resolve_repo_root(Path(p).expanduser().resolve())
+                if root not in seen:
+                    seen.add(root)
+                    self._repos.append(root)
+            self._active_repo_index = 0
+        else:
+            current = resolve_repo_root(Path.cwd())
+            siblings = discover_sibling_repos(current)
+            self._repos = siblings if len(siblings) > 1 else [current]
+            self._active_repo_index = self._repos.index(current)
+        set_active_repo(self._repos[self._active_repo_index])
+
         self._theme_index = theme_index
         self._editor = saved.get("editor", "code")
         self._view_mode = saved.get("view_mode", VIEW_MODE_DIFF)
@@ -108,6 +128,14 @@ class DiffUI(App):
         self._search_term = ""
         self._search_debounce: Timer | None = None
         self._tab_generation = 0
+        self.show_reviewed = True
+
+        self._load_repo_state()
+
+    def _load_repo_state(self) -> None:
+        clear_branch_cache()
+        _diff_cache.clear()
+        self._repo_root = get_repo_root()
         self._branch_name = current_branch()
         self.main_branch = get_main_branch()
         self.merge_base = get_merge_base(self.main_branch)
@@ -116,7 +144,6 @@ class DiffUI(App):
         self.reviewed = load_reviewed()
         self.comments = load_comments()
         self.current_view = "all"
-        self.show_reviewed = True
         self._active_files: list[str] = []
         self._active_tab_ids: list[str] = []
         self._comment_nav_index: int = -1
@@ -124,10 +151,26 @@ class DiffUI(App):
         self._pending_scroll_restore: set[str] = set()
         self._last_file_mtimes = self._snapshot_file_mtimes()
         self._last_comments_mtime = self._get_comments_mtime()
-        self._git_head_mtime = self._stat_mtime(self._repo_root / ".git" / "HEAD")
-        self._git_index_mtime = self._stat_mtime(self._repo_root / ".git" / "index")
-        self._git_ref_path = self._repo_root / ".git" / "refs" / "heads" / self._branch_name
+        git_dir = get_git_dir()
+        self._git_head_mtime = self._stat_mtime(git_dir / "HEAD")
+        self._git_index_mtime = self._stat_mtime(git_dir / "index")
+        self._git_ref_path = git_dir / "refs" / "heads" / self._branch_name
         self._git_ref_mtime = self._stat_mtime(self._git_ref_path)
+
+    def _build_repo_options(self) -> list[tuple[str, int]]:
+        names = [p.name for p in self._repos]
+        if len(names) != len(set(names)):
+            names = [f"{p.parent.name}/{p.name}" for p in self._repos]
+        options: list[tuple[str, int]] = []
+        for i, (name, repo) in enumerate(zip(names, self._repos)):
+            prefix = "● " if repo_has_changes(repo) else "  "
+            options.append((f"{prefix}{name}", i))
+        return options
+
+    def _branch_label(self) -> str:
+        if len(self._repos) > 1:
+            return f"{self._repo_root.name}: {self._branch_name}"
+        return self._branch_name
 
     # --- Helpers ---
 
@@ -198,6 +241,13 @@ class DiffUI(App):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="top-bar"):
+            if len(self._repos) > 1:
+                yield Select[int](
+                    self._build_repo_options(),
+                    value=self._active_repo_index,
+                    id="repo-select",
+                    allow_blank=False,
+                )
             yield Select(
                 self._build_view_options(),
                 value="all",
@@ -235,9 +285,7 @@ class DiffUI(App):
 
     async def on_mount(self) -> None:
         try:
-            self.query_one("#branch-label", Static).update(
-                f"[dim]{self._branch_name}[/dim]"
-            )
+            self.query_one("#branch-label", Static).update(f"[dim]{self._branch_label()}[/dim]")
         except NoMatches:
             pass
         await self._refresh_tabs()
@@ -256,8 +304,9 @@ class DiffUI(App):
 
     @work(thread=True, exclusive=True, group="poll")
     def _poll_worker(self) -> None:
-        head_mtime = self._stat_mtime(self._repo_root / ".git" / "HEAD")
-        index_mtime = self._stat_mtime(self._repo_root / ".git" / "index")
+        git_dir = get_git_dir()
+        head_mtime = self._stat_mtime(git_dir / "HEAD")
+        index_mtime = self._stat_mtime(git_dir / "index")
         ref_mtime = self._stat_mtime(self._git_ref_path)
         comments_mtime = self._get_comments_mtime()
         current_files = self.all_files
@@ -290,9 +339,17 @@ class DiffUI(App):
 
         self.call_from_thread(
             self._apply_poll_result,
-            git_changed, files_changed, comments_changed,
-            head_mtime, index_mtime, ref_mtime, comments_mtime,
-            file_mtimes, new_commits, new_all_files, new_comments,
+            git_changed,
+            files_changed,
+            comments_changed,
+            head_mtime,
+            index_mtime,
+            ref_mtime,
+            comments_mtime,
+            file_mtimes,
+            new_commits,
+            new_all_files,
+            new_comments,
         )
 
     async def _apply_poll_result(
@@ -339,6 +396,27 @@ class DiffUI(App):
             await self._refresh_comments_in_viewer()
 
     # --- Tab management ---
+
+    @on(Select.Changed, "#repo-select")
+    async def repo_changed(self, event: Select.Changed) -> None:
+        if event.value is None or not isinstance(event.value, int):
+            return
+        if event.value == self._active_repo_index:
+            return
+        self._active_repo_index = event.value
+        set_active_repo(self._repos[self._active_repo_index])
+        self._load_repo_state()
+        try:
+            self.query_one("#branch-label", Static).update(f"[dim]{self._branch_label()}[/dim]")
+        except NoMatches:
+            pass
+        try:
+            self.query_one("#view-select", Select).set_options(self._build_view_options())
+        except NoMatches:
+            pass
+        self._update_toggle_button()
+        self._refresh_comments_select()
+        await self._refresh_tabs()
 
     @on(Select.Changed, "#view-select")
     async def view_changed(self, event: Select.Changed) -> None:
@@ -629,7 +707,9 @@ class DiffUI(App):
             await self._remove_all("FileTree")
         else:
             reviewed_set = {f for f in self._active_files if self._is_reviewed(f)}
-            tree = FileTree(self._active_files, reviewed=reviewed_set, active_file=self._get_current_file(), id="file-tree")
+            tree = FileTree(
+                self._active_files, reviewed=reviewed_set, active_file=self._get_current_file(), id="file-tree"
+            )
             tabs = self.query_one("#file-tabs", TabbedContent)
             await self.mount(tree, before=tabs)
 
@@ -688,6 +768,7 @@ class DiffUI(App):
             return
         try:
             import pyperclip
+
             pyperclip.copy(viewer.file_path)
             self.notify(f"Copied: {viewer.file_path}", timeout=2)
         except ImportError:
@@ -739,7 +820,9 @@ class DiffUI(App):
 
         file_path, line_idx = locations[self._comment_nav_index]
         self.clear_notifications()
-        self.notify(f"Comment {self._comment_nav_index + 1}/{len(locations)}: {short_name(file_path)}:{line_idx}", timeout=2)
+        self.notify(
+            f"Comment {self._comment_nav_index + 1}/{len(locations)}: {short_name(file_path)}:{line_idx}", timeout=2
+        )
 
         if not await self._activate_file_tab(file_path, line_idx):
             self.show_reviewed = True
@@ -814,22 +897,29 @@ class DiffUI(App):
     async def inline_comment_submitted(self, event: InlineCommentBox.Submitted) -> None:
         if event.file_path not in self.comments:
             self.comments[event.file_path] = []
-        self.comments[event.file_path].append({
-            "file_path": event.file_path,
-            "line_text": event.line_text,
-            "line_index": event.line_index,
-            "file_line_num": event.file_line_num,
-            "comment": event.comment,
-            "author": self._user_name,
-            "author_type": "user",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self.comments[event.file_path].append(
+            {
+                "file_path": event.file_path,
+                "line_text": event.line_text,
+                "line_index": event.line_index,
+                "file_line_num": event.file_line_num,
+                "comment": event.comment,
+                "author": self._user_name,
+                "author_type": "user",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         save_comments(self.comments)
         self._comment_nav_index = -1
         self._refresh_comments_select()
         box = self.query_one("InlineCommentBox")
         assert box.parent is not None
-        await box.parent.mount(InlineCommentDisplay(event.comment, event.file_path, event.line_index, author=self._user_name, author_type="user"), before=box)  # type: ignore[union-attr]
+        await box.parent.mount(
+            InlineCommentDisplay(
+                event.comment, event.file_path, event.line_index, author=self._user_name, author_type="user"
+            ),
+            before=box,
+        )  # type: ignore[union-attr]
         await box.remove()
         self.notify(f"Comment added to {short_name(event.file_path)}", timeout=3)
 
@@ -869,7 +959,8 @@ class DiffUI(App):
     async def inline_comment_deleted(self, event: InlineCommentDisplay.Deleted) -> None:
         file_comments = self.comments.get(event.file_path, [])
         self.comments[event.file_path] = [
-            c for c in file_comments
+            c
+            for c in file_comments
             if not (c.get("line_index") == event.line_index and c.get("comment") == event.comment_text)
         ]
         if not self.comments[event.file_path]:
@@ -993,7 +1084,14 @@ class DiffUI(App):
         await self._refresh_tabs()
 
     def _save_settings(self) -> None:
-        save_settings({"theme": ALL_THEMES[self._theme_index].name, "editor": self._editor, "view_mode": self._view_mode, "user_name": self._user_name})
+        save_settings(
+            {
+                "theme": ALL_THEMES[self._theme_index].name,
+                "editor": self._editor,
+                "view_mode": self._view_mode,
+                "user_name": self._user_name,
+            }
+        )
 
     def action_quit(self) -> None:
         self.exit()
