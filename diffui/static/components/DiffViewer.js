@@ -122,9 +122,14 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           <span class="diff-stat-del">-${data.dels}</span>
         </div>
         <div class="diff-header-actions">
+          ${onExpandContext && contextLines > 3 && html`
+            <button class="expand-ctx-btn" onClick=${() => onExpandContext('collapse')}>
+              Less context
+            </button>
+          `}
           ${onExpandContext && contextLines < 9999 && html`
-            <button class="expand-ctx-btn" onClick=${onExpandContext}>
-              Expand context
+            <button class="expand-ctx-btn" onClick=${() => onExpandContext('expand')}>
+              More context
             </button>
           `}
           <button class=${'review-btn' + (reviewed ? ' reviewed' : '')} onClick=${onToggleReview}>

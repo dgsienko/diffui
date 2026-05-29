@@ -266,9 +266,14 @@ function App() {
     }
   }, []);
 
-  const handleExpandContext = useCallback(() => {
+  const handleExpandContext = useCallback((direction = 'expand') => {
     const levels = [3, 10, 50, 9999];
-    const next = levels.find(l => l > contextLines) || 9999;
+    let next;
+    if (direction === 'collapse') {
+      next = [...levels].reverse().find(l => l < contextLines) || 3;
+    } else {
+      next = levels.find(l => l > contextLines) || 9999;
+    }
     setContextLines(next);
     const af = activeFileRef.current;
     if (af) {
