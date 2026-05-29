@@ -104,7 +104,7 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
           ${splitData.map(s => {
             const { right } = s;
             return html`
-              <div class="split-hunk-header">${hunk.header}</div>
+              <div class="split-hunk-header">${s.header}</div>
               ${right.map((line, i) => {
                 const lineComments = line ? (comments[data.file_path] || []).filter(c => c.line_index === line.index) : [];
                 return html`
