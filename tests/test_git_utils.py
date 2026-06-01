@@ -144,8 +144,6 @@ class TestResolveRepos:
         assert 0 <= idx < len(repos)
 
     def test_explicit_paths(self):
-        from pathlib import Path
-
         from diffui.git_utils import resolve_repos
 
         repo_path = str(Path(__file__).parent.parent)
@@ -155,8 +153,6 @@ class TestResolveRepos:
         assert repos[0].name == "diffui"
 
     def test_deduplicates(self):
-        from pathlib import Path
-
         from diffui.git_utils import resolve_repos
 
         repo_path = str(Path(__file__).parent.parent)

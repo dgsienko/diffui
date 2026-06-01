@@ -13,6 +13,8 @@ import { FileTree } from './components/FileTree.js';
 import { SplitDiffViewer } from './components/SplitDiffViewer.js';
 import { FullFileViewer } from './components/FullFileViewer.js';
 import { Minimap } from './components/Minimap.js';
+import { CompletionScreen } from './components/CompletionScreen.js';
+import { CommandPalette } from './components/CommandPalette.js';
 
 const html = htm.bind(h);
 
@@ -35,6 +37,8 @@ function App() {
   const [showFileTree, setShowFileTree] = useState(false);
   const [diffMode, setDiffMode] = useState('unified');
   const [contextLines, setContextLines] = useState(3);
+  const [showCompletion, setShowCompletion] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const diffRef = useRef(null);
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
@@ -49,6 +53,8 @@ function App() {
   const branchRef = useRef(branch);
   branchRef.current = branch;
   const visibleFilesRef = useRef([]);
+  const showCompletionRef = useRef(false);
+  const dialogOpenRef = useRef(false);
 
   const fetchTheme = useCallback(async () => {
     const res = await fetch('/api/theme/css');
@@ -204,7 +210,12 @@ function App() {
     const data = await r.json();
     showToast(data.reviewed ? 'Marked as reviewed' : 'Marked as unreviewed', 'success');
     await fetchFiles();
-  }, [activeFile, fetchFiles]);
+    if (data.reviewed) {
+      const vf = visibleFilesRef.current;
+      const next = vf.find(f => !f.reviewed);
+      if (next) handleFileSelect(next.path);
+    }
+  }, [fetchFiles, handleFileSelect]);
 
   const handleAddComment = useCallback(async (filePath, lineIndex, lineText, fileLineNum, commentText) => {
     await fetch('/api/comments', {
@@ -242,6 +253,13 @@ function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
+    });
+    await fetchComments();
+  }, [fetchComments]);
+
+  const handleResolveComment = useCallback(async (filePath, commentId) => {
+    await fetch(`/api/comments/${encodeURIComponent(filePath)}/${commentId}/resolve`, {
+      method: 'POST',
     });
     await fetchComments();
   }, [fetchComments]);
@@ -292,6 +310,21 @@ function App() {
     showToast(label);
   }, [contextLines, fetchDiff]);
 
+  const scrollToHunk = useCallback((direction) => {
+    const container = diffRef.current;
+    if (!container) return;
+    const headers = [...container.querySelectorAll('.hunk-header')];
+    if (!headers.length) return;
+    const scrollTop = container.scrollTop;
+    if (direction === 'next') {
+      const next = headers.find(h => h.offsetTop > scrollTop + 10);
+      if (next) container.scrollTo({ top: next.offsetTop, behavior: 'instant' });
+    } else {
+      const prev = [...headers].reverse().find(h => h.offsetTop < scrollTop - 10);
+      if (prev) container.scrollTo({ top: prev.offsetTop, behavior: 'instant' });
+    }
+  }, []);
+
   const handleCopyGitLabLink = useCallback(() => {
     const af = activeFileRef.current;
     const b = branchRef.current;
@@ -319,7 +352,26 @@ function App() {
   // Keyboard shortcuts — stable effect, reads current values via refs
   useEffect(() => {
     const handler = (e) => {
+      if (showCompletionRef.current) { setShowCompletion(false); return; }
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+      // Global shortcuts — work even when dialogs are open
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(v => !v);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowSettings(false);
+        setShowSearch(false);
+        setShowShortcuts(false);
+        setShowCommandPalette(false);
+        setSearchTerm('');
+        return;
+      }
+
+      // Context-aware: skip action shortcuts when a dialog is open
+      if (dialogOpenRef.current) return;
 
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         const vf = visibleFilesRef.current;
@@ -342,35 +394,75 @@ function App() {
       } else if (e.key === 'b') {
         setShowFileTree(v => !v);
       } else if (e.key === 'j' || e.key === 'k') {
-        const container = diffRef.current;
-        if (!container) return;
-        const headers = [...container.querySelectorAll('.hunk-header')];
-        if (!headers.length) return;
-        const scrollTop = container.scrollTop;
-        if (e.key === 'j') {
-          const next = headers.find(h => h.offsetTop > scrollTop + 10);
-          if (next) container.scrollTo({ top: next.offsetTop, behavior: 'instant' });
-        } else {
-          const prev = [...headers].reverse().find(h => h.offsetTop < scrollTop - 10);
-          if (prev) container.scrollTo({ top: prev.offsetTop, behavior: 'instant' });
-        }
+        scrollToHunk(e.key === 'j' ? 'next' : 'prev');
       } else if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
         setShowSearch(v => !v);
       } else if (e.key === '?') {
         setShowShortcuts(v => !v);
-      } else if (e.key === 'Escape') {
-        setShowSettings(false);
-        setShowSearch(false);
-        setShowShortcuts(false);
-        setSearchTerm('');
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  const reviewedCount = files.filter(f => f.reviewed).length;
+  const reviewedCount = useMemo(() => files.filter(f => f.reviewed).length, [files]);
+  showCompletionRef.current = showCompletion;
+  dialogOpenRef.current = showSettings || showSearch || showShortcuts || showCommandPalette;
+  const prevReviewedRef = useRef(null);
+  useEffect(() => {
+    if (prevReviewedRef.current !== null && files.length > 0
+        && reviewedCount === files.length
+        && prevReviewedRef.current < files.length) {
+      setShowCompletion(true);
+    }
+    prevReviewedRef.current = reviewedCount;
+  }, [reviewedCount, files.length]);
+
+  const paletteCommands = useMemo(() => [
+    { id: 'toggle-review', label: 'Toggle reviewed', keys: 'r', category: 'Actions' },
+    { id: 'toggle-show-reviewed', label: 'Show/hide reviewed files', keys: 'a', category: 'Actions' },
+    { id: 'prev-file', label: 'Previous file', keys: '←', category: 'Navigation' },
+    { id: 'next-file', label: 'Next file', keys: '→', category: 'Navigation' },
+    { id: 'prev-hunk', label: 'Previous hunk', keys: 'k', category: 'Navigation' },
+    { id: 'next-hunk', label: 'Next hunk', keys: 'j', category: 'Navigation' },
+    { id: 'copy-path', label: 'Copy file path', keys: 'y', category: 'Actions' },
+    { id: 'copy-gitlab-link', label: 'Copy GitLab link', keys: 'Y', category: 'Actions' },
+    { id: 'toggle-file-tree', label: 'Toggle file tree', keys: 'b', category: 'Actions' },
+    { id: 'search', label: 'Search in diff', keys: 'Ctrl+F', category: 'Actions' },
+    { id: 'shortcuts', label: 'Show keyboard shortcuts', keys: '?', category: 'Help' },
+    { id: 'settings', label: 'Open settings', category: 'Settings' },
+    { id: 'mode-unified', label: 'Switch to unified diff', category: 'Settings' },
+    { id: 'mode-split', label: 'Switch to split diff', category: 'Settings' },
+    { id: 'mode-file', label: 'Switch to full file view', category: 'Settings' },
+    { id: 'expand-context', label: 'Expand diff context', category: 'Actions' },
+    { id: 'collapse-context', label: 'Collapse diff context', category: 'Actions' },
+  ], []);
+
+  const handleCommand = useCallback((id) => {
+    const vf = visibleFilesRef.current;
+    const af = activeFileRef.current;
+    const idx = vf.findIndex(f => f.path === af);
+    switch (id) {
+      case 'toggle-review': handleToggleReview(); break;
+      case 'toggle-show-reviewed': setShowReviewed(v => !v); break;
+      case 'prev-file': if (vf.length) handleFileSelect(vf[(idx - 1 + vf.length) % vf.length].path); break;
+      case 'next-file': if (vf.length) handleFileSelect(vf[(idx + 1) % vf.length].path); break;
+      case 'copy-path': handleCopyPath(); break;
+      case 'copy-gitlab-link': handleCopyGitLabLink(); break;
+      case 'toggle-file-tree': setShowFileTree(v => !v); break;
+      case 'search': setShowSearch(v => !v); break;
+      case 'shortcuts': setShowShortcuts(v => !v); break;
+      case 'settings': setShowSettings(v => !v); break;
+      case 'mode-unified': setDiffMode('unified'); break;
+      case 'mode-split': setDiffMode('split'); break;
+      case 'mode-file': setDiffMode('file'); break;
+      case 'expand-context': handleExpandContext('expand'); break;
+      case 'collapse-context': handleExpandContext('collapse'); break;
+      case 'prev-hunk': scrollToHunk('prev'); break;
+      case 'next-hunk': scrollToHunk('next'); break;
+    }
+  }, [handleToggleReview, handleFileSelect, handleCopyPath, handleCopyGitLabLink, handleExpandContext]);
 
   return html`
     <${TopBar}
@@ -435,6 +527,7 @@ function App() {
                   onDeleteComment=${handleDeleteComment}
                   onEditComment=${handleEditComment}
                   onReplyComment=${handleReplyComment}
+                  onResolveComment=${handleResolveComment}
                   reviewed=${files.find(f => f.path === activeFile)?.reviewed}
                 />`
               : diffData
@@ -448,6 +541,7 @@ function App() {
                     onDeleteComment=${handleDeleteComment}
                     onEditComment=${handleEditComment}
                     onReplyComment=${handleReplyComment}
+                    onResolveComment=${handleResolveComment}
                     onOpenInEditor=${handleOpenInEditor}
                     onExpandContext=${handleExpandContext}
                     contextLines=${contextLines}
@@ -471,18 +565,30 @@ function App() {
     `}
     <div class="legend">
       <div class="legend-items">
+        <span><kbd>Ctrl+K</kbd> commands</span>
+        <span><kbd>?</kbd> shortcuts</span>
         <span><kbd>←</kbd><kbd>→</kbd> prev/next file</span>
         <span><kbd>j</kbd><kbd>k</kbd> next/prev hunk</span>
         <span><kbd>r</kbd> toggle reviewed</span>
         <span><kbd>a</kbd> show/hide reviewed</span>
-        <span><kbd>y</kbd> copy path</span>
-        <span><kbd>Y</kbd> copy GitLab link</span>
         <span><kbd>Ctrl+F</kbd> search</span>
-        <span><kbd>Ctrl+Click</kbd> open in editor</span>
-        <span><kbd>Right-Click</kbd> add comment</span>
+        <span><kbd>y</kbd> copy path</span>
       </div>
-      <span class="legend-fixed"><kbd>?</kbd> shortcuts</span>
     </div>
+    ${showCommandPalette && html`
+      <${CommandPalette}
+        commands=${paletteCommands}
+        onExecute=${handleCommand}
+        onClose=${() => setShowCommandPalette(false)}
+      />
+    `}
+    ${showCompletion && html`
+      <${CompletionScreen}
+        fileCount=${files.length}
+        comments=${comments}
+        onDismiss=${() => setShowCompletion(false)}
+      />
+    `}
     <${ToastContainer} />
   `;
 }

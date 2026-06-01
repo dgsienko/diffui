@@ -93,7 +93,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover }) 
   `;
 }
 
-function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, commentingLine, setCommentingLine, filePath }) {
+function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, commentingLine, setCommentingLine, filePath }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return html`
@@ -120,6 +120,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHov
                 onDelete=${() => onDeleteComment(filePath, c.id)}
                 onEdit=${(text) => onEditComment(filePath, c.id, text)}
                 onReply=${(text) => onReplyComment(filePath, c.id, text)}
+                onResolve=${() => onResolveComment(filePath, c.id)}
               />
             `)}
             ${commentingLine === line.index && html`
@@ -139,7 +140,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHov
   `;
 }
 
-export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onOpenInEditor, onExpandContext, contextLines, onLineHover, reviewed, containerRef }) {
+export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onOpenInEditor, onExpandContext, contextLines, onLineHover, reviewed, containerRef }) {
   const [commentingLine, setCommentingLine] = useState(null);
 
   const handleRightClick = (line) => {
@@ -198,6 +199,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           onDeleteComment=${onDeleteComment}
           onEditComment=${onEditComment}
           onReplyComment=${onReplyComment}
+          onResolveComment=${onResolveComment}
         />
       `)}
     </div>

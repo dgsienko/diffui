@@ -11,9 +11,10 @@ function renderMd(text) {
   return { __html: marked.parse(text || '') };
 }
 
-export function CommentDisplay({ comment, onDelete, onEdit, onReply }) {
+export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve }) {
   const [showReply, setShowReply] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const replyRef = useRef(null);
   const editRef = useRef(null);
 
@@ -22,6 +23,7 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply }) {
   const replies = comment.replies || [];
   const hasAgentReply = replies.some(r => (r.author_type || 'agent') !== 'user');
   const canEdit = isUser && !hasAgentReply;
+  const isResolved = comment.status === 'resolved';
 
   const handleReplySubmit = () => {
     const text = replyRef.current?.value.trim();
@@ -47,10 +49,23 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply }) {
   };
 
   return html`
-    <div class="comment-display">
+    <div class=${'comment-display' + (isResolved ? ' comment-resolved' : '')}>
       <div class="comment-header">
-        <span class="comment-author">${icon} ${comment.author || 'User'}</span>
+        <span class="comment-author">
+          ${icon} ${comment.author || 'User'}
+          ${isResolved && html`<span class="comment-status-badge resolved">Resolved</span>`}
+        </span>
         <div class="comment-actions">
+          ${replies.length > 0 && html`
+            <button class="comment-action-btn" onClick=${() => setCollapsed(v => !v)} title=${collapsed ? 'Expand thread' : 'Collapse thread'}>
+              ${collapsed ? '▸' : '▾'}
+            </button>
+          `}
+          ${onResolve && html`
+            <button class="comment-action-btn resolve" onClick=${onResolve} title=${isResolved ? 'Reopen' : 'Resolve'}>
+              ${isResolved ? '○' : '✓'}
+            </button>
+          `}
           <button class="comment-action-btn" onClick=${() => { setShowReply(true); setTimeout(() => replyRef.current?.focus(), 0); }}>↩</button>
           ${canEdit && html`
             <button class="comment-action-btn" onClick=${() => { setEditing(true); setTimeout(() => editRef.current?.focus(), 0); }}>✎</button>
@@ -73,12 +88,15 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply }) {
       ` : html`
         <div class="comment-body comment-md" dangerouslySetInnerHTML=${renderMd(comment.comment)}></div>
       `}
-      ${replies.map(r => {
+      ${!collapsed && replies.map(r => {
         const rIcon = (r.author_type || 'agent') === 'user' ? '💬' : '🤖';
         return html`
           <div class="comment-reply">↳ ${rIcon} ${r.author || 'agent'}: <span class="comment-md" dangerouslySetInnerHTML=${renderMd(r.text)}></span></div>
         `;
       })}
+      ${collapsed && replies.length > 0 && html`
+        <div class="comment-collapsed-hint">${replies.length} ${replies.length === 1 ? 'reply' : 'replies'} hidden</div>
+      `}
       ${showReply && html`
         <div class="comment-reply-box">
           <textarea

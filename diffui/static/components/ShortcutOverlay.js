@@ -12,6 +12,7 @@ const SHORTCUTS = [
   { keys: 'y', action: 'Copy file path' },
   { keys: 'Y', action: 'Copy GitLab link' },
   { keys: 'b', action: 'Toggle file tree' },
+  { keys: 'Ctrl+K', action: 'Command palette' },
   { keys: 'Ctrl+F', action: 'Search' },
   { keys: 'Ctrl+Click', action: 'Open in editor' },
   { keys: 'Right-Click', action: 'Add comment' },

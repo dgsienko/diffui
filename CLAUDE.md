@@ -11,6 +11,7 @@ UI for reviewing AI agent diffs. Two frontends sharing the same backend:
 - **Preact + HTM** (web UI frontend, no build step)
 - **Textual** (TUI framework)
 - **Pygments** for syntax highlighting
+- **watchfiles** for real-time filesystem watching (Rust-backed FSEvents/inotify)
 - Git operations via `subprocess` (no gitpython dependency)
 - Installed globally via `pipx install -e .`
 
@@ -27,7 +28,7 @@ diffui/
 ├── git_utils.py        # Git subprocess helpers, state persistence, repo discovery
 ├── server/             # FastAPI backend (web UI)
 │   ├── app.py          # App factory — mounts routes, static files, SSE poller
-│   ├── events.py       # SSE endpoint + background poller (3s git/file/comment mtime checks)
+│   ├── events.py       # SSE endpoint + watchfiles-based filesystem watcher
 │   ├── highlight.py    # Pygments-to-HTML adapter, word highlight overlay
 │   ├── routes_*.py     # API routes (repos, diffs, comments, review, settings)
 │   ├── state.py        # AppState singleton — shared server state
@@ -36,13 +37,14 @@ diffui/
 │   ├── app.js          # Root component, state management, SSE client, keyboard shortcuts
 │   ├── components/     # TopBar, FileTabs, DiffViewer, SplitDiffViewer,
 │   │                   #   FullFileViewer, FileTree, CommentBox, CommentDisplay,
-│   │                   #   SearchBar, SettingsPanel, Minimap, ShortcutOverlay, Toast
+│   │                   #   SearchBar, SettingsPanel, Minimap, ShortcutOverlay,
+│   │                   #   Toast, CommandPalette, CompletionScreen
 │   ├── index.html      # Shell page with importmap for preact/htm CDN
 │   └── style.css       # All styles via CSS custom properties (themed)
 └── themes/
     ├── __init__.py     # Theme state (get/set_current_theme), re-exports
     ├── theme.py        # Theme dataclass (30+ color fields)
-    ├── definitions.py  # 10 theme instances with Pygments token color maps
+    ├── definitions.py  # 15 theme instances with Pygments token color maps
     └── css.py          # generate_css(theme) — Textual CSS template
 ```
 
@@ -54,8 +56,9 @@ diffui/
   `~/.config/diffui/{repo}/{branch}/`. `get_repo_root()` and
   `_cached_current_branch()` are `lru_cache`'d.
 - **Comment threads** — comments have `id` (UUID), `author`/`author_type`
-  fields. Replies are structured dicts. Edit locking: user content is
-  editable until an agent replies to the thread.
+  fields, and `status` (open/resolved). Replies are structured dicts.
+  Edit locking: user content is editable until an agent replies.
+  Threads are collapsible in the web UI.
 - **Word-level diff** — `pair_diff_lines` matches consecutive remove/add
   pairs and `word_diff_ranges` uses `difflib.SequenceMatcher` to find
   changed word spans.
@@ -64,8 +67,10 @@ diffui/
 
 ### Web UI Patterns
 
-- **SSE live updates** — `events.py` polls git state every 3s in a
-  background thread, pushes events to connected `EventSource` clients.
+- **SSE live updates** — `events.py` uses `watchfiles` (Rust-backed
+  FSEvents/inotify) for real-time filesystem watching with 400ms
+  debounce. Watches repo dir, `.git` dir, and comments file. Filters
+  to only relevant paths (git HEAD/index/refs, source files, comments).
 - **Diff caching** — server-side `_diff_cache` keyed by
   `(repo, merge_base, path, view, mtime)`. Client-side `diffCache` Map
   for instant tab switching with stale-while-revalidate.
@@ -114,7 +119,8 @@ diffui                               # Web UI (from any git repo)
 diffui --open                        # Web UI + open in browser
 diffui-tui                           # Terminal UI
 diffui --comments                    # Dump comments to stdout
-pytest                               # Run tests (122 tests)
+diffui --json                        # Export review session as JSON
+pytest                               # Run tests (145 tests)
 ruff check diffui/ tests/           # Lint
 ```
 
@@ -124,18 +130,21 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
 `themes/`) and the web server (`server/`). No Textual app tests —
 would require `app.run_test()` with a headless terminal.
 
-- `tests/test_diff.py` — 49 tests: line classification, number parsing,
+- `tests/test_diff.py` — 48 tests: line classification, number parsing,
   hunk splitting, prefix stripping, lexer selection, syntax highlighting,
   word diff ranges, pair diff lines
-- `tests/test_git_utils.py` — 24 tests: short_name, _safe_name, JSON
+- `tests/test_events.py` — 22 tests: change classification (source files,
+  git paths, comments, mixed, empty, dedup), watch filter (accept/reject
+  for source, pyc, git paths, unrelated dirs), SSE broadcast
+- `tests/test_git_utils.py` — 25 tests: short_name, _safe_name, JSON
   load/save roundtrips, diff_stat counting, resolve_repos, get_diff_numstat
-- `tests/test_highlight.py` — 19 tests: highlight_line_html escaping and
+- `tests/test_highlight.py` — 18 tests: highlight_line_html escaping and
   coloring, _apply_word_highlights with spans/entities/malformed HTML,
   parse_diff_to_json structure, highlight_file_to_json
-- `tests/test_server.py` — 14 tests: CSS vars generation, all API routes
+- `tests/test_server.py` — 20 tests: CSS vars generation, all API routes
   (repos, branch, commits, files, diff, themes, settings, comments CRUD,
-  review toggle, static files)
-- `tests/test_themes.py` — 16 tests: all themes have valid hex colors,
+  comment resolution toggle, review toggle, static files, JSON export)
+- `tests/test_themes.py` — 12 tests: all themes have valid hex colors,
   unique names, syntax maps; CSS generation; theme state get/set
 
 ## Linting
@@ -158,7 +167,8 @@ All in `~/.config/diffui/`:
 | `{repo}/{branch}/comments.json` | Per-branch | `{"path": [{...}]}` |
 
 Comment objects: `id` (UUID), `file_path`, `file_line_num`, `line_text`,
-`comment`, `author`, `author_type`, `timestamp`, `replies[]`.
+`comment`, `author`, `author_type`, `timestamp`, `status` (open/resolved),
+`replies[]`.
 
 Reply objects: `text`, `author`, `author_type`.
 

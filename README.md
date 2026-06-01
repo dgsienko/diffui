@@ -28,6 +28,7 @@ available via a dropdown switcher.
 
 ```bash
 diffui --comments    # Dump all comments to stdout
+diffui --json        # Export review session as structured JSON
 diffui --open        # Web UI: also open the URL in a browser
 ```
 
@@ -40,43 +41,57 @@ diffui --open        # Web UI: also open the URL in a browser
 - **File header** — pinned bar showing full file path, additions, and
   deletions with an inline review button
 - **Collapsible hunks** — click hunk headers to collapse/expand
-- **Review tracking** — mark files as reviewed; auto-unmarks when the
-  file changes (tracked by file modification time)
+- **Review tracking** — mark files as reviewed; auto-advances to next
+  unreviewed file; auto-unmarks when the file changes (tracked by mtime)
 - **Comment threads** — right-click a line to leave a comment; reply to
-  comments; named authors (user vs agent); edit your comments inline
+  comments; named authors (user vs agent); edit your comments inline;
+  collapse/expand threads
+- **Comment resolution** — resolve/reopen comments with a toggle; resolved
+  comments appear dimmed with a status badge
 - **Comment navigation** — `n`/`p` to jump between comments across files
-- **Search** — ctrl+f to search across the current diff (debounced)
-- **Open in editor** — ctrl+click to open the line in VS Code, Cursor,
+- **Command palette** — `ctrl+k` to search and execute any command
+- **Search** — `ctrl+f` to search across the current diff (debounced)
+- **Open in editor** — `ctrl+click` to open the line in VS Code, Cursor,
   Vim, or Neovim (configurable in settings)
-- **View modes** — diff view (default) or full file view, switchable in
-  settings
+- **View modes** — unified diff (default), split (side-by-side), or full
+  file view
 - **View selector** — switch between all branch changes, individual
   commits (most recent first), or uncommitted working changes
 - **Untracked files** — new files not yet added to git are shown
 - **File tree sidebar** — press `b` to toggle a collapsible file tree
+- **Completion screen** — celebratory overlay when all files are reviewed,
+  with stats and open comment count
 - **Branch name** — displayed in the top bar
-- **10 color themes** — Catppuccin Mocha, GitHub Dark, Dracula, One Dark,
-  Solarized Dark, Gruvbox Dark, Nord, Tokyo Night, Rose Pine, Monokai Pro
-- **Auto-refresh** — detects file changes, new commits, and comment edits
-  every 3 seconds (polling runs off the main thread)
+- **15 color themes** — Catppuccin Mocha, Catppuccin Latte, GitHub Dark,
+  Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night,
+  Rose Pine, Rose Pine Moon, Monokai Pro, Kanagawa, Everforest, Ayu Dark
+- **Auto-refresh** — real-time filesystem watching via watchfiles
+  (FSEvents/inotify) with 400ms debounce
+- **JSON export** — `diffui --json` outputs structured review data for
+  agent/CLI integration
 - **Settings persistence** — theme, editor, view mode, and display name
   saved across sessions
 - **Scroll position persistence** — switching tabs preserves your scroll
   position
+- **Context-aware keybindings** — shortcuts are suppressed when dialogs
+  are open
 
 ## Keybindings
 
 | Key | Action |
 | --- | --- |
-| `r` | Toggle reviewed status on current file |
+| `ctrl+k` | Open command palette |
+| `?` | Show keyboard shortcuts overlay |
+| `left` / `right` | Previous / next file tab |
+| `j` / `k` | Next / previous hunk |
+| `r` | Toggle reviewed (auto-advances to next unreviewed) |
 | `a` | Show all / hide reviewed files |
 | `n` / `p` | Next / previous comment |
-| `j` / `k` | Next / previous hunk |
-| `left` / `right` | Previous / next file tab |
 | `y` | Copy current file path to clipboard |
+| `Y` | Copy GitLab link to clipboard |
 | `b` | Toggle file tree sidebar |
 | `ctrl+f` | Open search |
-| `escape` | Close settings panel or search bar |
+| `escape` | Close any open panel or dialog |
 | `ctrl+click` | Open line in editor |
 | `right-click` | Add comment on a line |
 | `q` | Quit |
@@ -85,8 +100,12 @@ diffui --open        # Web UI: also open the URL in a browser
 
 Comments are stored at `~/.config/diffui/{repo}/{branch}/comments.json`.
 Each comment includes the file path, line number, diff context, comment
-text, author name, and author type. AI agents can read this file to
-address review feedback and reply to comments.
+text, author name, author type, and status (open/resolved). AI agents
+can read this file to address review feedback and reply to comments.
+
+`diffui --json` exports the full review session as structured JSON
+including branch info, per-file review status, comments, and a summary
+with open/resolved counts — useful for programmatic agent workflows.
 
 To have an agent address your comments, just ask:
 
@@ -114,7 +133,7 @@ directories.
 # Install with dev deps
 pipx inject diffui pytest ruff
 
-# Run tests (122 tests)
+# Run tests (145 tests)
 cd ~/code/diffui && pytest
 
 # Lint
@@ -133,7 +152,7 @@ diffui/
 ├── git_utils.py        # Git operations and state persistence
 ├── server/             # FastAPI backend (web UI)
 │   ├── app.py          # FastAPI app factory
-│   ├── events.py       # SSE poller for live updates
+│   ├── events.py       # SSE endpoint + watchfiles-based filesystem watcher
 │   ├── highlight.py    # Pygments-to-HTML adapter
 │   ├── routes_*.py     # API routes (repos, diffs, comments, review, settings)
 │   ├── state.py        # Shared app state
@@ -143,17 +162,19 @@ diffui/
 │   ├── components/     # TopBar, FileTabs, DiffViewer, SplitDiffViewer,
 │   │                   #   FullFileViewer, FileTree, CommentBox,
 │   │                   #   CommentDisplay, SearchBar, SettingsPanel,
-│   │                   #   Minimap, ShortcutOverlay, Toast
+│   │                   #   Minimap, ShortcutOverlay, Toast,
+│   │                   #   CommandPalette, CompletionScreen
 │   ├── index.html      # Shell page
 │   └── style.css       # Styles using CSS custom properties
 ├── themes/
 │   ├── theme.py        # Theme dataclass
-│   ├── definitions.py  # 10 theme definitions
+│   ├── definitions.py  # 15 theme definitions
 │   └── css.py          # Textual CSS template generator
 └── tests/
-    ├── test_diff.py        # Diff parsing tests (49 tests)
-    ├── test_git_utils.py   # Persistence and utility tests (24 tests)
-    ├── test_highlight.py   # HTML highlight adapter tests (19 tests)
-    ├── test_server.py      # API route tests (14 tests)
-    └── test_themes.py      # Theme definitions and CSS tests (16 tests)
+    ├── test_diff.py        # Diff parsing tests (48 tests)
+    ├── test_events.py      # Filesystem watcher tests (22 tests)
+    ├── test_git_utils.py   # Persistence and utility tests (25 tests)
+    ├── test_highlight.py   # HTML highlight adapter tests (18 tests)
+    ├── test_server.py      # API route and JSON export tests (20 tests)
+    └── test_themes.py      # Theme definitions and CSS tests (12 tests)
 ```

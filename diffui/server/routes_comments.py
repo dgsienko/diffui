@@ -39,6 +39,7 @@ def add_comment(body: dict):
             "author": body.get("author", app_state.user_name),
             "author_type": body.get("author_type", "user"),
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "status": body.get("status", "open"),
         }
     )
     save_comments(app_state.comments)
@@ -61,6 +62,16 @@ def delete_comment(file_path: str, comment_id: str):
     if not app_state.comments[file_path]:
         del app_state.comments[file_path]
     save_comments(app_state.comments)
+    return {"ok": True}
+
+
+@router.post("/comments/{file_path:path}/{comment_id}/resolve")
+def resolve_comment(file_path: str, comment_id: str):
+    c = _find_comment(file_path, comment_id)
+    if c:
+        current = c.get("status", "open")
+        c["status"] = "open" if current == "resolved" else "resolved"
+        save_comments(app_state.comments)
     return {"ok": True}
 
 

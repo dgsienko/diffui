@@ -100,26 +100,18 @@ class TestResolveLineNum:
 class TestParseLineNumbers:
     def test_simple_diff(self):
         diff = (
-            "diff --git a/f b/f\n"
-            "--- a/f\n"
-            "+++ b/f\n"
-            "@@ -1,3 +1,4 @@\n"
-            " line1\n"
-            "-line2\n"
-            "+line2_new\n"
-            "+line2_extra\n"
-            " line3\n"
+            "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1,3 +1,4 @@\n line1\n-line2\n+line2_new\n+line2_extra\n line3\n"
         )
         nums = parse_line_numbers(diff)
         assert nums[0] == (None, None)  # diff
         assert nums[1] == (None, None)  # ---
         assert nums[2] == (None, None)  # +++
         assert nums[3] == (None, None)  # @@
-        assert nums[4] == ("1", "1")    # context
-        assert nums[5] == ("2", None)   # remove
-        assert nums[6] == (None, "2")   # add
-        assert nums[7] == (None, "3")   # add
-        assert nums[8] == ("3", "4")    # context
+        assert nums[4] == ("1", "1")  # context
+        assert nums[5] == ("2", None)  # remove
+        assert nums[6] == (None, "2")  # add
+        assert nums[7] == (None, "3")  # add
+        assert nums[8] == ("3", "4")  # context
 
     def test_empty(self):
         assert parse_line_numbers("") == []
@@ -268,7 +260,11 @@ class TestPairDiffLines:
             "+new2",
         ]
         result = pair_diff_lines(lines)
-        assert 0 in result or 1 in result
+        assert len(result) == 4
+        for idx in (0, 1, 2, 3):
+            assert idx in result
+            assert isinstance(result[idx], list)
+            assert all(isinstance(r, tuple) and len(r) == 2 for r in result[idx])
 
     def test_unmatched_removes(self):
         lines = [
@@ -279,3 +275,4 @@ class TestPairDiffLines:
         result = pair_diff_lines(lines)
         assert 0 in result
         assert 2 in result
+        assert 1 not in result

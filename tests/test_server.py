@@ -128,10 +128,6 @@ class TestServerRoutes:
         finally:
             _server_app.put("/api/settings", json={"editor": original["editor"]})
 
-    def test_comments(self, _server_app):
-        r = _server_app.get("/api/comments")
-        assert r.status_code == 200
-
     def test_comment_crud(self, _server_app):
         r = _server_app.post(
             "/api/comments",
@@ -148,7 +144,9 @@ class TestServerRoutes:
             assert "_test_.py" in comments
             comment = comments["_test_.py"][0]
             assert comment["comment"] == "test comment"
+            assert comment["status"] == "open"
             assert "id" in comment
+            assert "timestamp" in comment
             cid = comment["id"]
 
             r = _server_app.put(f"/api/comments/_test_.py/{cid}", json={"comment": "edited"})
@@ -157,11 +155,47 @@ class TestServerRoutes:
 
             r = _server_app.post(f"/api/comments/_test_.py/{cid}/reply", json={"text": "reply"})
             assert r.status_code == 200
-            assert len(_server_app.get("/api/comments").json()["_test_.py"][0]["replies"]) == 1
+            replies = _server_app.get("/api/comments").json()["_test_.py"][0]["replies"]
+            assert len(replies) == 1
+            assert replies[0]["text"] == "reply"
+
+            r = _server_app.delete(f"/api/comments/_test_.py/{cid}")
+            assert r.status_code == 200
+            comments = _server_app.get("/api/comments").json()
+            assert "_test_.py" not in comments or len(comments["_test_.py"]) == 0
         finally:
             comments = _server_app.get("/api/comments").json()
             for c in comments.get("_test_.py", []):
                 _server_app.delete(f"/api/comments/_test_.py/{c['id']}")
+
+    def test_comment_resolve_toggle(self, _server_app):
+        r = _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_resolve_.py",
+                "line_index": 1,
+                "comment": "needs fix",
+            },
+        )
+        assert r.status_code == 200
+        try:
+            comments = _server_app.get("/api/comments").json()
+            c = comments["_test_resolve_.py"][0]
+            assert c.get("status") == "open"
+
+            r = _server_app.post(f"/api/comments/_test_resolve_.py/{c['id']}/resolve")
+            assert r.status_code == 200
+            comments = _server_app.get("/api/comments").json()
+            assert comments["_test_resolve_.py"][0]["status"] == "resolved"
+
+            r = _server_app.post(f"/api/comments/_test_resolve_.py/{c['id']}/resolve")
+            assert r.status_code == 200
+            comments = _server_app.get("/api/comments").json()
+            assert comments["_test_resolve_.py"][0]["status"] == "open"
+        finally:
+            comments = _server_app.get("/api/comments").json()
+            for c in comments.get("_test_resolve_.py", []):
+                _server_app.delete(f"/api/comments/_test_resolve_.py/{c['id']}")
 
     def test_review_toggle(self, _server_app):
         files = _server_app.get("/api/files?view=all").json()
@@ -182,3 +216,44 @@ class TestServerRoutes:
         assert r.status_code == 200
         r = _server_app.get("/static/style.css")
         assert r.status_code == 200
+
+
+class TestExportJson:
+    def test_output_structure(self):
+        import json
+        from io import StringIO
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from diffui.git_utils import resolve_repo_root, set_active_repo
+
+        root = resolve_repo_root(Path(__file__).parent.parent)
+        set_active_repo(root)
+
+        buf = StringIO()
+        with patch("builtins.print", side_effect=lambda *a, **kw: buf.write(a[0] if a else "")):
+            from diffui.cli import export_json
+
+            export_json()
+
+        data = json.loads(buf.getvalue())
+        assert "branch" in data
+        assert "main_branch" in data
+        assert "merge_base" in data
+        assert "summary" in data
+        assert "files" in data
+
+        summary = data["summary"]
+        assert "total_files" in summary
+        assert "reviewed_files" in summary
+        assert "total_comments" in summary
+        assert "open_comments" in summary
+        assert "resolved_comments" in summary
+        assert summary["resolved_comments"] == summary["total_comments"] - summary["open_comments"]
+
+        assert isinstance(data["files"], list)
+        for f in data["files"]:
+            assert "path" in f
+            assert "reviewed" in f
+            assert "comments" in f
+            assert "open_comment_count" in f
