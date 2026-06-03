@@ -7,6 +7,17 @@ marked.setOptions({ breaks: true, gfm: true });
 
 const html = htm.bind(h);
 
+const AGENT_COLORS = [
+  '#89b4fa', '#a6e3a1', '#cba6f7', '#fab387', '#f38ba8',
+  '#94e2d5', '#f9e2af', '#89dceb', '#eba0ac', '#b4befe',
+];
+
+function agentColor(name) {
+  let hash = 0;
+  for (let i = 0; i < (name || '').length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  return AGENT_COLORS[Math.abs(hash) % AGENT_COLORS.length];
+}
+
 function renderMd(text) {
   return { __html: marked.parse(text || '') };
 }
@@ -21,6 +32,7 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
 
   const isUser = comment.author_type === 'user';
   const icon = isUser ? '💬' : '🤖';
+  const authorStyle = !isUser ? { color: agentColor(comment.author) } : {};
   const replies = comment.replies || [];
   const hasAgentReply = replies.some(r => (r.author_type || 'agent') !== 'user');
   const canEdit = isUser && !hasAgentReply;
@@ -53,7 +65,7 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
   return html`
     <div class=${'comment-display' + (isResolved ? ' comment-resolved' : '')}>
       <div class="comment-header">
-        <span class="comment-author">
+        <span class="comment-author" style=${authorStyle}>
           ${icon} ${comment.author || 'User'}
           ${category && html`<span class=${'comment-category-badge category-' + category}>${category}</span>`}
           ${isResolved && html`<span class="comment-status-badge resolved">Resolved</span>`}
@@ -111,9 +123,11 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
         </div>
       `}
       ${!collapsed && replies.map(r => {
-        const rIcon = (r.author_type || 'agent') === 'user' ? '💬' : '🤖';
+        const rIsUser = (r.author_type || 'agent') === 'user';
+        const rIcon = rIsUser ? '💬' : '🤖';
+        const rStyle = !rIsUser ? { color: agentColor(r.author) } : {};
         return html`
-          <div class="comment-reply">↳ ${rIcon} ${r.author || 'agent'}: <span class="comment-md" dangerouslySetInnerHTML=${renderMd(r.text)}></span></div>
+          <div class="comment-reply">↳ ${rIcon} <span style=${rStyle}>${r.author || 'agent'}</span>: <span class="comment-md" dangerouslySetInnerHTML=${renderMd(r.text)}></span></div>
         `;
       })}
       ${collapsed && replies.length > 0 && html`
