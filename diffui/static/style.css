@@ -25,6 +25,7 @@
   --purple: #cba6f7;
   --purple-bg: #2a2040;
   --purple-border: #3a2a50;
+  --file-header-height: 44px;
 }
 
 * {
@@ -58,6 +59,7 @@ html, body {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .top-bar-left, .top-bar-center, .top-bar-right {
@@ -240,7 +242,7 @@ html, body {
   cursor: pointer;
   user-select: none;
   position: sticky;
-  top: 44px;
+  top: var(--file-header-height);
   z-index: 5;
 }
 
@@ -268,6 +270,7 @@ html, body {
   line-height: 20px;
   padding: 0 16px 0 0;
   white-space: pre;
+  cursor: context-menu;
 }
 
 .diff-line:hover {
@@ -687,6 +690,12 @@ mark {
 
 .comment-category-select:focus { outline: none; border-color: var(--accent); }
 
+.comment-md-hint {
+  color: var(--fg-muted);
+  font-size: 11px;
+  margin-left: auto;
+}
+
 .comment-suggestion {
   margin: 4px 10px 6px;
   border: 1px solid var(--add-hover);
@@ -822,6 +831,7 @@ mark {
   font-size: 13px;
   animation: toast-in 0.2s ease-out;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
 }
 
 .toast-success { border-left-color: #a6e3a1; }
@@ -1486,3 +1496,17 @@ mark {
   height: 200px;
   color: var(--fg-muted);
 }
+
+.loading::after {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-left: 8px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }

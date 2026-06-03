@@ -29,7 +29,7 @@ export function ToastContainer() {
   return html`
     <div class="toast-container">
       ${toasts.map(t => html`
-        <div key=${t.id} class=${'toast toast-' + t.type}>${t.message}</div>
+        <div key=${t.id} class=${'toast toast-' + t.type} onClick=${() => setToasts(ts => ts.filter(x => x.id !== t.id))}>${t.message}</div>
       `)}
     </div>
   `;

@@ -102,7 +102,7 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
           ${showRepoSelect && activeRepo ? html`<span class="branch-repo">${activeRepo.name}</span>` : ''}
           ${branch?.name || ''}
         </span>
-        <button class="settings-btn" onClick=${onOpenSettings}>☰</button>
+        <button class="settings-btn" onClick=${onOpenSettings} aria-label="Settings">⚙</button>
       </div>
     </div>
   `;
