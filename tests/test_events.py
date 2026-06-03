@@ -116,7 +116,8 @@ class TestMakeWatchFilter:
 
 class TestBroadcast:
     def test_broadcast_to_clients(self):
-        from diffui.server.events import _broadcast, _clients
+        from diffui.server.events import _broadcast
+        from diffui.server.events import _sse_clients as _clients
 
         q = asyncio.Queue(maxsize=8)
         _clients.add(q)
@@ -130,7 +131,8 @@ class TestBroadcast:
             _clients.discard(q)
 
     def test_broadcast_empty_events_is_noop(self):
-        from diffui.server.events import _broadcast, _clients
+        from diffui.server.events import _broadcast
+        from diffui.server.events import _sse_clients as _clients
 
         q = asyncio.Queue(maxsize=8)
         _clients.add(q)
@@ -141,13 +143,15 @@ class TestBroadcast:
             _clients.discard(q)
 
     def test_broadcast_no_clients_is_noop(self):
-        from diffui.server.events import _broadcast, _clients
+        from diffui.server.events import _broadcast
+        from diffui.server.events import _sse_clients as _clients
 
         _clients.clear()
         _broadcast(["files_changed"])
 
     def test_broadcast_full_queue_skipped(self):
-        from diffui.server.events import _broadcast, _clients
+        from diffui.server.events import _broadcast
+        from diffui.server.events import _sse_clients as _clients
 
         q = asyncio.Queue(maxsize=1)
         q.put_nowait("filler")

@@ -158,27 +158,54 @@ function App() {
     }
   }, [themeCss]);
 
-  // SSE real-time updates — use ref to avoid reconnecting on every callback change
+  // Real-time updates — WebSocket with SSE fallback
   useEffect(() => {
-    const es = new EventSource('/api/events');
-    es.onmessage = (e) => {
-      try {
-        const { events } = JSON.parse(e.data);
-        const cb = latestCallbacks.current;
-        if (events.includes('git_changed') || events.includes('files_changed')) {
-          diffCache.current.clear();
-          cb.fetchFiles();
-          cb.fetchCommits();
-          cb.fetchRepos();
-          if (cb.activeFile) cb.fetchDiff(cb.activeFile);
-        }
-        if (events.includes('comments_changed')) {
-          cb.fetchComments();
-        }
-      } catch {}
+    let cleanup = () => {};
+
+    const handleEvents = (events) => {
+      const cb = latestCallbacks.current;
+      if (events.includes('git_changed') || events.includes('files_changed')) {
+        diffCache.current.clear();
+        cb.fetchFiles();
+        cb.fetchCommits();
+        cb.fetchRepos();
+        if (cb.activeFile) cb.fetchDiff(cb.activeFile);
+      }
+      if (events.includes('comments_changed')) {
+        cb.fetchComments();
+      }
     };
+
+    const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProto}//${location.host}/api/ws`;
+    let ws;
+    try {
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.events) handleEvents(msg.events);
+        } catch {}
+      };
+      ws.onclose = () => {
+        // Fall back to SSE if WebSocket closes unexpectedly
+        const es = new EventSource('/api/events');
+        es.onmessage = (e) => {
+          try { handleEvents(JSON.parse(e.data).events); } catch {}
+        };
+        cleanup = () => es.close();
+      };
+      cleanup = () => ws.close();
+    } catch {
+      const es = new EventSource('/api/events');
+      es.onmessage = (e) => {
+        try { handleEvents(JSON.parse(e.data).events); } catch {}
+      };
+      cleanup = () => es.close();
+    }
+
     const repoInterval = setInterval(() => latestCallbacks.current.fetchRepos(), 30000);
-    return () => { es.close(); clearInterval(repoInterval); };
+    return () => { cleanup(); clearInterval(repoInterval); };
   }, []);
 
   const handleViewChange = useCallback(async (newView) => {

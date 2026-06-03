@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.responses import StreamingResponse
-from watchfiles import Change, awatch
+from watchfiles import awatch
 
 from diffui.git_utils import (
     _comments_path,
@@ -13,32 +13,40 @@ from diffui.git_utils import (
     get_repo_root,
     load_comments,
 )
-
-# _comments_path and get_git_dir used at startup in _watch_loop; load_comments in _apply_state_updates
 from diffui.server.state import app_state
 
 router = APIRouter(prefix="/api")
 
-_clients: set[asyncio.Queue] = set()
+_sse_clients: set[asyncio.Queue] = set()
+_ws_clients: set[WebSocket] = set()
 
 DEBOUNCE_MS = 400
 
 
 def _broadcast(events: list[str]) -> None:
-    if not events or not _clients:
+    if not events:
         return
     data = json.dumps({"events": events})
-    msg = f"data: {data}\n\n"
-    for q in list(_clients):
-        try:
-            q.put_nowait(msg)
-        except asyncio.QueueFull:
-            pass
+
+    if _sse_clients:
+        msg = f"data: {data}\n\n"
+        for q in list(_sse_clients):
+            try:
+                q.put_nowait(msg)
+            except asyncio.QueueFull:
+                pass
+
+    if _ws_clients:
+        _pending_ws: list[asyncio.Task] = []
+        for ws in list(_ws_clients):
+            try:
+                _pending_ws.append(asyncio.create_task(ws.send_text(data)))
+            except Exception:
+                _ws_clients.discard(ws)
 
 
-def _classify_changes(changes: set[tuple[Change, str]], git_dir: str, comments_path: str) -> list[str]:
+def _classify_changes(changes: set[tuple], git_dir: str, comments_path: str) -> list[str]:
     events: set[str] = set()
-
     for _change_type, path in changes:
         if path == comments_path:
             events.add("comments_changed")
@@ -46,7 +54,6 @@ def _classify_changes(changes: set[tuple[Change, str]], git_dir: str, comments_p
             events.add("git_changed")
         else:
             events.add("files_changed")
-
     return list(events)
 
 
@@ -66,7 +73,7 @@ def _apply_state_updates(events: list[str]) -> list[str]:
 
 
 def make_watch_filter(git_dir_str: str):
-    def _watch_filter(_change: Change, path: str) -> bool:
+    def _watch_filter(_change, path: str) -> bool:
         if "/.git/" in path or path.endswith("/.git"):
             if not path.startswith(git_dir_str):
                 return False
@@ -109,6 +116,9 @@ async def _watch_loop() -> None:
             pass
 
 
+# --- SSE fallback ---
+
+
 async def _event_stream(queue: asyncio.Queue):
     try:
         while True:
@@ -121,7 +131,7 @@ async def _event_stream(queue: asyncio.Queue):
 @router.get("/events")
 async def sse_events():
     queue: asyncio.Queue = asyncio.Queue(maxsize=32)
-    _clients.add(queue)
+    _sse_clients.add(queue)
 
     async def generate():
         try:
@@ -129,7 +139,7 @@ async def sse_events():
             async for msg in _event_stream(queue):
                 yield msg
         finally:
-            _clients.discard(queue)
+            _sse_clients.discard(queue)
 
     return StreamingResponse(
         generate(),
@@ -140,6 +150,29 @@ async def sse_events():
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# --- WebSocket ---
+
+
+@router.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    _ws_clients.add(ws)
+    try:
+        await ws.send_text(json.dumps({"events": ["connected"]}))
+        while True:
+            data = await ws.receive_text()
+            try:
+                msg = json.loads(data)
+                if msg.get("type") == "ping":
+                    await ws.send_text(json.dumps({"type": "pong"}))
+            except (json.JSONDecodeError, KeyError):
+                pass
+    except WebSocketDisconnect:
+        pass
+    finally:
+        _ws_clients.discard(ws)
 
 
 def start_poller(loop: asyncio.AbstractEventLoop) -> None:
