@@ -130,7 +130,20 @@ function App() {
   latestCallbacks.current = { fetchFiles, fetchCommits, fetchComments, fetchDiff, fetchRepos, activeFile };
 
   useEffect(() => {
-    Promise.all([fetchTheme(), fetchRepos(), fetchBranch(), fetchCommits(), fetchFiles(), fetchComments()]);
+    Promise.all([fetchTheme(), fetchRepos(), fetchBranch(), fetchCommits(), fetchFiles(), fetchComments()]).then(async () => {
+      const res = await fetch('/api/session');
+      const session = await res.json();
+      if (session.activeFile) setActiveFile(session.activeFile);
+      if (session.diffMode) setDiffMode(session.diffMode);
+      if (session.showFileTree !== undefined) setShowFileTree(session.showFileTree);
+      if (session.showReviewed !== undefined) setShowReviewed(session.showReviewed);
+      if (session.scrollPositions) {
+        for (const [k, v] of Object.entries(session.scrollPositions)) {
+          scrollPositions.current.set(k, v);
+        }
+      }
+      if (session.activeFile) fetchDiff(session.activeFile);
+    });
   }, []);
 
   useEffect(() => {
@@ -373,6 +386,27 @@ function App() {
   const visibleFiles = useMemo(() => showReviewed ? files : files.filter(f => !f.reviewed), [files, showReviewed]);
 
   visibleFilesRef.current = visibleFiles;
+
+  // Persist session state on changes (debounced)
+  const saveTimerRef = useRef(null);
+  useEffect(() => {
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const scrollObj = {};
+      scrollPositions.current.forEach((v, k) => { scrollObj[k] = v; });
+      fetch('/api/session', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activeFile,
+          diffMode,
+          showFileTree,
+          showReviewed,
+          scrollPositions: scrollObj,
+        }),
+      }).catch(() => {});
+    }, 1000);
+  }, [activeFile, diffMode, showFileTree, showReviewed]);
 
   // Keyboard shortcuts — stable effect, reads current values via refs
   useEffect(() => {

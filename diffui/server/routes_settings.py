@@ -64,3 +64,20 @@ def open_in_editor(body: dict):
 
     subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return {"ok": True}
+
+
+@router.get("/session")
+def get_session():
+    from diffui.git_utils import load_session
+
+    return load_session()
+
+
+@router.put("/session")
+def update_session(body: dict):
+    from diffui.git_utils import load_session, save_session
+
+    session = load_session()
+    session.update(body)
+    save_session(session)
+    return {"ok": True}

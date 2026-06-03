@@ -349,6 +349,18 @@ def _comments_path() -> Path:
     return _branch_dir() / "comments.json"
 
 
+def _session_path() -> Path:
+    return _branch_dir() / "session.json"
+
+
+def load_session() -> dict[str, Any]:
+    return _load_json(_session_path(), {})
+
+
+def save_session(session: dict[str, Any]) -> None:
+    _save_json(_session_path(), session)
+
+
 def load_reviewed() -> dict[str, float]:
     return _load_json(_reviewed_path(), {})
 
