@@ -19,6 +19,17 @@ import { PreviewViewer, isPreviewable } from './components/PreviewViewer.js';
 
 const html = htm.bind(h);
 
+async function safeFetch(url, opts) {
+  try {
+    const res = await fetch(url, opts);
+    if (!res.ok) throw new Error(`${res.status}`);
+    return res;
+  } catch (err) {
+    showToast(`Request failed: ${url.replace('/api/', '')}`, 'error');
+    throw err;
+  }
+}
+
 function App() {
   const [repos, setRepos] = useState([]);
   const [files, setFiles] = useState([]);
@@ -60,28 +71,28 @@ function App() {
   const dialogOpenRef = useRef(false);
 
   const fetchTheme = useCallback(async () => {
-    const res = await fetch('/api/theme/css');
+    const res = await safeFetch('/api/theme/css');
     const data = await res.json();
     setThemeCss(data.css);
   }, []);
 
   const fetchRepos = useCallback(async () => {
-    const res = await fetch('/api/repos');
+    const res = await safeFetch('/api/repos');
     setRepos(await res.json());
   }, []);
 
   const fetchBranch = useCallback(async () => {
-    const res = await fetch('/api/branch');
+    const res = await safeFetch('/api/branch');
     setBranch(await res.json());
   }, []);
 
   const fetchCommits = useCallback(async () => {
-    const res = await fetch('/api/commits');
+    const res = await safeFetch('/api/commits');
     setCommits(await res.json());
   }, []);
 
   const fetchComments = useCallback(async () => {
-    const res = await fetch('/api/comments');
+    const res = await safeFetch('/api/comments');
     setComments(await res.json());
   }, []);
 
@@ -95,7 +106,7 @@ function App() {
       setDiffData(cached);
       return;
     }
-    const res = await fetch(`/api/diff/${encodeURIComponent(path)}?view=${v}&context=${c}`);
+    const res = await safeFetch(`/api/diff/${encodeURIComponent(path)}?view=${v}&context=${c}`);
     const data = await res.json();
     diffCache.current.set(cacheKey, data);
     if (activeFileRef.current === path) {
@@ -105,7 +116,7 @@ function App() {
 
   const fetchFiles = useCallback(async (v) => {
     const currentView = v || view;
-    const res = await fetch(`/api/files?view=${currentView}`);
+    const res = await safeFetch(`/api/files?view=${currentView}`);
     const data = await res.json();
     setFiles(data);
     const current = activeFileRef.current;

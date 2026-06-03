@@ -39,7 +39,10 @@ function TreeDir({ name, files, activeFile, onSelect }) {
           ${files.map(f => html`
             <div
               class=${'tree-file' + (f.path === activeFile ? ' tree-active' : '') + (f.reviewed ? ' tree-reviewed' : '')}
+              role="treeitem"
+              tabindex="0"
               onClick=${() => onSelect(f.path)}
+              onKeyDown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(f.path); } }}
               title=${f.path}
             >
               ${f.reviewed ? '✓ ' : ''}${f.short_name}

@@ -39,6 +39,7 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
         ${showRepoSelect && html`
           <select
             class="top-bar-select repo-select"
+            aria-label="Repository"
             onChange=${(e) => onRepoSwitch(Number(e.target.value))}
           >
             ${repos.map(r => html`
@@ -50,6 +51,7 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
         `}
         <select
           class="top-bar-select view-select"
+          aria-label="View filter"
           value=${view}
           onChange=${(e) => onViewChange(e.target.value)}
         >
@@ -59,6 +61,7 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
         </select>
         <select
           class="top-bar-select comment-select"
+          aria-label="Jump to comment"
           onChange=${(e) => {
             const idx = Number(e.target.value);
             if (idx >= 0 && commentOptions[idx]) {

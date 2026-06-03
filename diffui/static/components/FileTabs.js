@@ -16,12 +16,16 @@ export function FileTabs({ files, activeFile, onSelect }) {
   if (!files.length) return null;
 
   return html`
-    <div class="tab-bar">
+    <div class="tab-bar" role="tablist">
       ${files.map(f => html`
         <div
           ref=${f.path === activeFile ? activeRef : null}
           class=${'tab' + (f.path === activeFile ? ' active' : '') + (f.reviewed ? ' reviewed' : '')}
+          role="tab"
+          tabindex=${f.path === activeFile ? '0' : '-1'}
+          aria-selected=${f.path === activeFile}
           onClick=${() => onSelect(f.path)}
+          onKeyDown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(f.path); } }}
           title=${f.path}
         >
           ${f.reviewed ? '✓ ' : ''}${f.short_name}
