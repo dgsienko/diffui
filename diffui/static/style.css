@@ -241,10 +241,14 @@ html, body {
 
 .hunk-lines {
   overflow: hidden;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
 }
 
 .hunk-lines.collapsed {
   display: none;
+  content-visibility: visible;
+  contain-intrinsic-size: auto 0px;
 }
 
 /* --- Diff lines --- */
