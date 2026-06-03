@@ -308,6 +308,13 @@ function App() {
     }
   }, []);
 
+  const handleExportSummary = useCallback(async () => {
+    const res = await fetch('/api/review-summary');
+    const data = await res.json();
+    await navigator.clipboard.writeText(data.markdown);
+    showToast('Review summary copied to clipboard', 'success');
+  }, []);
+
   const handleExpandContext = useCallback((direction = 'expand') => {
     const levels = [3, 10, 50, 9999];
     let next;
@@ -407,6 +414,8 @@ function App() {
         setShowReviewed(v => !v);
       } else if (e.key === 'y') {
         handleCopyPath();
+      } else if (e.key === 'S') {
+        handleExportSummary();
       } else if (e.key === 'Y') {
         handleCopyGitLabLink();
       } else if (e.key === 'b') {
@@ -458,6 +467,7 @@ function App() {
     { id: 'mode-file', label: 'Switch to full file view', category: 'Settings' },
     { id: 'expand-context', label: 'Expand diff context', category: 'Actions' },
     { id: 'collapse-context', label: 'Collapse diff context', category: 'Actions' },
+    { id: 'export-summary', label: 'Copy review summary', keys: 'S', category: 'Actions' },
   ], []);
 
   const handleCommand = useCallback((id) => {
@@ -481,6 +491,7 @@ function App() {
       case 'mode-file': setDiffMode('file'); break;
       case 'expand-context': handleExpandContext('expand'); break;
       case 'collapse-context': handleExpandContext('collapse'); break;
+      case 'export-summary': handleExportSummary(); break;
       case 'prev-hunk': scrollToHunk('prev'); break;
       case 'next-hunk': scrollToHunk('next'); break;
     }
