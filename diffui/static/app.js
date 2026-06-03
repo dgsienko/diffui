@@ -217,7 +217,7 @@ function App() {
     }
   }, [fetchFiles, handleFileSelect]);
 
-  const handleAddComment = useCallback(async (filePath, lineIndex, lineText, fileLineNum, commentText) => {
+  const handleAddComment = useCallback(async (filePath, lineIndex, lineText, fileLineNum, commentText, category) => {
     await fetch('/api/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -227,6 +227,7 @@ function App() {
         line_text: lineText,
         file_line_num: fileLineNum,
         comment: commentText,
+        category: category || '',
       }),
     });
     const shortName = filePath.split('/').pop();

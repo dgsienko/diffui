@@ -24,6 +24,7 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve }
   const hasAgentReply = replies.some(r => (r.author_type || 'agent') !== 'user');
   const canEdit = isUser && !hasAgentReply;
   const isResolved = comment.status === 'resolved';
+  const category = comment.category || '';
 
   const handleReplySubmit = () => {
     const text = replyRef.current?.value.trim();
@@ -53,6 +54,7 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve }
       <div class="comment-header">
         <span class="comment-author">
           ${icon} ${comment.author || 'User'}
+          ${category && html`<span class=${'comment-category-badge category-' + category}>${category}</span>`}
           ${isResolved && html`<span class="comment-status-badge resolved">Resolved</span>`}
         </span>
         <div class="comment-actions">

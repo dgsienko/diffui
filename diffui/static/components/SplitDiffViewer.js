@@ -121,9 +121,9 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
                   `)}
                   ${commentingLine === line?.index && html`
                     <${CommentBox}
-                      onSubmit=${(text) => {
+                      onSubmit=${(text, category) => {
                         const lineNum = parseInt(line.new_num) || parseInt(line.old_num) || null;
-                        onAddComment(data.file_path, line.index, line.text, lineNum, text);
+                        onAddComment(data.file_path, line.index, line.text, lineNum, text, category);
                         setCommentingLine(null);
                       }}
                       onCancel=${() => setCommentingLine(null)}

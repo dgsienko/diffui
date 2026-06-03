@@ -40,6 +40,7 @@ def add_comment(body: dict):
             "author_type": body.get("author_type", "user"),
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "status": body.get("status", "open"),
+            "category": body.get("category", ""),
         }
     )
     save_comments(app_state.comments)

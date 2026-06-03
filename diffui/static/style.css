@@ -621,6 +621,34 @@ mark {
   font-style: italic;
 }
 
+.comment-category-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: 6px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.category-bug { background: var(--remove-bg); color: #f38ba8; border: 1px solid var(--remove-hover); }
+.category-suggestion { background: var(--add-bg); color: #a6e3a1; border: 1px solid var(--add-hover); }
+.category-nit { background: var(--hunk-bg); color: var(--hunk-fg); border: 1px solid var(--border); }
+.category-question { background: #2a2040; color: #cba6f7; border: 1px solid #3a2a50; }
+
+.comment-category-select {
+  background: var(--bg);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.comment-category-select:focus { outline: none; border-color: var(--accent); }
+
 /* --- Settings panel --- */
 
 .settings-overlay {
