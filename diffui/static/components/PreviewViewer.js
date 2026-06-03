@@ -2,6 +2,7 @@ import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
 import { renderMd } from '../lib/markdown.js';
+import { mergeRef } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -30,14 +31,12 @@ export function PreviewViewer({ filePath, onToggleReview, reviewed, containerRef
       .then(d => { setPreview(d); setLoading(false); });
   }, [filePath]);
 
-  const mergedRef = (el) => { if (containerRef) containerRef.current = el; };
-
   if (loading) return html`<div class="loading">Loading preview...</div>`;
 
   const ext = getExt(filePath);
 
   return html`
-    <div class="diff-container preview-container" ref=${mergedRef}>
+    <div class="diff-container preview-container" ref=${mergeRef(containerRef)}>
       <div class="diff-file-header">
         <div>
           <span class="diff-file-path">${filePath}</span>

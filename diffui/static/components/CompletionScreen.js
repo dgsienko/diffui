@@ -1,12 +1,12 @@
 import { h } from 'preact';
-import { useState, useEffect, useMemo } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
 
 const html = htm.bind(h);
 
 const SPARKLES = ['✦', '✧', '·', '⋆', '˚'];
 
-export function CompletionScreen({ fileCount, comments, onDismiss }) {
+export function CompletionScreen({ fileCount, commentStats, onDismiss }) {
   const [sparkle, setSparkle] = useState(0);
 
   useEffect(() => {
@@ -14,16 +14,7 @@ export function CompletionScreen({ fileCount, comments, onDismiss }) {
     return () => clearInterval(id);
   }, []);
 
-  const { total: totalComments, open: openComments } = useMemo(() =>
-    Object.values(comments || {}).reduce(
-      (acc, arr) => {
-        acc.total += arr.length;
-        acc.open += arr.filter(c => (c.status || 'open') !== 'resolved').length;
-        return acc;
-      },
-      { total: 0, open: 0 }
-    ),
-  [comments]);
+  const { total: totalComments, open: openComments } = commentStats || { total: 0, open: 0 };
 
   return html`
     <div class="completion-screen" onClick=${onDismiss}>

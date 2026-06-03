@@ -24,6 +24,7 @@ class AppState:
         self.merge_base: str = ""
         self.commits: list[Commit] = []
         self.all_files: list[str] = []
+        self.numstat: dict[str, tuple[int, int]] = {}
         self.reviewed: dict[str, float] = {}
         self.comments: dict[str, list[dict]] = {}
         self.current_view: str = "all"
@@ -46,6 +47,9 @@ class AppState:
         self.merge_base = get_merge_base(main_branch)
         self.commits = get_branch_commits(self.merge_base)
         self.all_files = get_changed_files(self.merge_base)
+        from diffui.git_utils import get_diff_numstat
+
+        self.numstat = get_diff_numstat(self.merge_base)
         self.reviewed = load_reviewed()
         self.comments = load_comments()
         self.current_view = "all"

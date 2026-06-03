@@ -60,9 +60,7 @@ def list_files(view: str = "all"):
         commit = next((c for c in app_state.commits if c.sha == view), None)
         files = commit.files if commit else []
 
-    from diffui.git_utils import get_diff_numstat
-
-    numstat = get_diff_numstat(app_state.merge_base) if view == "all" else {}
+    numstat = app_state.numstat if view == "all" else {}
 
     return [
         {

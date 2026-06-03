@@ -3,6 +3,7 @@ import { useState, useRef, useMemo } from 'preact/hooks';
 import htm from 'htm';
 import { CommentBox } from './CommentBox.js';
 import { CommentDisplay } from './CommentDisplay.js';
+import { mergeRef } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -63,8 +64,10 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
   const syncScroll = (source, target) => {
     if (syncing.current) return;
     syncing.current = true;
-    if (target.current) target.current.scrollTop = source.current.scrollTop;
-    syncing.current = false;
+    requestAnimationFrame(() => {
+      if (target.current) target.current.scrollTop = source.current.scrollTop;
+      syncing.current = false;
+    });
   };
 
   const handleRightClick = (line) => setCommentingLine(line.index);
@@ -79,10 +82,8 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
 
   if (!splitData) return html`<div class="empty-state">No diff data</div>`;
 
-  const mergedRef = (el) => { if (containerRef) containerRef.current = el; };
-
   return html`
-    <div class="split-container" ref=${mergedRef}>
+    <div class="split-container" ref=${mergeRef(containerRef)}>
       <div class="diff-file-header">
         <div>
           <span class="diff-file-path">${data.file_path}</span>
@@ -146,7 +147,7 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
                       onApplySuggestion=${onApplySuggestion}
                     />
                   `)}
-                  ${commentingLine === line?.index && html`
+                  ${commentingLine === line?.index && line?.type !== 'remove' && html`
                     <${CommentBox}
                       onSubmit=${(text, category) => {
                         const lineNum = parseInt(line.new_num) || parseInt(line.old_num) || null;

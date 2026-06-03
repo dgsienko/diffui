@@ -16,6 +16,7 @@ import { Minimap } from './components/Minimap.js';
 import { CompletionScreen } from './components/CompletionScreen.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { PreviewViewer, isPreviewable } from './components/PreviewViewer.js';
+import { shortName } from './lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -137,16 +138,11 @@ function App() {
         scrollToLineRef.current = null;
         requestAnimationFrame(() => {
           if (!diffRef.current) return;
-          const lineEl = diffRef.current.querySelector(`.diff-line:nth-child(n) .gutter-new`);
-          const allLines = diffRef.current.querySelectorAll('.diff-line');
-          for (const el of allLines) {
-            const gutter = el.querySelector('.gutter-new');
-            if (gutter && gutter.textContent.trim() === String(targetLine)) {
-              el.scrollIntoView({ block: 'center' });
-              el.style.outline = '2px solid var(--accent)';
-              setTimeout(() => { el.style.outline = ''; }, 2000);
-              return;
-            }
+          const el = diffRef.current.querySelector(`[data-line-new="${targetLine}"]`);
+          if (el) {
+            el.scrollIntoView({ block: 'center' });
+            el.style.outline = '2px solid var(--accent)';
+            setTimeout(() => { el.style.outline = ''; }, 2000);
           }
         });
       } else {
@@ -304,8 +300,7 @@ function App() {
         category: category || '',
       }),
     });
-    const shortName = filePath.split('/').pop();
-    showToast(`Comment added to ${shortName}`, 'success');
+    showToast(`Comment added to ${shortName(filePath)}`, 'success');
     await Promise.all([fetchComments(), fetchFiles()]);
   }, [fetchComments, fetchFiles]);
 
@@ -564,6 +559,14 @@ function App() {
   }, [searchTerm, diffData]);
 
   const reviewedCount = useMemo(() => files.filter(f => f.reviewed).length, [files]);
+  const commentStats = useMemo(() => {
+    let total = 0, open = 0;
+    for (const arr of Object.values(comments || {})) {
+      total += arr.length;
+      open += arr.filter(c => (c.status || 'open') !== 'resolved').length;
+    }
+    return { total, open };
+  }, [comments]);
   showCompletionRef.current = showCompletion;
   dialogOpenRef.current = showSettings || showSearch || showShortcuts || showCommandPalette;
   const prevReviewedRef = useRef(null);
@@ -760,7 +763,7 @@ function App() {
     ${showCompletion && html`
       <${CompletionScreen}
         fileCount=${files.length}
-        comments=${comments}
+        commentStats=${commentStats}
         onDismiss=${() => setShowCompletion(false)}
       />
     `}

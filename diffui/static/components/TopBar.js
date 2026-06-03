@@ -2,6 +2,7 @@ import { h } from 'preact';
 import { useMemo } from 'preact/hooks';
 import htm from 'htm';
 import { isPreviewable } from './PreviewViewer.js';
+import { shortName } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -21,12 +22,12 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
   const commentOptions = useMemo(() => {
     const opts = [];
     for (const [filePath, fileComments] of Object.entries(comments || {})) {
-      const shortName = filePath.split('/').pop();
+      const fname = shortName(filePath);
       for (const c of fileComments) {
         const lineNum = c.file_line_num || c.line_index;
         const label = fileComments.length > 1
-          ? `${shortName} (line ${lineNum})`
-          : shortName;
+          ? `${fname} (line ${lineNum})`
+          : fname;
         opts.push({ label, filePath, lineNum });
       }
     }

@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'preact/hooks';
 import htm from 'htm';
 import { CommentBox } from './CommentBox.js';
 import { CommentDisplay } from './CommentDisplay.js';
+import { mergeRef } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -87,6 +88,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover, bl
   return html`
     <div
       class=${'diff-line ' + typeClass + (isMatch ? ' search-match' : '')}
+      data-line-new=${line.new_num || undefined}
       onClick=${handleClick}
       onContextMenu=${handleContext}
       onMouseEnter=${() => onLineHover && onLineHover(line)}
@@ -203,12 +205,8 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
     return html`<div class="empty-state">No diff data</div>`;
   }
 
-  const mergedRef = (el) => {
-    if (containerRef) containerRef.current = el;
-  };
-
   return html`
-    <div class="diff-container" ref=${mergedRef}>
+    <div class="diff-container" ref=${mergeRef(containerRef)}>
       <div class="diff-file-header">
         <div>
           <span class="diff-file-path">${data.file_path}</span>
