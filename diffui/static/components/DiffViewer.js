@@ -93,7 +93,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover }) 
   `;
 }
 
-function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, commentingLine, setCommentingLine, filePath }) {
+function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, filePath }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return html`
@@ -121,6 +121,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHov
                 onEdit=${(text) => onEditComment(filePath, c.id, text)}
                 onReply=${(text) => onReplyComment(filePath, c.id, text)}
                 onResolve=${() => onResolveComment(filePath, c.id)}
+                onApplySuggestion=${onApplySuggestion}
               />
             `)}
             ${commentingLine === line.index && html`
@@ -140,7 +141,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHov
   `;
 }
 
-export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onOpenInEditor, onExpandContext, contextLines, onLineHover, reviewed, containerRef }) {
+export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, onOpenInEditor, onExpandContext, contextLines, onLineHover, reviewed, containerRef }) {
   const [commentingLine, setCommentingLine] = useState(null);
 
   const handleRightClick = (line) => {
@@ -200,6 +201,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           onEditComment=${onEditComment}
           onReplyComment=${onReplyComment}
           onResolveComment=${onResolveComment}
+          onApplySuggestion=${onApplySuggestion}
         />
       `)}
     </div>

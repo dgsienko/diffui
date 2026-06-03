@@ -54,7 +54,7 @@ function SplitLine({ line, side, onRightClick }) {
   `;
 }
 
-export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, reviewed, containerRef }) {
+export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, reviewed, containerRef }) {
   const [commentingLine, setCommentingLine] = useState(null);
   const leftRef = useRef(null);
   const rightRef = useRef(null);
@@ -117,6 +117,7 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
                       onEdit=${(text) => onEditComment(data.file_path, c.id, text)}
                       onReply=${(text) => onReplyComment(data.file_path, c.id, text)}
                       onResolve=${() => onResolveComment(data.file_path, c.id)}
+                      onApplySuggestion=${onApplySuggestion}
                     />
                   `)}
                   ${commentingLine === line?.index && html`

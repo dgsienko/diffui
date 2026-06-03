@@ -265,6 +265,21 @@ function App() {
     await fetchComments();
   }, [fetchComments]);
 
+  const handleApplySuggestion = useCallback(async (filePath, commentId) => {
+    const r = await fetch(`/api/comments/${encodeURIComponent(filePath)}/${commentId}/apply`, {
+      method: 'POST',
+    });
+    const data = await r.json();
+    if (data.ok) {
+      showToast('Suggestion applied', 'success');
+      diffCache.current.clear();
+      await Promise.all([fetchComments(), fetchFiles()]);
+      if (activeFileRef.current) fetchDiff(activeFileRef.current);
+    } else {
+      showToast(data.error || 'Failed to apply', 'error');
+    }
+  }, [fetchComments, fetchFiles, fetchDiff]);
+
   const handleOpenInEditor = useCallback(async (filePath, lineNum) => {
     await fetch('/api/editor/open', {
       method: 'POST',
@@ -529,6 +544,7 @@ function App() {
                   onEditComment=${handleEditComment}
                   onReplyComment=${handleReplyComment}
                   onResolveComment=${handleResolveComment}
+                  onApplySuggestion=${handleApplySuggestion}
                   reviewed=${files.find(f => f.path === activeFile)?.reviewed}
                 />`
               : diffData
@@ -543,6 +559,7 @@ function App() {
                     onEditComment=${handleEditComment}
                     onReplyComment=${handleReplyComment}
                     onResolveComment=${handleResolveComment}
+                    onApplySuggestion=${handleApplySuggestion}
                     onOpenInEditor=${handleOpenInEditor}
                     onExpandContext=${handleExpandContext}
                     contextLines=${contextLines}

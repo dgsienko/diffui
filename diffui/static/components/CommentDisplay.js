@@ -11,10 +11,11 @@ function renderMd(text) {
   return { __html: marked.parse(text || '') };
 }
 
-export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve }) {
+export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, onApplySuggestion }) {
   const [showReply, setShowReply] = useState(false);
   const [editing, setEditing] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [applying, setApplying] = useState(false);
   const replyRef = useRef(null);
   const editRef = useRef(null);
 
@@ -89,6 +90,25 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve }
         </div>
       ` : html`
         <div class="comment-body comment-md" dangerouslySetInnerHTML=${renderMd(comment.comment)}></div>
+      `}
+      ${comment.suggestion && html`
+        <div class="comment-suggestion">
+          <div class="comment-suggestion-header">
+            <span>Suggested change</span>
+            ${onApplySuggestion && !isResolved && html`
+              <button
+                class="comment-suggestion-apply"
+                disabled=${applying}
+                onClick=${async () => {
+                  setApplying(true);
+                  await onApplySuggestion(comment.file_path, comment.id);
+                  setApplying(false);
+                }}
+              >${applying ? 'Applying...' : 'Apply'}</button>
+            `}
+          </div>
+          <pre class="comment-suggestion-code">${comment.suggestion}</pre>
+        </div>
       `}
       ${!collapsed && replies.map(r => {
         const rIcon = (r.author_type || 'agent') === 'user' ? '💬' : '🤖';

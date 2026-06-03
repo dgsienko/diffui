@@ -649,6 +649,50 @@ mark {
 
 .comment-category-select:focus { outline: none; border-color: var(--accent); }
 
+.comment-suggestion {
+  margin: 4px 10px 6px;
+  border: 1px solid var(--add-hover);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.comment-suggestion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: var(--add-bg);
+  color: #a6e3a1;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.comment-suggestion-apply {
+  background: var(--add-hover);
+  color: #a6e3a1;
+  border: 1px solid #a6e3a1;
+  border-radius: 4px;
+  padding: 2px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.comment-suggestion-apply:hover { background: #a6e3a1; color: var(--bg); }
+.comment-suggestion-apply:disabled { opacity: 0.5; cursor: default; }
+
+.comment-suggestion-code {
+  padding: 6px 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 12px;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+
 /* --- Settings panel --- */
 
 .settings-overlay {

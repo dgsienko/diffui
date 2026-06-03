@@ -41,6 +41,7 @@ def add_comment(body: dict):
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "status": body.get("status", "open"),
             "category": body.get("category", ""),
+            "suggestion": body.get("suggestion", ""),
         }
     )
     save_comments(app_state.comments)
@@ -90,4 +91,31 @@ def reply_to_comment(file_path: str, comment_id: str, body: dict):
             }
         )
         save_comments(app_state.comments)
+    return {"ok": True}
+
+
+@router.post("/comments/{file_path:path}/{comment_id}/apply")
+def apply_suggestion(file_path: str, comment_id: str):
+    from diffui.git_utils import get_repo_root
+
+    c = _find_comment(file_path, comment_id)
+    if not c or not c.get("suggestion"):
+        return {"ok": False, "error": "No suggestion to apply"}
+    line_num = c.get("file_line_num")
+    if not line_num:
+        return {"ok": False, "error": "No line number"}
+    full_path = get_repo_root() / file_path
+    if not full_path.exists():
+        return {"ok": False, "error": "File not found"}
+    lines = full_path.read_text().splitlines(keepends=True)
+    idx = line_num - 1
+    if idx < 0 or idx >= len(lines):
+        return {"ok": False, "error": "Line out of range"}
+    suggestion = c["suggestion"]
+    if not suggestion.endswith("\n"):
+        suggestion += "\n"
+    lines[idx] = suggestion
+    full_path.write_text("".join(lines))
+    c["status"] = "resolved"
+    save_comments(app_state.comments)
     return {"ok": True}
