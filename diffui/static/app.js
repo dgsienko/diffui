@@ -45,6 +45,7 @@ function App() {
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
   const hoveredLineRef = useRef(null);
+  const scrollToLineRef = useRef(null);
   const latestCallbacks = useRef({});
   const activeFileRef = useRef(activeFile);
   activeFileRef.current = activeFile;
@@ -117,13 +118,32 @@ function App() {
     setLoading(false);
   }, [view, fetchDiff]);
 
-  // Restore scroll position after diff renders
+  // Restore scroll position after diff renders, or scroll to a specific line
   useEffect(() => {
     if (activeFile && diffRef.current) {
-      const saved = scrollPositions.current.get(activeFile) || 0;
-      requestAnimationFrame(() => {
-        if (diffRef.current) diffRef.current.scrollTop = saved;
-      });
+      const targetLine = scrollToLineRef.current;
+      if (targetLine !== null) {
+        scrollToLineRef.current = null;
+        requestAnimationFrame(() => {
+          if (!diffRef.current) return;
+          const lineEl = diffRef.current.querySelector(`.diff-line:nth-child(n) .gutter-new`);
+          const allLines = diffRef.current.querySelectorAll('.diff-line');
+          for (const el of allLines) {
+            const gutter = el.querySelector('.gutter-new');
+            if (gutter && gutter.textContent.trim() === String(targetLine)) {
+              el.scrollIntoView({ block: 'center' });
+              el.style.outline = '2px solid var(--accent)';
+              setTimeout(() => { el.style.outline = ''; }, 2000);
+              return;
+            }
+          }
+        });
+      } else {
+        const saved = scrollPositions.current.get(activeFile) || 0;
+        requestAnimationFrame(() => {
+          if (diffRef.current) diffRef.current.scrollTop = saved;
+        });
+      }
     }
   }, [diffData, activeFile]);
 
@@ -240,6 +260,11 @@ function App() {
     setActiveFile(path);
     fetchDiff(path);
   }, [fetchDiff]);
+
+  const handleCommentSelect = useCallback((filePath, lineIndex) => {
+    scrollToLineRef.current = lineIndex;
+    handleFileSelect(filePath);
+  }, [handleFileSelect]);
 
   const handleToggleReview = useCallback(async () => {
     const af = activeFileRef.current;
@@ -574,7 +599,7 @@ function App() {
       activeFile=${activeFile}
       onToggleReviewed=${() => setShowReviewed(v => !v)}
       onOpenSettings=${() => setShowSettings(v => !v)}
-      onCommentSelect=${handleFileSelect}
+      onCommentSelect=${handleCommentSelect}
     />
     ${showSearch && html`
       <${SearchBar}

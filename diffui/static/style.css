@@ -2,21 +2,29 @@
   --bg: #1e1e2e;
   --bg-dark: #181825;
   --fg: #cdd6f4;
-  --fg-muted: #6c7086;
+  --fg-muted: #7f849c;
   --border: #45475a;
   --accent: #89b4fa;
   --add-bg: #1a3a2a;
   --add-hover: #264d38;
+  --add-fg: #a6e3a1;
   --remove-bg: #3a1a1a;
   --remove-hover: #4d2626;
+  --remove-fg: #f38ba8;
   --hunk-bg: #1e2a3a;
   --hunk-fg: #89b4fa;
-  --gutter-fg: #6c7086;
+  --gutter-fg: #7f849c;
   --gutter-sep: #45475a;
   --hover-bg: #313244;
   --comment-bg: #242438;
   --comment-header-bg: #2a2a40;
   --comment-accent: #89b4fa;
+  --warn-bg: #3a2a1a;
+  --warn-hover: #4d381f;
+  --warn-fg: #f9e2af;
+  --purple: #cba6f7;
+  --purple-bg: #2a2040;
+  --purple-border: #3a2a50;
 }
 
 * {
@@ -182,19 +190,19 @@ html, body {
 }
 
 .diff-stat-add {
-  color: #a6e3a1;
+  color: var(--add-fg);
   margin-left: 12px;
 }
 
 .diff-stat-del {
-  color: #f38ba8;
+  color: var(--remove-fg);
   margin-left: 8px;
 }
 
 .review-btn {
-  background: var(--add-bg);
-  color: var(--fg);
-  border: 1px solid var(--add-hover);
+  background: var(--bg);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 4px 12px;
   cursor: pointer;
@@ -203,17 +211,18 @@ html, body {
 }
 
 .review-btn:hover {
-  background: var(--add-hover);
+  background: var(--hover-bg);
+  color: var(--fg);
 }
 
 .review-btn.reviewed {
-  background: var(--warn-bg);
-  border-color: var(--warn-hover);
-  color: var(--warn-fg);
+  background: var(--add-bg);
+  border-color: var(--add-hover);
+  color: var(--add-fg);
 }
 
 .review-btn.reviewed:hover {
-  background: var(--warn-hover);
+  background: var(--add-hover);
 }
 
 /* --- Hunks --- */
@@ -583,7 +592,7 @@ mark {
 }
 
 .comment-action-btn.delete:hover {
-  color: #f38ba8;
+  color: var(--remove-fg);
 }
 
 .comment-body {
@@ -626,12 +635,12 @@ mark {
 
 .comment-status-badge.resolved {
   background: var(--add-bg);
-  color: #a6e3a1;
+  color: var(--add-fg);
   border: 1px solid var(--add-hover);
 }
 
 .comment-action-btn.resolve {
-  color: #a6e3a1;
+  color: var(--add-fg);
 }
 
 .comment-collapsed-hint {
@@ -651,10 +660,10 @@ mark {
   letter-spacing: 0.3px;
 }
 
-.category-bug { background: var(--remove-bg); color: #f38ba8; border: 1px solid var(--remove-hover); }
-.category-suggestion { background: var(--add-bg); color: #a6e3a1; border: 1px solid var(--add-hover); }
+.category-bug { background: var(--remove-bg); color: var(--remove-fg); border: 1px solid var(--remove-hover); }
+.category-suggestion { background: var(--add-bg); color: var(--add-fg); border: 1px solid var(--add-hover); }
 .category-nit { background: var(--hunk-bg); color: var(--hunk-fg); border: 1px solid var(--border); }
-.category-question { background: #2a2040; color: #cba6f7; border: 1px solid #3a2a50; }
+.category-question { background: var(--purple-bg); color: var(--purple); border: 1px solid var(--purple-border); }
 
 .comment-category-select {
   background: var(--bg);
@@ -682,15 +691,15 @@ mark {
   justify-content: space-between;
   padding: 4px 8px;
   background: var(--add-bg);
-  color: #a6e3a1;
+  color: var(--add-fg);
   font-size: 11px;
   font-weight: 600;
 }
 
 .comment-suggestion-apply {
   background: var(--add-hover);
-  color: #a6e3a1;
-  border: 1px solid #a6e3a1;
+  color: var(--add-fg);
+  border: 1px solid var(--add-fg);
   border-radius: 4px;
   padding: 2px 10px;
   cursor: pointer;
@@ -699,7 +708,7 @@ mark {
   font-weight: 600;
 }
 
-.comment-suggestion-apply:hover { background: #a6e3a1; color: var(--bg); }
+.comment-suggestion-apply:hover { background: var(--add-fg); color: var(--bg); }
 .comment-suggestion-apply:disabled { opacity: 0.5; cursor: default; }
 
 .comment-suggestion-code {
@@ -1080,8 +1089,8 @@ mark {
   white-space: nowrap;
 }
 
-.stats-add { color: #a6e3a1; }
-.stats-del { color: #f38ba8; margin-left: 8px; }
+.stats-add { color: var(--add-fg); }
+.stats-del { color: var(--remove-fg); margin-left: 8px; }
 
 .stats-files {
   flex: 1;
@@ -1098,8 +1107,8 @@ mark {
   overflow: hidden;
 }
 
-.stats-file-add { background: #a6e3a1; }
-.stats-file-del { background: #f38ba8; }
+.stats-file-add { background: var(--add-fg); }
+.stats-file-del { background: var(--remove-fg); }
 
 /* --- Shortcut Overlay --- */
 
@@ -1227,8 +1236,8 @@ mark {
   pointer-events: none;
 }
 
-.minimap-add { background: #a6e3a1; }
-.minimap-del { background: #f38ba8; }
+.minimap-add { background: var(--add-fg); }
+.minimap-del { background: var(--remove-fg); }
 .minimap-comment { background: var(--accent); }
 
 /* --- Expand Context --- */

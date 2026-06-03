@@ -23,10 +23,11 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
     for (const [filePath, fileComments] of Object.entries(comments || {})) {
       const shortName = filePath.split('/').pop();
       for (const c of fileComments) {
+        const lineNum = c.file_line_num || c.line_index;
         const label = fileComments.length > 1
-          ? `${shortName} (line ${c.line_index})`
+          ? `${shortName} (line ${lineNum})`
           : shortName;
-        opts.push({ label, filePath, lineIndex: c.line_index });
+        opts.push({ label, filePath, lineNum });
       }
     }
     return opts;
@@ -62,7 +63,7 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
             const idx = Number(e.target.value);
             if (idx >= 0 && commentOptions[idx]) {
               const opt = commentOptions[idx];
-              onCommentSelect(opt.filePath, opt.lineIndex);
+              onCommentSelect(opt.filePath, opt.lineNum);
             }
             e.target.value = '';
           }}
