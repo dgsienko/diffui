@@ -157,11 +157,16 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
   const [commentingLine, setCommentingLine] = useState(null);
   const [showBlame, setShowBlame] = useState(false);
   const [blameData, setBlameData] = useState(null);
+  const blameCache = useRef(new Map());
   const hoveredLineRef = useRef(null);
 
   const fetchBlame = useCallback(async (filePath) => {
+    const cached = blameCache.current.get(filePath);
+    if (cached) { setBlameData(cached); return; }
     const res = await fetch(`/api/blame/${encodeURIComponent(filePath)}`);
-    setBlameData(await res.json());
+    const result = await res.json();
+    blameCache.current.set(filePath, result);
+    setBlameData(result);
   }, []);
 
   useEffect(() => {

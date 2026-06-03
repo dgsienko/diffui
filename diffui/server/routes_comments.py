@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
-from diffui.git_utils import save_comments
+from diffui.git_utils import get_repo_root, save_comments
 from diffui.server.state import app_state
 
 router = APIRouter(prefix="/api")
@@ -96,7 +96,6 @@ def reply_to_comment(file_path: str, comment_id: str, body: dict):
 
 @router.post("/comments/{file_path:path}/{comment_id}/apply")
 def apply_suggestion(file_path: str, comment_id: str):
-    from diffui.git_utils import get_repo_root
 
     c = _find_comment(file_path, comment_id)
     if not c or not c.get("suggestion"):

@@ -176,32 +176,28 @@ function App() {
       }
     };
 
+    const connectSSE = () => {
+      const es = new EventSource('/api/events');
+      es.onmessage = (e) => {
+        try { handleEvents(JSON.parse(e.data).events); } catch {}
+      };
+      cleanup = () => es.close();
+    };
+
     const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProto}//${location.host}/api/ws`;
-    let ws;
     try {
-      ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(wsUrl);
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data);
           if (msg.events) handleEvents(msg.events);
         } catch {}
       };
-      ws.onclose = () => {
-        // Fall back to SSE if WebSocket closes unexpectedly
-        const es = new EventSource('/api/events');
-        es.onmessage = (e) => {
-          try { handleEvents(JSON.parse(e.data).events); } catch {}
-        };
-        cleanup = () => es.close();
-      };
+      ws.onclose = connectSSE;
       cleanup = () => ws.close();
     } catch {
-      const es = new EventSource('/api/events');
-      es.onmessage = (e) => {
-        try { handleEvents(JSON.parse(e.data).events); } catch {}
-      };
-      cleanup = () => es.close();
+      connectSSE();
     }
 
     const repoInterval = setInterval(() => latestCallbacks.current.fetchRepos(), 30000);
@@ -411,6 +407,7 @@ function App() {
   }, []);
 
   const visibleFiles = useMemo(() => showReviewed ? files : files.filter(f => !f.reviewed), [files, showReviewed]);
+  const activeFileReviewed = useMemo(() => files.find(f => f.path === activeFile)?.reviewed, [files, activeFile]);
 
   visibleFilesRef.current = visibleFiles;
 
@@ -611,7 +608,7 @@ function App() {
                 containerRef=${diffRef}
                 filePath=${activeFile}
                 onToggleReview=${handleToggleReview}
-                reviewed=${files.find(f => f.path === activeFile)?.reviewed}
+                reviewed=${activeFileReviewed}
               />`
             : diffMode === 'file'
             ? html`<${FullFileViewer}
@@ -619,7 +616,7 @@ function App() {
                 filePath=${activeFile}
                 view=${view}
                 onToggleReview=${handleToggleReview}
-                reviewed=${files.find(f => f.path === activeFile)?.reviewed}
+                reviewed=${activeFileReviewed}
               />`
             : diffMode === 'split' && diffData
               ? html`<${SplitDiffViewer}
@@ -633,7 +630,7 @@ function App() {
                   onReplyComment=${handleReplyComment}
                   onResolveComment=${handleResolveComment}
                   onApplySuggestion=${handleApplySuggestion}
-                  reviewed=${files.find(f => f.path === activeFile)?.reviewed}
+                  reviewed=${activeFileReviewed}
                 />`
               : diffData
                 ? html`<${DiffViewer}
@@ -652,7 +649,7 @@ function App() {
                     onExpandContext=${handleExpandContext}
                     contextLines=${contextLines}
                     onLineHover=${(num) => { hoveredLineRef.current = num; }}
-                    reviewed=${files.find(f => f.path === activeFile)?.reviewed}
+                    reviewed=${activeFileReviewed}
                   />`
                 : html`<div class="loading">Loading...</div>`
       }

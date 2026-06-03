@@ -112,6 +112,9 @@ def get_preview(path: str):
         full_path = get_repo_root() / path
         if not full_path.exists():
             return {"type": "image", "exists": False}
+        size = full_path.stat().st_size
+        if size > 10 * 1024 * 1024:
+            return {"type": "image", "exists": True, "too_large": True}
         import base64
 
         data = base64.b64encode(full_path.read_bytes()).decode()

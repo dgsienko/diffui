@@ -1,9 +1,7 @@
 import { h } from 'preact';
 import { useState, useRef } from 'preact/hooks';
 import htm from 'htm';
-import { marked } from 'marked';
-
-marked.setOptions({ breaks: true, gfm: true });
+import { renderMd } from '../lib/markdown.js';
 
 const html = htm.bind(h);
 
@@ -16,10 +14,6 @@ function agentColor(name) {
   let hash = 0;
   for (let i = 0; i < (name || '').length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
   return AGENT_COLORS[Math.abs(hash) % AGENT_COLORS.length];
-}
-
-function renderMd(text) {
-  return { __html: marked.parse(text || '') };
 }
 
 export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, onApplySuggestion }) {

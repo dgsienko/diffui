@@ -19,6 +19,7 @@ router = APIRouter(prefix="/api")
 
 _sse_clients: set[asyncio.Queue] = set()
 _ws_clients: set[WebSocket] = set()
+_bg_tasks: set[asyncio.Task] = set()
 
 DEBOUNCE_MS = 400
 
@@ -36,13 +37,13 @@ def _broadcast(events: list[str]) -> None:
             except asyncio.QueueFull:
                 pass
 
-    if _ws_clients:
-        _pending_ws: list[asyncio.Task] = []
-        for ws in list(_ws_clients):
-            try:
-                _pending_ws.append(asyncio.create_task(ws.send_text(data)))
-            except Exception:
-                _ws_clients.discard(ws)
+    for ws in list(_ws_clients):
+        try:
+            task = asyncio.create_task(ws.send_text(data))
+            _bg_tasks.add(task)
+            task.add_done_callback(_bg_tasks.discard)
+        except Exception:
+            _ws_clients.discard(ws)
 
 
 def _classify_changes(changes: set[tuple], git_dir: str, comments_path: str) -> list[str]:

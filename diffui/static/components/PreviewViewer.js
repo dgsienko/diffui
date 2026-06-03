@@ -1,7 +1,7 @@
 import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
-import { marked } from 'marked';
+import { renderMd } from '../lib/markdown.js';
 
 const html = htm.bind(h);
 
@@ -16,13 +16,6 @@ function getExt(path) {
 export function isPreviewable(path) {
   const ext = getExt(path);
   return MD_EXTS.has(ext) || IMG_EXTS.has(ext);
-}
-
-// Markdown content comes from the user's own repository files (read via git_utils).
-// This is a local-only tool — the content is trusted first-party data from the
-// user's own filesystem, rendered in their own browser session.
-function renderMarkdown(text) {
-  return { __html: marked.parse(text || '') };
 }
 
 export function PreviewViewer({ filePath, onToggleReview, reviewed, containerRef }) {
@@ -61,7 +54,7 @@ export function PreviewViewer({ filePath, onToggleReview, reviewed, containerRef
           }
         </div>
       ` : MD_EXTS.has(ext) && preview?.content ? html`
-        <div class="preview-markdown comment-md" dangerouslySetInnerHTML=${renderMarkdown(preview.content)}></div>
+        <div class="preview-markdown comment-md" dangerouslySetInnerHTML=${renderMd(preview.content)}></div>
       ` : html`
         <div class="empty-state">No preview available</div>
       `}
