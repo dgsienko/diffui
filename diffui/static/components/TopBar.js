@@ -1,10 +1,11 @@
 import { h } from 'preact';
 import { useMemo } from 'preact/hooks';
 import htm from 'htm';
+import { isPreviewable } from './PreviewViewer.js';
 
 const html = htm.bind(h);
 
-export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount, showReviewed, diffMode, comments, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onCommentSelect }) {
+export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount, showReviewed, diffMode, comments, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onCommentSelect }) {
   const activeRepo = repos.find(r => r.active);
   const showRepoSelect = repos.length > 1;
 
@@ -82,6 +83,11 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
             >${label}</button>
           `)}
         </div>
+        ${activeFile && isPreviewable(activeFile) && html`
+          <button class=${'top-bar-btn' + (showPreview ? ' preview-active' : '')} onClick=${onTogglePreview}>
+            ${showPreview ? 'Raw' : 'Preview'}
+          </button>
+        `}
         <button class="top-bar-btn" onClick=${onToggleReviewed}>
           ${showReviewed ? 'Hide reviewed' : 'Show all'}
         </button>

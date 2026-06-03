@@ -15,6 +15,7 @@ import { FullFileViewer } from './components/FullFileViewer.js';
 import { Minimap } from './components/Minimap.js';
 import { CompletionScreen } from './components/CompletionScreen.js';
 import { CommandPalette } from './components/CommandPalette.js';
+import { PreviewViewer, isPreviewable } from './components/PreviewViewer.js';
 
 const html = htm.bind(h);
 
@@ -39,6 +40,7 @@ function App() {
   const [contextLines, setContextLines] = useState(3);
   const [showCompletion, setShowCompletion] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const diffRef = useRef(null);
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
@@ -498,6 +500,9 @@ function App() {
       onRepoSwitch=${handleRepoSwitch}
       diffMode=${diffMode}
       onDiffModeChange=${setDiffMode}
+      showPreview=${showPreview}
+      onTogglePreview=${() => setShowPreview(v => !v)}
+      activeFile=${activeFile}
       onToggleReviewed=${() => setShowReviewed(v => !v)}
       onOpenSettings=${() => setShowSettings(v => !v)}
       onCommentSelect=${handleFileSelect}
@@ -529,7 +534,14 @@ function App() {
           ? files.length === 0
             ? html`<div class="empty-state">No changed files</div>`
             : html`<div class="loading">Select a file</div>`
-          : diffMode === 'file'
+          : showPreview && isPreviewable(activeFile)
+            ? html`<${PreviewViewer}
+                containerRef=${diffRef}
+                filePath=${activeFile}
+                onToggleReview=${handleToggleReview}
+                reviewed=${files.find(f => f.path === activeFile)?.reviewed}
+              />`
+            : diffMode === 'file'
             ? html`<${FullFileViewer}
                 containerRef=${diffRef}
                 filePath=${activeFile}
