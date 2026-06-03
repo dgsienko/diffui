@@ -134,21 +134,24 @@ def get_merge_base(main_branch: str) -> str:
 
 
 def get_branch_commits(merge_base: str) -> list[Commit]:
-    result = _git("log", f"{merge_base}..HEAD", "--format=%H\t%s\t%an", "--reverse")
+    result = _git("log", f"{merge_base}..HEAD", "--format=%H\t%s\t%an", "--name-only", "--reverse")
     if result.returncode != 0:
         return []
 
     commits = []
-    for line in result.stdout.strip().splitlines():
+    current: Commit | None = None
+    for line in result.stdout.splitlines():
         if not line:
             continue
         parts = line.split("\t", 2)
-        if len(parts) < 3:
-            continue
-        sha, message, author = parts
-        files_result = _git("diff-tree", "--no-commit-id", "-r", "--name-only", sha)
-        files = [f for f in files_result.stdout.strip().splitlines() if f]
-        commits.append(Commit(sha=sha, message=message, author=author, files=files))
+        if len(parts) == 3 and len(parts[0]) == 40:
+            if current:
+                commits.append(current)
+            current = Commit(sha=parts[0], message=parts[1], author=parts[2])
+        elif current:
+            current.files.append(line)
+    if current:
+        commits.append(current)
 
     return commits
 

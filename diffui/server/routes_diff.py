@@ -105,10 +105,12 @@ def get_blame_data(path: str):
 
 @router.get("/preview/{path:path}")
 def get_preview(path: str):
+    import mimetypes
+
     from diffui.git_utils import get_file_content, get_repo_root
 
-    ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
-    if ext in ("png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"):
+    mime, _ = mimetypes.guess_type(path)
+    if mime and mime.startswith("image/"):
         full_path = get_repo_root() / path
         if not full_path.exists():
             return {"type": "image", "exists": False}
@@ -118,16 +120,6 @@ def get_preview(path: str):
         import base64
 
         data = base64.b64encode(full_path.read_bytes()).decode()
-        mime = {
-            "png": "image/png",
-            "jpg": "image/jpeg",
-            "jpeg": "image/jpeg",
-            "gif": "image/gif",
-            "svg": "image/svg+xml",
-            "webp": "image/webp",
-            "ico": "image/x-icon",
-            "bmp": "image/bmp",
-        }.get(ext, "application/octet-stream")
         return {"type": "image", "exists": True, "data_url": f"data:{mime};base64,{data}"}
     content = get_file_content(path)
     return {"type": "text", "content": content}

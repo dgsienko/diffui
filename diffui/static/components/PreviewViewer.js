@@ -6,7 +6,8 @@ import { renderMd } from '../lib/markdown.js';
 const html = htm.bind(h);
 
 const MD_EXTS = new Set(['md', 'markdown', 'mdx']);
-const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp']);
+// UI hint only — backend uses mimetypes.guess_type for authoritative detection
+const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'avif', 'tiff', 'tif']);
 
 function getExt(path) {
   const dot = path.lastIndexOf('.');
