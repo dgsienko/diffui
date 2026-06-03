@@ -460,6 +460,12 @@ mark {
   border-color: var(--accent);
 }
 
+.search-count {
+  color: var(--fg-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .search-close-btn {
   background: none;
   border: none;

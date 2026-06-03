@@ -97,7 +97,33 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
         <div class="split-pane" ref=${leftRef} onScroll=${() => syncScroll(leftRef, rightRef)}>
           ${splitData.map(s => html`
             <div class="split-hunk-header">${s.header}</div>
-            ${s.left.map(line => html`<${SplitLine} line=${line} side="left" onRightClick=${handleRightClick} />`)}
+            ${s.left.map(line => {
+              const lineComments = line && line.type === 'remove' ? (comments[data.file_path] || []).filter(c => c.line_index === line.index) : [];
+              return html`
+                <${SplitLine} line=${line} side="left" onRightClick=${handleRightClick} />
+                ${lineComments.map(c => html`
+                  <${CommentDisplay}
+                    key=${c.id || c.line_index}
+                    comment=${c}
+                    onDelete=${() => onDeleteComment(data.file_path, c.id)}
+                    onEdit=${(text) => onEditComment(data.file_path, c.id, text)}
+                    onReply=${(text) => onReplyComment(data.file_path, c.id, text)}
+                    onResolve=${() => onResolveComment(data.file_path, c.id)}
+                    onApplySuggestion=${onApplySuggestion}
+                  />
+                `)}
+                ${commentingLine === line?.index && line?.type === 'remove' && html`
+                  <${CommentBox}
+                    onSubmit=${(text, category) => {
+                      const lineNum = parseInt(line.old_num) || null;
+                      onAddComment(data.file_path, line.index, line.text, lineNum, text, category);
+                      setCommentingLine(null);
+                    }}
+                    onCancel=${() => setCommentingLine(null)}
+                  />
+                `}
+              `;
+            })}
           `)}
         </div>
         <div class="split-pane" ref=${rightRef} onScroll=${() => syncScroll(rightRef, leftRef)}>

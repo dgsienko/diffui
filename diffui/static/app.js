@@ -147,7 +147,7 @@ function App() {
     }
   }, [diffData, activeFile]);
 
-  latestCallbacks.current = { fetchFiles, fetchCommits, fetchComments, fetchDiff, fetchRepos, activeFile };
+  latestCallbacks.current = { fetchFiles, fetchCommits, fetchComments, fetchDiff, fetchRepos, activeFile, comments };
 
   useEffect(() => {
     Promise.all([fetchTheme(), fetchRepos(), fetchBranch(), fetchCommits(), fetchFiles(), fetchComments()]).then(async () => {
@@ -396,6 +396,26 @@ function App() {
     showToast(label);
   }, [contextLines, fetchDiff]);
 
+  const commentNavRef = useRef(0);
+  const navigateComment = useCallback((direction) => {
+    const allComments = [];
+    for (const [filePath, fileComments] of Object.entries(latestCallbacks.current.comments || {})) {
+      for (const c of fileComments) {
+        allComments.push({ filePath, lineNum: c.file_line_num || c.line_index });
+      }
+    }
+    if (!allComments.length) return;
+    if (direction === 'next') {
+      commentNavRef.current = (commentNavRef.current + 1) % allComments.length;
+    } else {
+      commentNavRef.current = (commentNavRef.current - 1 + allComments.length) % allComments.length;
+    }
+    const target = allComments[commentNavRef.current];
+    scrollToLineRef.current = target.lineNum;
+    handleFileSelect(target.filePath);
+    showToast(`Comment ${commentNavRef.current + 1}/${allComments.length}`);
+  }, [handleFileSelect]);
+
   const scrollToHunk = useCallback((direction) => {
     const container = diffRef.current;
     if (!container) return;
@@ -505,6 +525,8 @@ function App() {
         setShowFileTree(v => !v);
       } else if (e.key === 'c') {
         document.dispatchEvent(new CustomEvent('diffui:comment-on-hovered'));
+      } else if (e.key === 'n' || e.key === 'p') {
+        navigateComment(e.key === 'n' ? 'next' : 'prev');
       } else if (e.key === 'j' || e.key === 'k') {
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
       } else if (e.ctrlKey && e.key === 'f') {
@@ -517,6 +539,18 @@ function App() {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, []);
+
+  const searchMatchCount = useMemo(() => {
+    if (!searchTerm || !diffData?.hunks) return 0;
+    const lower = searchTerm.toLowerCase();
+    let count = 0;
+    for (const hunk of diffData.hunks) {
+      for (const line of hunk.lines) {
+        if (line.text && line.text.toLowerCase().includes(lower)) count++;
+      }
+    }
+    return count;
+  }, [searchTerm, diffData]);
 
   const reviewedCount = useMemo(() => files.filter(f => f.reviewed).length, [files]);
   showCompletionRef.current = showCompletion;
@@ -606,6 +640,7 @@ function App() {
         value=${searchTerm}
         onChange=${setSearchTerm}
         onClose=${() => { setShowSearch(false); setSearchTerm(''); }}
+        matchCount=${searchMatchCount}
       />
     `}
     <${FileTabs}

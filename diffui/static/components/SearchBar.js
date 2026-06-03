@@ -4,7 +4,7 @@ import htm from 'htm';
 
 const html = htm.bind(h);
 
-export function SearchBar({ value, onChange, onClose }) {
+export function SearchBar({ value, onChange, onClose, matchCount }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -27,6 +27,9 @@ export function SearchBar({ value, onChange, onClose }) {
         onKeyDown=${handleKeyDown}
         placeholder="Type to search..."
       />
+      ${value && matchCount !== undefined && html`
+        <span class="search-count">${matchCount} ${matchCount === 1 ? 'match' : 'matches'}</span>
+      `}
       <button class="search-close-btn" onClick=${onClose}>✕</button>
     </div>
   `;
