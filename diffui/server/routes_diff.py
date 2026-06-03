@@ -94,3 +94,10 @@ def get_file(path: str, view: str = "all"):
     content = get_file_content(path)
     diff_text = _get_diff(path, view)
     return highlight_file_to_json(content, diff_text, path, app_state.theme)
+
+
+@router.get("/blame/{path:path}")
+def get_blame_data(path: str):
+    from diffui.git_utils import get_blame
+
+    return get_blame(path)

@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useRef, useEffect } from 'preact/hooks';
+import { useState, useRef, useEffect, useCallback } from 'preact/hooks';
 import htm from 'htm';
 import { CommentBox } from './CommentBox.js';
 import { CommentDisplay } from './CommentDisplay.js';
@@ -47,7 +47,17 @@ function highlightSearch(html, term) {
   return result;
 }
 
-function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover }) {
+function BlameCell({ blame }) {
+  if (!blame) return null;
+  const now = Date.now() / 1000;
+  const age = now - blame.timestamp;
+  const days = Math.floor(age / 86400);
+  const label = days < 1 ? 'today' : days < 30 ? `${days}d` : days < 365 ? `${Math.floor(days / 30)}mo` : `${Math.floor(days / 365)}y`;
+  const name = (blame.author || '').split(' ')[0].slice(0, 8);
+  return html`<span class="blame-cell" title="${blame.author} · ${blame.sha}">${name} ${label}</span>`;
+}
+
+function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover, blame }) {
   const typeClass = {
     add: 'add',
     remove: 'remove',
@@ -82,6 +92,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover }) 
       onMouseEnter=${() => onLineHover && onLineHover(line)}
       onMouseLeave=${() => onLineHover && onLineHover(null)}
     >
+      ${blame && html`<${BlameCell} blame=${blame} />`}
       <div class="diff-gutter">
         <span class="gutter-old">${line.old_num || ''}</span>
         <span class="gutter-sep">│</span>
@@ -93,7 +104,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover }) 
   `;
 }
 
-function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, filePath }) {
+function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, filePath, blameData }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return html`
@@ -112,6 +123,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHov
               onRightClick=${onRightClick}
               onCtrlClick=${onCtrlClick}
               onLineHover=${onLineHover}
+              blame=${blameData && line.new_num ? blameData[parseInt(line.new_num) - 1] : null}
             />
             ${lineComments.map(c => html`
               <${CommentDisplay}
@@ -143,7 +155,22 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHov
 
 export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, onOpenInEditor, onExpandContext, contextLines, onLineHover, reviewed, containerRef }) {
   const [commentingLine, setCommentingLine] = useState(null);
+  const [showBlame, setShowBlame] = useState(false);
+  const [blameData, setBlameData] = useState(null);
   const hoveredLineRef = useRef(null);
+
+  const fetchBlame = useCallback(async (filePath) => {
+    const res = await fetch(`/api/blame/${encodeURIComponent(filePath)}`);
+    setBlameData(await res.json());
+  }, []);
+
+  useEffect(() => {
+    if (showBlame && data?.file_path) {
+      fetchBlame(data.file_path);
+    } else {
+      setBlameData(null);
+    }
+  }, [showBlame, data?.file_path, fetchBlame]);
 
   const handleRightClick = (line) => {
     setCommentingLine(line.index);
@@ -184,6 +211,9 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           <span class="diff-stat-del">-${data.dels}</span>
         </div>
         <div class="diff-header-actions">
+          <button class=${'expand-ctx-btn' + (showBlame ? ' active' : '')} onClick=${() => setShowBlame(v => !v)}>
+            ${showBlame ? 'Hide blame' : 'Blame'}
+          </button>
           ${onExpandContext && contextLines > 3 && html`
             <button class="expand-ctx-btn" onClick=${() => onExpandContext('collapse')}>
               Less context
@@ -217,6 +247,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           onReplyComment=${onReplyComment}
           onResolveComment=${onResolveComment}
           onApplySuggestion=${onApplySuggestion}
+          blameData=${showBlame ? blameData : null}
         />
       `)}
     </div>

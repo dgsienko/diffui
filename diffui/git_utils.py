@@ -243,6 +243,37 @@ def get_file_content(path: str) -> str:
         return ""
 
 
+def get_blame(path: str) -> list[dict]:
+    result = _git("blame", "--porcelain", "--", path)
+    if result.returncode != 0:
+        return []
+    lines: list[dict] = []
+    authors: dict[str, str] = {}
+    timestamps: dict[str, int] = {}
+    current_sha = ""
+    for raw_line in result.stdout.splitlines():
+        if raw_line[0] not in ("\t", " ") and len(raw_line) >= 40 and " " in raw_line:
+            parts = raw_line.split()
+            if len(parts[0]) == 40:
+                current_sha = parts[0]
+        elif raw_line.startswith("author "):
+            authors[current_sha] = raw_line[7:]
+        elif raw_line.startswith("author-time "):
+            try:
+                timestamps[current_sha] = int(raw_line[12:])
+            except ValueError:
+                pass
+        elif raw_line.startswith("\t"):
+            lines.append(
+                {
+                    "sha": current_sha[:8],
+                    "author": authors.get(current_sha, ""),
+                    "timestamp": timestamps.get(current_sha, 0),
+                }
+            )
+    return lines
+
+
 def get_remote_url() -> str:
     result = _git("remote", "get-url", "origin")
     return result.stdout.strip() if result.returncode == 0 else ""
