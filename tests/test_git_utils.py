@@ -160,6 +160,59 @@ class TestResolveRepos:
         assert len(repos) == 1
 
 
+class TestGetBlame:
+    def test_returns_list_of_dicts(self):
+        from diffui.git_utils import get_blame, set_active_repo
+
+        root = Path(__file__).parent.parent
+        set_active_repo(root)
+        result = get_blame("diffui/__init__.py")
+        assert isinstance(result, list)
+        if result:
+            assert "sha" in result[0]
+            assert "author" in result[0]
+            assert "timestamp" in result[0]
+
+    def test_sha_is_8_chars(self):
+        from diffui.git_utils import get_blame, set_active_repo
+
+        root = Path(__file__).parent.parent
+        set_active_repo(root)
+        result = get_blame("diffui/__init__.py")
+        for entry in result:
+            assert len(entry["sha"]) == 8
+
+    def test_unknown_file_returns_empty(self):
+        from diffui.git_utils import get_blame, set_active_repo
+
+        root = Path(__file__).parent.parent
+        set_active_repo(root)
+        assert get_blame("does_not_exist.py") == []
+
+
+class TestSessionPersistence:
+    def test_load_missing_returns_empty_dict(self, tmp_path: Path):
+        from diffui.git_utils import _load_json
+
+        assert _load_json(tmp_path / "session.json", {}) == {}
+
+    def test_save_and_load_roundtrip(self, tmp_path: Path):
+        from diffui.git_utils import _load_json, _save_json
+
+        p = tmp_path / "session.json"
+        _save_json(p, {"activeFile": "foo.py", "diffMode": "split"})
+        loaded = _load_json(p, {})
+        assert loaded == {"activeFile": "foo.py", "diffMode": "split"}
+
+    def test_save_overwrites_not_merges(self, tmp_path: Path):
+        from diffui.git_utils import _load_json, _save_json
+
+        p = tmp_path / "session.json"
+        _save_json(p, {"a": 1})
+        _save_json(p, {"b": 2})
+        assert _load_json(p, {}) == {"b": 2}
+
+
 class TestGetDiffNumstat:
     def test_returns_dict(self):
         from diffui.git_utils import get_diff_numstat, get_merge_base, set_active_repo

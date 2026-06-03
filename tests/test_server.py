@@ -217,6 +217,163 @@ class TestServerRoutes:
         r = _server_app.get("/static/style.css")
         assert r.status_code == 200
 
+    def test_comment_category_stored(self, _server_app):
+        r = _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_cat_.py",
+                "line_index": 1,
+                "comment": "bug here",
+                "category": "bug",
+            },
+        )
+        assert r.status_code == 200
+        try:
+            c = _server_app.get("/api/comments").json()["_test_cat_.py"][0]
+            assert c["category"] == "bug"
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_cat_.py", []):
+                _server_app.delete(f"/api/comments/_test_cat_.py/{c['id']}")
+
+    def test_comment_category_defaults_empty(self, _server_app):
+        r = _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_cat2_.py",
+                "line_index": 1,
+                "comment": "no cat",
+            },
+        )
+        assert r.status_code == 200
+        try:
+            c = _server_app.get("/api/comments").json()["_test_cat2_.py"][0]
+            assert c["category"] == ""
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_cat2_.py", []):
+                _server_app.delete(f"/api/comments/_test_cat2_.py/{c['id']}")
+
+    def test_comment_suggestion_stored(self, _server_app):
+        r = _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_sug_.py",
+                "line_index": 1,
+                "comment": "fix this",
+                "suggestion": "x = 1\n",
+            },
+        )
+        assert r.status_code == 200
+        try:
+            c = _server_app.get("/api/comments").json()["_test_sug_.py"][0]
+            assert c["suggestion"] == "x = 1\n"
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_sug_.py", []):
+                _server_app.delete(f"/api/comments/_test_sug_.py/{c['id']}")
+
+    def test_apply_suggestion_no_suggestion(self, _server_app):
+        _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_apply1_.py",
+                "line_index": 1,
+                "comment": "no suggestion",
+            },
+        )
+        try:
+            cid = _server_app.get("/api/comments").json()["_test_apply1_.py"][0]["id"]
+            r = _server_app.post(f"/api/comments/_test_apply1_.py/{cid}/apply")
+            assert r.json()["ok"] is False
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_apply1_.py", []):
+                _server_app.delete(f"/api/comments/_test_apply1_.py/{c['id']}")
+
+    def test_apply_suggestion_no_line_num(self, _server_app):
+        _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_apply2_.py",
+                "line_index": 1,
+                "comment": "fix",
+                "suggestion": "x = 1\n",
+            },
+        )
+        try:
+            cid = _server_app.get("/api/comments").json()["_test_apply2_.py"][0]["id"]
+            r = _server_app.post(f"/api/comments/_test_apply2_.py/{cid}/apply")
+            assert r.json()["ok"] is False
+            assert "line number" in r.json()["error"].lower()
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_apply2_.py", []):
+                _server_app.delete(f"/api/comments/_test_apply2_.py/{c['id']}")
+
+    def test_apply_suggestion_missing_comment(self, _server_app):
+        r = _server_app.post("/api/comments/_test_apply3_.py/nonexistent-id/apply")
+        assert r.json()["ok"] is False
+
+    def test_blame_returns_list(self, _server_app):
+        r = _server_app.get("/api/blame/diffui/__init__.py")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_blame_unknown_file(self, _server_app):
+        r = _server_app.get("/api/blame/_nonexistent_path_.py")
+        assert r.status_code == 200
+        assert r.json() == []
+
+    def test_preview_text_file(self, _server_app):
+        r = _server_app.get("/api/preview/diffui/__init__.py")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["type"] == "text"
+        assert "content" in data
+
+    def test_preview_image_not_found(self, _server_app):
+        r = _server_app.get("/api/preview/_fake_.png")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["type"] == "image"
+        assert data["exists"] is False
+
+    def test_review_summary_returns_markdown(self, _server_app):
+        r = _server_app.get("/api/review-summary")
+        assert r.status_code == 200
+        md = r.json()["markdown"]
+        assert "# Review Summary:" in md
+        assert "**Files:**" in md
+
+    def test_session_get_returns_dict(self, _server_app):
+        r = _server_app.get("/api/session")
+        assert r.status_code == 200
+        assert isinstance(r.json(), dict)
+
+    def test_session_put_and_get_roundtrip(self, _server_app):
+        _server_app.put("/api/session", json={"test_key": "test_val"})
+        r = _server_app.get("/api/session")
+        assert r.json().get("test_key") == "test_val"
+
+    def test_session_put_is_additive(self, _server_app):
+        _server_app.put("/api/session", json={"key_a": 1})
+        _server_app.put("/api/session", json={"key_b": 2})
+        session = _server_app.get("/api/session").json()
+        assert session.get("key_a") == 1
+        assert session.get("key_b") == 2
+
+    def test_websocket_connected_event(self, _server_app):
+        import json
+
+        with _server_app.websocket_connect("/api/ws") as ws:
+            data = json.loads(ws.receive_text())
+            assert data == {"events": ["connected"]}
+
+    def test_websocket_ping_pong(self, _server_app):
+        import json
+
+        with _server_app.websocket_connect("/api/ws") as ws:
+            ws.receive_text()  # consume connected
+            ws.send_text(json.dumps({"type": "ping"}))
+            data = json.loads(ws.receive_text())
+            assert data == {"type": "pong"}
+
 
 class TestExportJson:
     def test_output_structure(self):

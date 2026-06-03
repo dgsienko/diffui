@@ -161,3 +161,40 @@ class TestBroadcast:
             assert q.qsize() == 1
         finally:
             _clients.discard(q)
+
+
+class TestWsBroadcast:
+    def test_broadcast_delivers_to_ws_clients(self):
+        from unittest.mock import AsyncMock
+
+        from diffui.server.events import _broadcast, _ws_clients
+
+        ws = AsyncMock()
+        _ws_clients.add(ws)
+        try:
+            _broadcast(["files_changed"])
+            ws.send_text.assert_called_once()
+            import json
+
+            payload = json.loads(ws.send_text.call_args[0][0])
+            assert "files_changed" in payload["events"]
+        finally:
+            _ws_clients.discard(ws)
+
+    def test_broadcast_sends_to_both_sse_and_ws(self):
+        from unittest.mock import AsyncMock
+
+        from diffui.server.events import _broadcast, _ws_clients
+        from diffui.server.events import _sse_clients as _clients
+
+        q = asyncio.Queue(maxsize=8)
+        _clients.add(q)
+        ws = AsyncMock()
+        _ws_clients.add(ws)
+        try:
+            _broadcast(["git_changed"])
+            assert not q.empty()
+            ws.send_text.assert_called_once()
+        finally:
+            _clients.discard(q)
+            _ws_clients.discard(ws)
