@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useEffect, useRef, useMemo } from 'preact/hooks';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'preact/hooks';
 import htm from 'htm';
 
 const html = htm.bind(h);
@@ -8,9 +8,16 @@ export function CommandPalette({ commands, onExecute, onClose }) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef(null);
+  const listRef = useRef(null);
 
   useEffect(() => {
     if (inputRef.current) inputRef.current.focus();
+  }, []);
+
+  const scrollSelectedIntoView = useCallback((idx) => {
+    if (!listRef.current) return;
+    const items = listRef.current.querySelectorAll('.command-palette-item');
+    if (items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
   }, []);
 
   const filtered = useMemo(() => {
@@ -32,10 +39,10 @@ export function CommandPalette({ commands, onExecute, onClose }) {
       onClose();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex(i => Math.min(i + 1, filtered.length - 1));
+      setSelectedIndex(i => { const n = Math.min(i + 1, filtered.length - 1); scrollSelectedIntoView(n); return n; });
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex(i => Math.max(i - 1, 0));
+      setSelectedIndex(i => { const n = Math.max(i - 1, 0); scrollSelectedIntoView(n); return n; });
     } else if (e.key === 'Enter' && filtered[selectedIndex]) {
       onExecute(filtered[selectedIndex].id);
       onClose();
@@ -67,7 +74,7 @@ export function CommandPalette({ commands, onExecute, onClose }) {
           onInput=${(e) => setQuery(e.target.value)}
           onKeyDown=${handleKeyDown}
         />
-        <div class="command-palette-list">
+        <div class="command-palette-list" ref=${listRef}>
           ${Object.entries(grouped).map(([category, cmds]) => html`
             <div class="command-palette-category">${category}</div>
             ${cmds.map(cmd => html`

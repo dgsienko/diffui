@@ -80,7 +80,7 @@ export function FullFileViewer({ filePath, view, onToggleReview, reviewed, conta
       <div style="height: ${totalHeight}px; position: relative;">
         <div style="transform: translateY(${offsetY}px); will-change: transform;">
           ${data.lines.slice(startIdx, endIdx).map(line => html`
-            <div key=${line.num} class=${'diff-line' + (line.type === 'add' ? ' add' : '')} style="height: ${LINE_HEIGHT}px">
+            <div key=${line.num} class=${'diff-line' + (line.type === 'add' ? ' add' : line.type === 'remove' ? ' remove' : '')} style="height: ${LINE_HEIGHT}px">
               <div class="diff-gutter">
                 <span class="gutter-new">${line.num}</span>
                 <span class="gutter-sep">│</span>

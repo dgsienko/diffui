@@ -79,7 +79,7 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
           ${canEdit && html`
             <button class="comment-action-btn" onClick=${() => { setEditing(true); setTimeout(() => editRef.current?.focus(), 0); }}>✎</button>
           `}
-          <button class="comment-action-btn delete" onClick=${onDelete}>✕</button>
+          <button class="comment-action-btn delete" onClick=${() => { if (confirm('Delete this comment?')) onDelete(); }}>✕</button>
         </div>
       </div>
       ${editing ? html`
@@ -121,7 +121,7 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
         const rIcon = rIsUser ? '💬' : '🤖';
         const rStyle = !rIsUser ? { color: agentColor(r.author) } : {};
         return html`
-          <div class="comment-reply">↳ ${rIcon} <span style=${rStyle}>${r.author || 'agent'}</span>: <span class="comment-md" dangerouslySetInnerHTML=${renderMd(r.text)}></span></div>
+          <div class="comment-reply">↳ ${rIcon} <span style=${rStyle}>${r.author || 'agent'}</span>: <div class="comment-reply-md comment-md" dangerouslySetInnerHTML=${renderMd(r.text)}></div></div>
         `;
       })}
       ${collapsed && replies.length > 0 && html`
