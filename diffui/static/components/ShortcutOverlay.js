@@ -15,6 +15,7 @@ const SHORTCUTS = [
   { keys: 'Ctrl+K', action: 'Command palette' },
   { keys: 'Ctrl+F', action: 'Search' },
   { keys: 'Ctrl+Click', action: 'Open in editor' },
+  { keys: 'c', action: 'Comment on hovered line' },
   { keys: 'Right-Click', action: 'Add comment' },
   { keys: 'Escape', action: 'Close panel / search' },
   { keys: '?', action: 'Toggle this overlay' },

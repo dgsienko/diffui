@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useRef } from 'preact/hooks';
+import { useState, useRef, useEffect } from 'preact/hooks';
 import htm from 'htm';
 import { CommentBox } from './CommentBox.js';
 import { CommentDisplay } from './CommentDisplay.js';
@@ -79,7 +79,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover }) 
       class=${'diff-line ' + typeClass + (isMatch ? ' search-match' : '')}
       onClick=${handleClick}
       onContextMenu=${handleContext}
-      onMouseEnter=${() => onLineHover && onLineHover(parseInt(line.new_num) || parseInt(line.old_num) || null)}
+      onMouseEnter=${() => onLineHover && onLineHover(line)}
       onMouseLeave=${() => onLineHover && onLineHover(null)}
     >
       <div class="diff-gutter">
@@ -143,10 +143,25 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHov
 
 export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, onOpenInEditor, onExpandContext, contextLines, onLineHover, reviewed, containerRef }) {
   const [commentingLine, setCommentingLine] = useState(null);
+  const hoveredLineRef = useRef(null);
 
   const handleRightClick = (line) => {
     setCommentingLine(line.index);
   };
+
+  const handleLineHover = (line) => {
+    hoveredLineRef.current = line;
+    if (onLineHover) onLineHover(line ? (parseInt(line.new_num) || parseInt(line.old_num) || null) : null);
+  };
+
+  useEffect(() => {
+    const handler = () => {
+      const line = hoveredLineRef.current;
+      if (line) setCommentingLine(line.index);
+    };
+    document.addEventListener('diffui:comment-on-hovered', handler);
+    return () => document.removeEventListener('diffui:comment-on-hovered', handler);
+  }, []);
 
   const handleCtrlClick = (lineNum) => {
     if (data?.file_path) onOpenInEditor(data.file_path, lineNum);
@@ -195,7 +210,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           setCommentingLine=${setCommentingLine}
           onRightClick=${handleRightClick}
           onCtrlClick=${handleCtrlClick}
-          onLineHover=${onLineHover}
+          onLineHover=${handleLineHover}
           onAddComment=${onAddComment}
           onDeleteComment=${onDeleteComment}
           onEditComment=${onEditComment}

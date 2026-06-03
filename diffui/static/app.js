@@ -409,6 +409,8 @@ function App() {
         handleCopyGitLabLink();
       } else if (e.key === 'b') {
         setShowFileTree(v => !v);
+      } else if (e.key === 'c') {
+        document.dispatchEvent(new CustomEvent('diffui:comment-on-hovered'));
       } else if (e.key === 'j' || e.key === 'k') {
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
       } else if (e.ctrlKey && e.key === 'f') {
@@ -436,6 +438,7 @@ function App() {
   }, [reviewedCount, files.length]);
 
   const paletteCommands = useMemo(() => [
+    { id: 'comment-line', label: 'Comment on hovered line', keys: 'c', category: 'Actions' },
     { id: 'toggle-review', label: 'Toggle reviewed', keys: 'r', category: 'Actions' },
     { id: 'toggle-show-reviewed', label: 'Show/hide reviewed files', keys: 'a', category: 'Actions' },
     { id: 'prev-file', label: 'Previous file', keys: '←', category: 'Navigation' },
@@ -460,6 +463,7 @@ function App() {
     const af = activeFileRef.current;
     const idx = vf.findIndex(f => f.path === af);
     switch (id) {
+      case 'comment-line': document.dispatchEvent(new CustomEvent('diffui:comment-on-hovered')); break;
       case 'toggle-review': handleToggleReview(); break;
       case 'toggle-show-reviewed': setShowReviewed(v => !v); break;
       case 'prev-file': if (vf.length) handleFileSelect(vf[(idx - 1 + vf.length) % vf.length].path); break;
@@ -589,6 +593,7 @@ function App() {
         <span><kbd>j</kbd><kbd>k</kbd> next/prev hunk</span>
         <span><kbd>r</kbd> toggle reviewed</span>
         <span><kbd>a</kbd> show/hide reviewed</span>
+        <span><kbd>c</kbd> comment</span>
         <span><kbd>Ctrl+F</kbd> search</span>
         <span><kbd>y</kbd> copy path</span>
       </div>
