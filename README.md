@@ -43,20 +43,32 @@ diffui --open        # Web UI: also open the URL in a browser
 - **Collapsible hunks** — click hunk headers to collapse/expand
 - **Review tracking** — mark files as reviewed; auto-advances to next
   unreviewed file; auto-unmarks when the file changes (tracked by mtime)
-- **Comment threads** — right-click a line to leave a comment; reply to
-  comments; named authors (user vs agent); edit your comments inline;
-  collapse/expand threads
+- **Comment threads** — right-click a line or press `c` to leave a
+  comment; reply to comments; named authors (user vs agent); edit your
+  comments inline; collapse/expand threads
+- **Comment categories** — tag comments as bug, suggestion, nit, or
+  question with colored badges
+- **Code suggestions** — comments can carry a proposed code change with
+  an Apply button that patches the file directly
+- **Multi-agent support** — multiple named agents get unique
+  color-coded identities in comment threads
 - **Comment resolution** — resolve/reopen comments with a toggle; resolved
   comments appear dimmed with a status badge
-- **Comment navigation** — `n`/`p` to jump between comments across files
+- **Comment navigation** — `n`/`p` to jump between comments across files;
+  comment dropdown scrolls to the exact line
 - **Command palette** — `ctrl+k` to search and execute any command
-- **Search** — `ctrl+f` to search across the current diff (debounced)
+- **Search** — `ctrl+f` to search across the current diff with match count
 - **Open in editor** — `ctrl+click` to open the line in VS Code, Cursor,
   Vim, or Neovim (configurable in settings)
 - **View modes** — unified diff (default), split (side-by-side), or full
   file view
 - **View selector** — switch between all branch changes, individual
   commits (most recent first), or uncommitted working changes
+- **Blame gutter** — toggleable git blame column showing author and age
+- **Markdown/image preview** — toggleable rendered preview for `.md`
+  files and inline display for images
+- **Review summary export** — `Shift+S` copies a formatted markdown
+  summary to clipboard with stats and open comments by category
 - **Untracked files** — new files not yet added to git are shown
 - **File tree sidebar** — press `b` to toggle a collapsible file tree
 - **Completion screen** — celebratory overlay when all files are reviewed,
@@ -65,14 +77,16 @@ diffui --open        # Web UI: also open the URL in a browser
 - **15 color themes** — Catppuccin Mocha, Catppuccin Latte, GitHub Dark,
   Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night,
   Rose Pine, Rose Pine Moon, Monokai Pro, Kanagawa, Everforest, Ayu Dark
-- **Auto-refresh** — real-time filesystem watching via watchfiles
-  (FSEvents/inotify) with 400ms debounce
+- **Auto-refresh** — real-time updates via WebSocket (SSE fallback)
+  powered by watchfiles (FSEvents/inotify)
+- **Virtual scrolling** — windowed rendering for large files; browser-
+  native content-visibility for hunk blocks
+- **Session persistence** — active file, diff mode, scroll positions,
+  and UI state restored on reload
 - **JSON export** — `diffui --json` outputs structured review data for
   agent/CLI integration
 - **Settings persistence** — theme, editor, view mode, and display name
   saved across sessions
-- **Scroll position persistence** — switching tabs preserves your scroll
-  position
 - **Context-aware keybindings** — shortcuts are suppressed when dialogs
   are open
 
@@ -87,21 +101,23 @@ diffui --open        # Web UI: also open the URL in a browser
 | `r` | Toggle reviewed (auto-advances to next unreviewed) |
 | `a` | Show all / hide reviewed files |
 | `n` / `p` | Next / previous comment |
+| `c` | Comment on hovered line |
 | `y` | Copy current file path to clipboard |
 | `Y` | Copy GitLab link to clipboard |
+| `S` | Copy review summary to clipboard |
 | `b` | Toggle file tree sidebar |
 | `ctrl+f` | Open search |
 | `escape` | Close any open panel or dialog |
 | `ctrl+click` | Open line in editor |
 | `right-click` | Add comment on a line |
-| `q` | Quit |
 
 ## AI Agent Integration
 
 Comments are stored at `~/.config/diffui/{repo}/{branch}/comments.json`.
 Each comment includes the file path, line number, diff context, comment
-text, author name, author type, and status (open/resolved). AI agents
-can read this file to address review feedback and reply to comments.
+text, author name, author type, category, optional code suggestion, and
+status (open/resolved). AI agents can read this file to address review
+feedback and reply to comments.
 
 `diffui --json` exports the full review session as structured JSON
 including branch info, per-file review status, comments, and a summary
@@ -126,6 +142,8 @@ directories.
   (per-branch)
 - `~/.config/diffui/{repo}/{branch}/comments.json` — comments
   (per-branch)
+- `~/.config/diffui/{repo}/{branch}/session.json` — UI session state
+  (per-branch)
 
 ## Development
 
@@ -133,7 +151,7 @@ directories.
 # Install with dev deps
 pipx inject diffui pytest ruff
 
-# Run tests (145 tests)
+# Run tests (167 tests)
 cd ~/code/diffui && pytest
 
 # Lint
@@ -149,22 +167,27 @@ diffui/
 ├── app.py              # Textual TUI app class
 ├── widgets.py          # TUI widgets
 ├── diff.py             # Diff parsing, syntax highlighting, word diff
-├── git_utils.py        # Git operations and state persistence
+├── git_utils.py        # Git operations, blame, state persistence
 ├── server/             # FastAPI backend (web UI)
 │   ├── app.py          # FastAPI app factory
-│   ├── events.py       # SSE endpoint + watchfiles-based filesystem watcher
+│   ├── events.py       # WebSocket + SSE endpoints, watchfiles watcher
 │   ├── highlight.py    # Pygments-to-HTML adapter
-│   ├── routes_*.py     # API routes (repos, diffs, comments, review, settings)
+│   ├── routes_*.py     # API routes (repos, diffs, blame, preview,
+│   │                   #   comments, review, settings, session)
 │   ├── state.py        # Shared app state
 │   └── theme_css.py    # CSS custom property generator
-├── static/             # Preact frontend (web UI)
+├── static/             # Preact frontend (web UI, no build step)
 │   ├── app.js          # Main app component
+│   ├── lib/            # Shared utilities
+│   │   ├── markdown.js #   Markdown renderer (marked.js wrapper)
+│   │   └── utils.js    #   shortName, mergeRef helpers
 │   ├── components/     # TopBar, FileTabs, DiffViewer, SplitDiffViewer,
 │   │                   #   FullFileViewer, FileTree, CommentBox,
 │   │                   #   CommentDisplay, SearchBar, SettingsPanel,
 │   │                   #   Minimap, ShortcutOverlay, Toast,
-│   │                   #   CommandPalette, CompletionScreen
-│   ├── index.html      # Shell page
+│   │                   #   CommandPalette, CompletionScreen,
+│   │                   #   PreviewViewer
+│   ├── index.html      # Shell page with importmap
 │   └── style.css       # Styles using CSS custom properties
 ├── themes/
 │   ├── theme.py        # Theme dataclass
@@ -172,9 +195,9 @@ diffui/
 │   └── css.py          # Textual CSS template generator
 └── tests/
     ├── test_diff.py        # Diff parsing tests (48 tests)
-    ├── test_events.py      # Filesystem watcher tests (22 tests)
-    ├── test_git_utils.py   # Persistence and utility tests (25 tests)
+    ├── test_events.py      # Watcher + broadcast tests (24 tests)
+    ├── test_git_utils.py   # Blame, session, utility tests (31 tests)
     ├── test_highlight.py   # HTML highlight adapter tests (18 tests)
-    ├── test_server.py      # API route and JSON export tests (20 tests)
+    ├── test_server.py      # API routes, WebSocket, export tests (34 tests)
     └── test_themes.py      # Theme definitions and CSS tests (12 tests)
 ```
