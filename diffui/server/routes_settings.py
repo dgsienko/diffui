@@ -20,6 +20,7 @@ def get_settings():
         "editor": app_state.editor,
         "view_mode": app_state.view_mode,
         "user_name": app_state.user_name,
+        "agent_cli": app_state.agent_cli,
     }
 
 
@@ -36,6 +37,8 @@ def update_settings(body: dict):
         app_state.view_mode = body["view_mode"]
     if "user_name" in body:
         app_state.user_name = body["user_name"]
+    if "agent_cli" in body:
+        app_state.agent_cli = body["agent_cli"]
 
     save_settings(
         {
@@ -43,6 +46,7 @@ def update_settings(body: dict):
             "editor": app_state.editor,
             "view_mode": app_state.view_mode,
             "user_name": app_state.user_name,
+            "agent_cli": app_state.agent_cli,
         }
     )
     return {"ok": True, "css": generate_css_vars(app_state.theme)}

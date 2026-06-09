@@ -11,6 +11,13 @@ const EDITORS = [
   { value: 'nvim', label: 'Neovim' },
 ];
 
+const AGENTS = [
+  { value: 'claude', label: 'Claude Code' },
+  { value: 'codex', label: 'Codex (OpenAI)' },
+  { value: 'opencode', label: 'OpenCode' },
+  { value: 'cursor', label: 'Cursor Agent' },
+];
+
 export function SettingsPanel({ onChange, onClose }) {
   const [settings, setSettings] = useState(null);
   const [themes, setThemes] = useState([]);
@@ -72,6 +79,16 @@ export function SettingsPanel({ onChange, onClose }) {
           onChange=${(e) => update({ editor: e.target.value })}
         >
           ${EDITORS.map(e => html`<option value=${e.value}>${e.label}</option>`)}
+        </select>
+
+        <label class="settings-label" for="agent-select">Agent CLI</label>
+        <select
+          id="agent-select"
+          class="settings-select"
+          value=${settings.agent_cli}
+          onChange=${(e) => update({ agent_cli: e.target.value })}
+        >
+          ${AGENTS.map(a => html`<option value=${a.value}>${a.label}</option>`)}
         </select>
 
         <label class="settings-label" for="display-name">Display name</label>

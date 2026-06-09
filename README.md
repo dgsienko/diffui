@@ -67,12 +67,14 @@ diffui --open        # Web UI: also open the URL in a browser
 - **Risk scoring** — files scored by risk (migrations, configs, large
   deletions, test removal) with colored dots on tabs and tree; sort by
   risk via command palette
-- **Agent orchestration** — "Send to agent" button spawns Claude to
-  address open comments; agent replies appear in real-time via
-  auto-refresh; status indicator with pulse animation
+- **Agent orchestration** — "Send to agent" button copies the review
+  prompt to clipboard for pasting into your existing terminal session;
+  Shift+click spawns the configured agent CLI as a background process.
+  Supports Claude Code, Codex, OpenCode, and Cursor Agent (configurable
+  in settings)
 - **Explain changes** — generate a self-contained HTML walkthrough of
   branch changes via command palette (TL;DR, file-by-file analysis,
-  architecture notes, risk flags)
+  architecture notes, risk flags) using the configured agent CLI
 - **Blame gutter** — toggleable git blame column showing author and age
 - **Markdown/image preview** — toggleable rendered preview for `.md`
   files and inline display for images
@@ -132,15 +134,20 @@ feedback and reply to comments.
 including branch info, per-file review status, comments, and a summary
 with open/resolved counts — useful for programmatic agent workflows.
 
-To have an agent address your comments, either:
+To have an agent address your comments:
 
-- Click **"Send to agent"** in the top bar — spawns Claude to address
-  all open comments, with real-time updates as the agent works
-- Or tell an agent directly: "Go address the diffui comments"
+- Click **"Send to agent"** — copies the review prompt to your
+  clipboard; paste it into your existing terminal session to keep full
+  context
+- **Shift+click** — spawns the configured agent CLI (Claude Code,
+  Codex, OpenCode, or Cursor Agent) as a background process
+- Or tell your agent directly: "Go address the diffui comments"
 
 The agent will read the comments, reply with what it did, make the
 changes, and remove addressed comments from the file. diffui
 auto-refreshes when the file changes.
+
+Configure your preferred agent CLI in Settings (gear icon).
 
 Use **"Explain changes"** from the command palette to generate a
 self-contained HTML walkthrough of the branch (TL;DR, file-by-file
@@ -152,7 +159,7 @@ All state lives in `~/.config/diffui/` — nothing is written to repo
 directories.
 
 - `~/.config/diffui/settings.json` — theme, editor, view mode, display
-  name (global)
+  name, agent CLI (global)
 - `~/.config/diffui/{repo}/{branch}/reviewed.json` — review status
   (per-branch)
 - `~/.config/diffui/{repo}/{branch}/comments.json` — comments

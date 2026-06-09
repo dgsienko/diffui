@@ -93,6 +93,51 @@ def _process_status(proc: subprocess.Popen | None) -> dict:
     return {"running": False, "exit_code": rc}
 
 
+_AGENT_CMDS = {
+    "claude": lambda prompt, cwd: ["claude", "-p", prompt, "--allowedTools", "Edit,Read,Bash,Write"],
+    "codex": lambda prompt, cwd: ["codex", "--prompt", prompt, "--auto-edit"],
+    "opencode": lambda prompt, cwd: ["opencode", "-p", prompt],
+    "cursor": lambda prompt, cwd: ["cursor-agent", "-p", prompt],
+}
+
+
+def _build_agent_prompt() -> tuple[str, str] | tuple[None, str]:
+    from diffui.git_utils import _comments_path, get_repo_root
+
+    open_comments = []
+    for file_path, file_comments in app_state.comments.items():
+        for c in file_comments:
+            if c.get("status", "open") != "resolved":
+                line_num = c.get("file_line_num", c.get("line_index", "?"))
+                cat = c.get("category", "")
+                prefix = f"[{cat}] " if cat else ""
+                open_comments.append(f"{file_path}:{line_num} — {prefix}{c.get('comment', '')}")
+
+    if not open_comments:
+        return None, "No open comments"
+
+    comments_path = str(_comments_path())
+    repo_root = str(get_repo_root())
+    comment_text = "\n".join(open_comments)
+
+    prompt = (
+        f"Address these diffui review comments in the repo at {repo_root}. "
+        f"The comments file is at {comments_path}. "
+        f"For each comment, make the fix, then add a reply to the comment in the JSON file "
+        f"explaining what you did. Remove comments you've fully addressed.\n\n"
+        f"{comment_text}"
+    )
+    return prompt, repo_root
+
+
+@router.post("/agent/prompt")
+def get_agent_prompt():
+    result = _build_agent_prompt()
+    if result[0] is None:
+        return {"ok": False, "error": result[1]}
+    return {"ok": True, "prompt": result[0]}
+
+
 @router.post("/agent/run")
 def run_agent():
     global _agent_process
@@ -100,39 +145,23 @@ def run_agent():
         if _agent_process and _agent_process.poll() is None:
             return {"ok": False, "error": "Agent already running"}
 
-        from diffui.git_utils import _comments_path, get_repo_root
+        result = _build_agent_prompt()
+        if result[0] is None:
+            return {"ok": False, "error": result[1]}
+        prompt, repo_root = result
 
-        open_comments = []
-        for file_path, file_comments in app_state.comments.items():
-            for c in file_comments:
-                if c.get("status", "open") != "resolved":
-                    line_num = c.get("file_line_num", c.get("line_index", "?"))
-                    cat = c.get("category", "")
-                    prefix = f"[{cat}] " if cat else ""
-                    open_comments.append(f"{file_path}:{line_num} — {prefix}{c.get('comment', '')}")
-
-        if not open_comments:
-            return {"ok": False, "error": "No open comments"}
-
-        comments_path = str(_comments_path())
-        repo_root = str(get_repo_root())
-        comment_text = "\n".join(open_comments)
-
-        prompt = (
-            f"Address these diffui review comments in the repo at {repo_root}. "
-            f"The comments file is at {comments_path}. "
-            f"For each comment, make the fix, then add a reply to the comment in the JSON file "
-            f"explaining what you did. Remove comments you've fully addressed.\n\n"
-            f"{comment_text}"
-        )
+        agent = app_state.agent_cli
+        cmd_builder = _AGENT_CMDS.get(agent)
+        if not cmd_builder:
+            return {"ok": False, "error": f"Unknown agent CLI: {agent}"}
 
         _agent_process = subprocess.Popen(
-            ["claude", "-p", prompt, "--allowedTools", "Edit,Read,Bash,Write"],
+            cmd_builder(prompt, repo_root),
             cwd=repo_root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-    return {"ok": True, "pid": _agent_process.pid}
+    return {"ok": True, "pid": _agent_process.pid, "agent": agent}
 
 
 @router.get("/agent/status")
@@ -177,8 +206,13 @@ def explain_changes():
             f"Changed files ({len(app_state.all_files)}):\n{file_list}"
         )
 
+        agent = app_state.agent_cli
+        cmd_builder = _AGENT_CMDS.get(agent)
+        if not cmd_builder:
+            return {"ok": False, "error": f"Unknown agent CLI: {agent}"}
+
         _explain_process = subprocess.Popen(
-            ["claude", "-p", prompt, "--allowedTools", "Read,Bash,Write,Glob,Grep"],
+            cmd_builder(prompt, repo_root),
             cwd=repo_root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

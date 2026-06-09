@@ -38,6 +38,7 @@ class AppState:
         self.editor: str = saved.get("editor", "code")
         self.view_mode: str = saved.get("view_mode", "diff")
         self.user_name: str = saved.get("user_name", "User")
+        self.agent_cli: str = saved.get("agent_cli", "claude")
         self.theme_index: int = theme_index
 
     def reload_repo_state(self) -> None:

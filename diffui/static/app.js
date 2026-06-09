@@ -394,9 +394,21 @@ function App() {
   }, []);
 
   const [agentRunning, setAgentRunning] = useState(false);
-  const handleRunAgent = useCallback(() => runAsyncTask(
+
+  const handleCopyAgentPrompt = useCallback(async () => {
+    const r = await fetch('/api/agent/prompt', { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      await navigator.clipboard.writeText(data.prompt);
+      showToast('Agent prompt copied — paste into your terminal session', 'success');
+    } else {
+      showToast(data.error || 'No comments to address', 'error');
+    }
+  }, []);
+
+  const handleSpawnAgent = useCallback(() => runAsyncTask(
     '/api/agent/run', '/api/agent/status', setAgentRunning,
-    { startMsg: 'Agent started — addressing comments', doneMsg: 'Agent finished', failMsg: 'Agent failed' },
+    { startMsg: 'Agent spawned — addressing comments', doneMsg: 'Agent finished', failMsg: 'Agent failed' },
   ), [runAsyncTask]);
 
   const [explainRunning, setExplainRunning] = useState(false);
@@ -642,7 +654,8 @@ function App() {
     { id: 'collapse-context', label: 'Collapse diff context', category: 'Actions' },
     { id: 'export-summary', label: 'Copy review summary', keys: 'S', category: 'Actions' },
     { id: 'sort-risk', label: 'Toggle sort by risk', category: 'Actions' },
-    { id: 'run-agent', label: 'Send comments to agent', category: 'Agent' },
+    { id: 'copy-agent-prompt', label: 'Copy agent prompt to clipboard', category: 'Agent' },
+    { id: 'spawn-agent', label: 'Spawn agent to address comments', category: 'Agent' },
     { id: 'explain', label: 'Explain changes (generate HTML)', category: 'Agent' },
   ], []);
 
@@ -669,7 +682,8 @@ function App() {
       case 'collapse-context': handleExpandContext('collapse'); break;
       case 'export-summary': handleExportSummary(); break;
       case 'sort-risk': setSortByRisk(v => { showToast(v ? 'Default file order' : 'Sorted by risk'); return !v; }); break;
-      case 'run-agent': handleRunAgent(); break;
+      case 'copy-agent-prompt': handleCopyAgentPrompt(); break;
+      case 'spawn-agent': handleSpawnAgent(); break;
       case 'explain': handleExplain(); break;
       case 'prev-hunk': scrollToHunk('prev'); break;
       case 'next-hunk': scrollToHunk('next'); break;
@@ -697,7 +711,8 @@ function App() {
       onOpenSettings=${() => setShowSettings(v => !v)}
       onCommentSelect=${handleCommentSelect}
       agentRunning=${agentRunning}
-      onRunAgent=${handleRunAgent}
+      onCopyAgentPrompt=${handleCopyAgentPrompt}
+      onSpawnAgent=${handleSpawnAgent}
     />
     ${showSearch && html`
       <${SearchBar}
