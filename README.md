@@ -55,35 +55,42 @@ diffui --open        # Web UI: also open the URL in a browser
 - **Comment resolution** — resolve/reopen comments with a toggle; resolved
   comments appear dimmed with a status badge
 - **Comment navigation** — `n`/`p` to jump between comments across files;
-  comment dropdown scrolls to the exact line
+  comments panel shows all open comments grouped by file
+- **Inline hover actions** — `+` button to comment and `↗` to open in
+  editor appear on hover over any diff line
 - **Command palette** — `ctrl+k` to search and execute any command
 - **Search** — `ctrl+f` to search across the current diff with match count
-- **Open in editor** — `ctrl+click` to open the line in VS Code, Cursor,
-  Vim, or Neovim (configurable in settings)
+- **File search** — `ctrl+shift+f` to filter the file list by path
+- **Open in editor** — `ctrl+click` or hover action to open the line in
+  VS Code, Cursor, Vim, or Neovim (configurable in settings)
 - **View modes** — unified diff (default), split (side-by-side), or full
   file view
 - **View selector** — switch between all branch changes, individual
   commits (most recent first), or uncommitted working changes
+- **Review progress** — visual progress bar with file count in the toolbar
 - **Risk scoring** — files scored by risk (migrations, configs, large
   deletions, test removal) with colored dots on tabs and tree; sort by
   risk via command palette
-- **Agent orchestration** — "Send to agent" button copies the review
-  prompt to clipboard for pasting into your existing terminal session;
-  Shift+click spawns the configured agent CLI as a background process.
-  Supports Claude Code, Codex, OpenCode, and Cursor Agent (configurable
-  in settings)
+- **Agent orchestration** — "Send to agent" button with confirmation
+  dialog showing what the agent will do. Spawns the configured agent CLI
+  (Claude Code, Codex, OpenCode, or Cursor Agent) with a rich context
+  file containing diffs, review state, and existing comment threads.
+  Status bar with live elapsed timer while agent is running
 - **Explain changes** — generate a self-contained HTML walkthrough of
   branch changes via command palette (TL;DR, file-by-file analysis,
   architecture notes, risk flags) using the configured agent CLI
 - **Blame gutter** — toggleable git blame column showing author and age
+  with aligned columns
 - **Markdown/image preview** — toggleable rendered preview for `.md`
   files and inline display for images
 - **Review summary export** — `Shift+S` copies a formatted markdown
   summary to clipboard with stats and open comments by category
 - **Untracked files** — new files not yet added to git are shown
-- **File tree sidebar** — press `b` to toggle a collapsible file tree
-- **Completion screen** — celebratory overlay when all files are reviewed,
-  with stats and open comment count
+- **Explorer sidebar** — file tree with grouping modes (directory, type,
+  status) and resizable via drag handle; open by default
+- **Comments panel** — sidebar showing all open comments grouped by file;
+  click to jump to the comment
+- **Completion screen** — overlay when all files are reviewed with stats
 - **Branch name** — displayed in the top bar
 - **15 color themes** — Catppuccin Mocha, Catppuccin Latte, GitHub Dark,
   Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night,
@@ -116,8 +123,10 @@ diffui --open        # Web UI: also open the URL in a browser
 | `y` | Copy current file path to clipboard |
 | `Y` | Copy GitLab link to clipboard |
 | `S` | Copy review summary to clipboard |
-| `b` | Toggle file tree sidebar |
-| `ctrl+f` | Open search |
+| `]` | Jump to next unreviewed file |
+| `b` | Toggle explorer sidebar |
+| `ctrl+f` | Search in diff |
+| `ctrl+shift+f` | Search files |
 | `escape` | Close any open panel or dialog |
 | `ctrl+click` | Open line in editor |
 | `right-click` | Add comment on a line |
@@ -136,16 +145,16 @@ with open/resolved counts — useful for programmatic agent workflows.
 
 To have an agent address your comments:
 
-- Click **"Send to agent"** — copies the review prompt to your
-  clipboard; paste it into your existing terminal session to keep full
-  context
-- **Shift+click** — spawns the configured agent CLI (Claude Code,
-  Codex, OpenCode, or Cursor Agent) as a background process
+- Click **"Send to agent"** in the toolbar — a confirmation dialog
+  shows the configured agent, comment count, and what the agent will do.
+  Confirm to spawn the agent with a rich context file containing full
+  diffs, review state, and existing comment threads
 - Or tell your agent directly: "Go address the diffui comments"
 
-The agent will read the comments, reply with what it did, make the
-changes, and remove addressed comments from the file. diffui
-auto-refreshes when the file changes.
+The agent will reply to comments explaining what it did, ask clarifying
+questions when unsure, and leave unresolved comments in place. A status
+bar shows live elapsed time while the agent is running. diffui
+auto-refreshes as the agent works.
 
 Configure your preferred agent CLI in Settings (gear icon).
 
@@ -205,10 +214,12 @@ diffui/
 │   │   └── utils.js    #   shortName, mergeRef helpers
 │   ├── components/     # TopBar, FileTabs, DiffViewer, SplitDiffViewer,
 │   │                   #   FullFileViewer, FileTree, CommentBox,
-│   │                   #   CommentDisplay, SearchBar, SettingsPanel,
+│   │                   #   CommentDisplay, CommentsPanel, SearchBar,
+│   │                   #   FileFilterBar, LineActions, SettingsPanel,
 │   │                   #   Minimap, ShortcutOverlay, Toast,
 │   │                   #   CommandPalette, CompletionScreen,
-│   │                   #   PreviewViewer
+│   │                   #   PreviewViewer, AgentStatusBar,
+│   │                   #   AgentConfirmDialog
 │   ├── index.html      # Shell page with importmap
 │   └── style.css       # Styles using CSS custom properties
 ├── themes/

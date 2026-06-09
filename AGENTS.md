@@ -48,9 +48,11 @@ diffui/
 │   │   └── utils.js    #   shortName(), mergeRef() helpers
 │   ├── components/     # TopBar, FileTabs, DiffViewer, SplitDiffViewer,
 │   │                   #   FullFileViewer, FileTree, CommentBox,
-│   │                   #   CommentDisplay, SearchBar, SettingsPanel,
+│   │                   #   CommentDisplay, CommentsPanel, SearchBar,
+│   │                   #   FileFilterBar, LineActions, SettingsPanel,
 │   │                   #   Minimap, ShortcutOverlay, Toast,
-│   │                   #   CommandPalette, CompletionScreen, PreviewViewer
+│   │                   #   CommandPalette, CompletionScreen, PreviewViewer,
+│   │                   #   AgentStatusBar, AgentConfirmDialog
 │   ├── index.html      # Shell page with importmap for preact/htm CDN
 │   └── style.css       # All styles via CSS custom properties (themed)
 └── themes/
@@ -108,13 +110,14 @@ diffui/
   configs, large deletions, test removal, high churn). Shown as colored
   dots on file tabs and tree items. Sort-by-risk toggle via command
   palette.
-- **Agent orchestration** — two modes: `/api/agent/prompt` returns the
-  prompt for clipboard copy (paste into existing terminal session), and
-  `/api/agent/run` spawns the configured agent CLI as a subprocess.
-  Frontend button defaults to clipboard copy; Shift+click spawns.
+- **Agent orchestration** — confirmation dialog shows agent name, comment
+  count, and behavior summary. `/api/agent/run` spawns the configured
+  agent CLI with a rich context file (`_build_agent_context`) containing
+  full diffs, review state, and thread history. `/api/agent/status` polls.
   Agent CLI is configurable in settings (Claude Code, Codex, OpenCode,
   Cursor Agent). Process management uses `_process_lock` for thread
-  safety and `_process_status` for zombie reaping.
+  safety and `_process_status` for reaping. `AgentStatusBar` shows live
+  elapsed timer during execution.
 - **Explain changes** — `/api/explain` spawns the configured agent CLI
   to generate a self-contained HTML walkthrough at
   `/tmp/diffui-explain-{branch}.html`. `/api/explain/status` polls.
@@ -132,6 +135,20 @@ diffui/
 - **Shared utilities** — `lib/markdown.js` provides `renderMd()` used by
   both `CommentDisplay` and `PreviewViewer`. `lib/utils.js` provides
   `shortName()` and `mergeRef()`.
+- **Two-row header** — row 1 has repo/view selects and branch pill;
+  row 2 (toolbar) has mode toggle, review controls, panel toggles
+  (Explorer, Search files, Comments), agent button, and diff stats.
+- **Inline hover actions** — `LineActions` component shows `+` (comment)
+  and `↗` (open in editor) buttons on diff line hover.
+- **Comments panel** — `CommentsPanel` sidebar shows all open comments
+  grouped by file. Click to jump.
+- **File filter** — `FileFilterBar` toggled via `Ctrl+Shift+F`. Filters
+  `visibleFiles` by path substring.
+- **Explorer sidebar** — `FileTree` with grouping modes (directory, type,
+  status), resizable via drag handle, open by default.
+- **Review progress** — visual progress bar + count in toolbar.
+- **CSS design system** — `--radius-sm/md/lg`, `--shadow-low/high` CSS
+  variables. All spacing on 4/8pt grid. No hardcoded colors.
 - **Error handling** — `safeFetch` wrapper shows toast on failed requests.
 - **Accessibility** — ARIA labels on selects, `role="tab"` and keyboard
   activation on file tabs, `role="treeitem"` on file tree items, focus
