@@ -408,6 +408,29 @@ class TestServerRoutes:
         assert r.status_code == 200
         assert "No explanation generated yet" in r.text
 
+    def test_agent_prompt_no_comments(self, _server_app):
+        r = _server_app.post("/api/agent/prompt")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is False
+        assert "No open comments" in data["error"]
+
+    def test_settings_include_agent_cli(self, _server_app):
+        r = _server_app.get("/api/settings")
+        assert r.status_code == 200
+        data = r.json()
+        assert "agent_cli" in data
+        assert data["agent_cli"] in ("claude", "codex", "opencode", "cursor")
+
+    def test_settings_agent_cli_roundtrip(self, _server_app):
+        original = _server_app.get("/api/settings").json()
+        try:
+            r = _server_app.put("/api/settings", json={"agent_cli": "codex"})
+            assert r.status_code == 200
+            assert _server_app.get("/api/settings").json()["agent_cli"] == "codex"
+        finally:
+            _server_app.put("/api/settings", json={"agent_cli": original["agent_cli"]})
+
 
 class TestRiskScoring:
     def test_migration_file_high_risk(self):

@@ -119,9 +119,9 @@ diffui/
   safety and `_process_status` for reaping. `AgentStatusBar` shows live
   elapsed timer during execution.
 - **Explain changes** — `/api/explain` spawns the configured agent CLI
-  to generate a self-contained HTML walkthrough at
-  `/tmp/diffui-explain-{branch}.html`. `/api/explain/status` polls.
-  Includes TL;DR, file-by-file analysis, architecture notes, risk flags.
+  to generate a self-contained HTML walkthrough. `/api/explain/status`
+  polls. `/api/explain/view` serves the result as a localhost page
+  (path-traversal guarded to tempdir). Toolbar button + status bar link.
 - **Blame gutter** — toggleable per-file. Fetches `git blame --porcelain`
   via `/api/blame/{path}`. Results cached client-side in a `Map`.
 - **Preview mode** — toggleable for `.md` and image files. Backend uses
@@ -195,7 +195,7 @@ diffui --open                        # Web UI + open in browser
 diffui-tui                           # Terminal UI
 diffui --comments                    # Dump comments to stdout
 diffui --json                        # Export review session as JSON
-pytest                               # Run tests (179 tests)
+pytest                               # Run tests (183 tests)
 ruff check diffui/ tests/           # Lint
 ```
 
@@ -218,7 +218,7 @@ would require `app.run_test()` with a headless terminal.
 - `tests/test_highlight.py` — 18 tests: highlight_line_html escaping and
   coloring, _apply_word_highlights with spans/entities/malformed HTML,
   parse_diff_to_json structure, highlight_file_to_json
-- `tests/test_server.py` — 46 tests: CSS vars generation, all API routes
+- `tests/test_server.py` — 50 tests: CSS vars generation, all API routes
   (repos, branch, commits, files, diff, themes, settings, comments CRUD,
   comment resolution toggle, review toggle, static files, JSON export),
   comment categories, code suggestions, blame, preview, review summary,

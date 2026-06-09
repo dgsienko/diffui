@@ -122,6 +122,7 @@ diffui --open        # Web UI: also open the URL in a browser
 | `c` | Comment on hovered line |
 | `y` | Copy current file path to clipboard |
 | `Y` | Copy GitLab link to clipboard |
+| `s` | Toggle sort by risk |
 | `S` | Copy review summary to clipboard |
 | `]` | Jump to next unreviewed file |
 | `b` | Toggle explorer sidebar |
@@ -182,7 +183,7 @@ directories.
 # Install with dev deps
 pipx inject diffui pytest ruff
 
-# Run tests (179 tests)
+# Run tests (183 tests)
 cd ~/code/diffui && pytest
 
 # Lint
@@ -232,6 +233,6 @@ diffui/
     ├── test_git_utils.py   # Blame, session, utility tests (31 tests)
     ├── test_highlight.py   # HTML highlight adapter tests (18 tests)
     ├── test_server.py      # API routes, WebSocket, risk scoring,
-    │                       #   agent/explain endpoints, export (46 tests)
+    │                       #   agent/explain endpoints, settings, export (50 tests)
     └── test_themes.py      # Theme definitions and CSS tests (12 tests)
 ```
