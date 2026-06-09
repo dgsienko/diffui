@@ -87,32 +87,30 @@ function TreeDir({ name, files, activeFile, onSelect }) {
 export function FileTree({ files, activeFile, onSelect, onClose }) {
   const [groupMode, setGroupMode] = useState('dir');
   const [width, setWidth] = useState(260);
-  const dragging = useRef(false);
+  const treeRef = useRef(null);
   const grouper = GROUPERS[groupMode] || groupByDir;
   const groups = grouper(files);
   const groupNames = Object.keys(groups).sort();
 
   const onResizeStart = useCallback((e) => {
     e.preventDefault();
-    dragging.current = true;
     const startX = e.clientX;
-    const startWidth = width;
+    const startWidth = treeRef.current?.offsetWidth || 260;
     const onMove = (e) => {
-      if (!dragging.current) return;
       const newWidth = Math.max(180, Math.min(500, startWidth + e.clientX - startX));
-      setWidth(newWidth);
+      if (treeRef.current) treeRef.current.style.width = newWidth + 'px';
     };
     const onUp = () => {
-      dragging.current = false;
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      if (treeRef.current) setWidth(treeRef.current.offsetWidth);
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-  }, [width]);
+  }, []);
 
   return html`
-    <div class="file-tree" style="width: ${width}px">
+    <div class="file-tree" ref=${treeRef} style="width: ${width}px">
       <div class="file-tree-header">
         <span class="file-tree-title">Files</span>
         <div class="tree-group-toggle">
