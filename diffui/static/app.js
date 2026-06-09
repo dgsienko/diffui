@@ -16,6 +16,7 @@ import { Minimap } from './components/Minimap.js';
 import { CompletionScreen } from './components/CompletionScreen.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { PreviewViewer, isPreviewable } from './components/PreviewViewer.js';
+import { AgentStatusBar } from './components/AgentStatusBar.js';
 import { shortName } from './lib/utils.js';
 
 const html = htm.bind(h);
@@ -371,12 +372,15 @@ function App() {
   const pollTimers = useRef([]);
   useEffect(() => () => pollTimers.current.forEach(clearInterval), []);
 
-  const runAsyncTask = useCallback(async (runUrl, statusUrl, setRunning, { startMsg, doneMsg, failMsg }) => {
+  const [taskStatus, setTaskStatus] = useState(null);
+
+  const runAsyncTask = useCallback(async (runUrl, statusUrl, setRunning, { label, doneMsg, failMsg }) => {
     const r = await fetch(runUrl, { method: 'POST' });
     const data = await r.json();
     if (!data.ok) { showToast(data.error || 'Failed to start', 'error'); return data; }
     setRunning(true);
-    showToast(startMsg, 'success');
+    const startTime = Date.now();
+    setTaskStatus({ label, startTime, status: 'running' });
     const poll = setInterval(async () => {
       try {
         const s = await fetch(statusUrl);
@@ -385,9 +389,16 @@ function App() {
           clearInterval(poll);
           pollTimers.current = pollTimers.current.filter(t => t !== poll);
           setRunning(false);
-          showToast(status.exit_code === 0 ? (typeof doneMsg === 'function' ? doneMsg(data) : doneMsg) : failMsg, status.exit_code === 0 ? 'success' : 'error');
+          const ok = status.exit_code === 0;
+          const msg = ok ? (typeof doneMsg === 'function' ? doneMsg(data) : doneMsg) : failMsg;
+          setTaskStatus({ label, startTime, status: ok ? 'done' : 'failed', message: msg, endTime: Date.now() });
+          setTimeout(() => setTaskStatus(s => s?.startTime === startTime ? null : s), 10000);
         }
-      } catch { clearInterval(poll); setRunning(false); }
+      } catch {
+        clearInterval(poll);
+        setRunning(false);
+        setTaskStatus({ label, startTime, status: 'failed', message: 'Lost connection', endTime: Date.now() });
+      }
     }, 3000);
     pollTimers.current.push(poll);
     return data;
@@ -408,13 +419,13 @@ function App() {
 
   const handleSpawnAgent = useCallback(() => runAsyncTask(
     '/api/agent/run', '/api/agent/status', setAgentRunning,
-    { startMsg: 'Agent spawned — addressing comments', doneMsg: 'Agent finished', failMsg: 'Agent failed' },
+    { label: 'Addressing comments', doneMsg: 'Comments addressed', failMsg: 'Agent failed' },
   ), [runAsyncTask]);
 
   const [explainRunning, setExplainRunning] = useState(false);
   const handleExplain = useCallback(() => runAsyncTask(
     '/api/explain', '/api/explain/status', setExplainRunning,
-    { startMsg: 'Generating explanation...', doneMsg: (d) => `Explanation ready: ${d.output_path}`, failMsg: 'Explanation generation failed' },
+    { label: 'Generating explanation', doneMsg: (d) => `Explanation ready: ${d.output_path}`, failMsg: 'Explanation generation failed' },
   ), [runAsyncTask]);
 
   const handleCopyPath = useCallback(() => {
@@ -714,6 +725,12 @@ function App() {
       onCopyAgentPrompt=${handleCopyAgentPrompt}
       onSpawnAgent=${handleSpawnAgent}
     />
+    ${taskStatus && html`
+      <${AgentStatusBar}
+        task=${taskStatus}
+        onDismiss=${() => setTaskStatus(null)}
+      />
+    `}
     ${showSearch && html`
       <${SearchBar}
         value=${searchTerm}

@@ -1514,6 +1514,70 @@ mark {
   50% { opacity: 0.6; }
 }
 
+/* --- Agent Status Bar --- */
+
+.agent-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background: var(--purple-bg);
+  border-bottom: 1px solid var(--purple-border);
+  color: var(--purple);
+  font-size: 12px;
+  flex-shrink: 0;
+  animation: slide-down 0.15s ease-out;
+}
+
+.agent-status-bar.status-done {
+  background: var(--add-bg);
+  border-color: var(--add-hover);
+  color: var(--add-fg);
+}
+
+.agent-status-bar.status-failed {
+  background: var(--remove-bg);
+  border-color: var(--remove-hover);
+  color: var(--remove-fg);
+}
+
+.agent-status-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-status-indicator { font-weight: 600; }
+
+.agent-status-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--purple-border);
+  border-top-color: var(--purple);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.status-done .agent-status-spinner { display: none; }
+.status-failed .agent-status-spinner { display: none; }
+
+.agent-status-elapsed {
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.agent-status-dismiss {
+  background: none;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.agent-status-dismiss:hover { color: var(--fg); }
+
 .top-bar-btn.preview-active {
   background: var(--accent);
   color: var(--bg);
