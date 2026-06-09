@@ -28,6 +28,7 @@ export function FileTabs({ files, activeFile, onSelect }) {
           onKeyDown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(f.path); } }}
           title=${f.path}
         >
+          ${f.risk_level && f.risk_level !== 'low' && html`<span class=${'risk-dot risk-' + f.risk_level} title=${'Risk: ' + f.risk_level}></span>`}
           ${f.reviewed ? '✓ ' : ''}${f.short_name}
           ${f.comment_count > 0 ? html` <span style="color: var(--accent)">(${f.comment_count})</span>` : ''}
         </div>

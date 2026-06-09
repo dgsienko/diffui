@@ -49,6 +49,43 @@ def _get_diff(path: str, view: str, context: int = 3) -> str:
     return result
 
 
+_HIGH_RISK_PATTERNS = {"migration", "alembic", "schema", "deploy", "infra", "terraform", ".env"}
+_CONFIG_EXTS = {".yml", ".yaml", ".toml", ".json", ".cfg", ".ini", ".env"}
+
+
+def _score_risk(path: str, adds: int, dels: int) -> tuple[int, str]:
+    score = 0
+    reasons = []
+    name_lower = path.lower()
+    ext = "." + path.rsplit(".", 1)[-1].lower() if "." in path else ""
+
+    if any(p in name_lower for p in _HIGH_RISK_PATTERNS):
+        score += 3
+        reasons.append("infra/migration")
+    if ext in _CONFIG_EXTS:
+        score += 2
+        reasons.append("config")
+    if dels > 50:
+        score += 2
+        reasons.append("large deletion")
+    elif dels > 20:
+        score += 1
+    if adds + dels > 200:
+        score += 2
+        reasons.append("high churn")
+    elif adds + dels > 50:
+        score += 1
+    if "test" in name_lower and dels > adds:
+        score += 2
+        reasons.append("test removal")
+
+    if score >= 5:
+        return score, "high"
+    if score >= 3:
+        return score, "medium"
+    return score, "low"
+
+
 @router.get("/files")
 def list_files(view: str = "all"):
     if view == "all":
@@ -62,20 +99,27 @@ def list_files(view: str = "all"):
 
     numstat = app_state.numstat if view == "all" else {}
 
-    return [
-        {
-            "path": f,
-            "short_name": short_name(f),
-            "reviewed": f in app_state.reviewed,
-            "review_mtime": app_state.reviewed.get(f),
-            "file_mtime": get_file_mtime(f),
-            "has_comments": f in app_state.comments,
-            "comment_count": len(app_state.comments.get(f, [])),
-            "adds": numstat.get(f, (0, 0))[0],
-            "dels": numstat.get(f, (0, 0))[1],
-        }
-        for f in files
-    ]
+    result = []
+    for f in files:
+        adds = numstat.get(f, (0, 0))[0]
+        dels = numstat.get(f, (0, 0))[1]
+        risk_score, risk_level = _score_risk(f, adds, dels)
+        result.append(
+            {
+                "path": f,
+                "short_name": short_name(f),
+                "reviewed": f in app_state.reviewed,
+                "review_mtime": app_state.reviewed.get(f),
+                "file_mtime": get_file_mtime(f),
+                "has_comments": f in app_state.comments,
+                "comment_count": len(app_state.comments.get(f, [])),
+                "adds": adds,
+                "dels": dels,
+                "risk_score": risk_score,
+                "risk_level": risk_level,
+            }
+        )
+    return result
 
 
 @router.get("/diff/{path:path}")

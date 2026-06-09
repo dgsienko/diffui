@@ -44,6 +44,7 @@ function App() {
   const [themeCss, setThemeCss] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [showReviewed, setShowReviewed] = useState(true);
+  const [sortByRisk, setSortByRisk] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -367,6 +368,56 @@ function App() {
     if (data.css) setThemeCss(data.css);
   }, []);
 
+  const [agentRunning, setAgentRunning] = useState(false);
+
+  const handleRunAgent = useCallback(async () => {
+    const r = await fetch('/api/agent/run', { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      setAgentRunning(true);
+      showToast('Agent started — addressing comments', 'success');
+      const poll = setInterval(async () => {
+        const s = await fetch('/api/agent/status');
+        const status = await s.json();
+        if (!status.running) {
+          clearInterval(poll);
+          setAgentRunning(false);
+          showToast('Agent finished', 'success');
+        }
+      }, 3000);
+    } else {
+      showToast(data.error || 'Failed to start agent', 'error');
+    }
+  }, []);
+
+  const [explainRunning, setExplainRunning] = useState(false);
+  const [explainPath, setExplainPath] = useState(null);
+
+  const handleExplain = useCallback(async () => {
+    const r = await fetch('/api/explain', { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      setExplainRunning(true);
+      setExplainPath(data.output_path);
+      showToast('Generating explanation...', 'success');
+      const poll = setInterval(async () => {
+        const s = await fetch('/api/explain/status');
+        const status = await s.json();
+        if (!status.running) {
+          clearInterval(poll);
+          setExplainRunning(false);
+          if (status.exit_code === 0) {
+            showToast(`Explanation ready: ${data.output_path}`, 'success');
+          } else {
+            showToast('Explanation generation failed', 'error');
+          }
+        }
+      }, 3000);
+    } else {
+      showToast(data.error || 'Failed to start', 'error');
+    }
+  }, []);
+
   const handleCopyPath = useCallback(() => {
     const af = activeFileRef.current;
     if (af) {
@@ -457,7 +508,11 @@ function App() {
     showToast(lineNum ? `GitLab link copied (line ${lineNum})` : 'GitLab link copied');
   }, []);
 
-  const visibleFiles = useMemo(() => showReviewed ? files : files.filter(f => !f.reviewed), [files, showReviewed]);
+  const visibleFiles = useMemo(() => {
+    let filtered = showReviewed ? files : files.filter(f => !f.reviewed);
+    if (sortByRisk) filtered = [...filtered].sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
+    return filtered;
+  }, [files, showReviewed, sortByRisk]);
   const activeFileReviewed = useMemo(() => files.find(f => f.path === activeFile)?.reviewed, [files, activeFile]);
 
   visibleFilesRef.current = visibleFiles;
@@ -599,6 +654,9 @@ function App() {
     { id: 'expand-context', label: 'Expand diff context', category: 'Actions' },
     { id: 'collapse-context', label: 'Collapse diff context', category: 'Actions' },
     { id: 'export-summary', label: 'Copy review summary', keys: 'S', category: 'Actions' },
+    { id: 'sort-risk', label: 'Toggle sort by risk', category: 'Actions' },
+    { id: 'run-agent', label: 'Send comments to agent', category: 'Agent' },
+    { id: 'explain', label: 'Explain changes (generate HTML)', category: 'Agent' },
   ], []);
 
   const handleCommand = useCallback((id) => {
@@ -623,6 +681,9 @@ function App() {
       case 'expand-context': handleExpandContext('expand'); break;
       case 'collapse-context': handleExpandContext('collapse'); break;
       case 'export-summary': handleExportSummary(); break;
+      case 'sort-risk': setSortByRisk(v => !v); showToast(sortByRisk ? 'Default file order' : 'Sorted by risk'); break;
+      case 'run-agent': handleRunAgent(); break;
+      case 'explain': handleExplain(); break;
       case 'prev-hunk': scrollToHunk('prev'); break;
       case 'next-hunk': scrollToHunk('next'); break;
     }
@@ -648,6 +709,8 @@ function App() {
       onToggleReviewed=${() => setShowReviewed(v => !v)}
       onOpenSettings=${() => setShowSettings(v => !v)}
       onCommentSelect=${handleCommentSelect}
+      agentRunning=${agentRunning}
+      onRunAgent=${handleRunAgent}
     />
     ${showSearch && html`
       <${SearchBar}

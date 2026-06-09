@@ -45,6 +45,7 @@ function TreeDir({ name, files, activeFile, onSelect }) {
               onKeyDown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(f.path); } }}
               title=${f.path}
             >
+              ${f.risk_level && f.risk_level !== 'low' && html`<span class=${'risk-dot risk-' + f.risk_level}></span>`}
               ${f.reviewed ? '✓ ' : ''}${f.short_name}
               ${(f.comment_count || 0) > 0 && html`<span class="tree-comment-count">${f.comment_count}</span>`}
             </div>

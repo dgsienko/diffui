@@ -167,6 +167,18 @@ html, body {
   opacity: 0.5;
 }
 
+.risk-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.risk-high { background: var(--remove-fg); }
+.risk-medium { background: var(--warn-fg); }
+
 /* --- Diff viewer --- */
 
 .diff-container {
@@ -1478,6 +1490,28 @@ mark {
   max-height: 80vh;
   border: 1px solid var(--border);
   border-radius: 4px;
+}
+
+.agent-btn {
+  border-color: var(--purple-border);
+  color: var(--purple);
+}
+
+.agent-btn:hover {
+  background: var(--purple-bg);
+  border-color: var(--purple);
+}
+
+.agent-running {
+  background: var(--purple-bg);
+  border-color: var(--purple);
+  color: var(--purple);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .top-bar-btn.preview-active {
