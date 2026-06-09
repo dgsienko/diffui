@@ -26,6 +26,11 @@
   --purple-bg: #2a2040;
   --purple-border: #3a2a50;
   --file-header-height: 44px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --shadow-low: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-high: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 * {
@@ -60,14 +65,14 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
+  padding: 4px 12px;
   gap: 8px;
 }
 
 .top-bar-left, .top-bar-center, .top-bar-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .top-bar-left { flex: 1; min-width: 0; }
@@ -86,15 +91,15 @@ html, body {
 .toolbar-left, .toolbar-center, .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .toolbar-btn {
   background: var(--bg);
   color: var(--fg-muted);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
   cursor: pointer;
   font-family: inherit;
   font-size: 11px;
@@ -103,7 +108,7 @@ html, body {
 
 .toolbar-btn:hover { border-color: var(--accent); color: var(--fg); }
 
-.toolbar-btn-sm { padding: 3px 6px; }
+.toolbar-btn-sm { padding: 4px 8px; }
 
 .toolbar-stat {
   font-size: 11px;
@@ -126,8 +131,8 @@ html, body {
   background: none;
   border: 1px solid transparent;
   color: var(--fg-muted);
-  border-radius: 4px;
-  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
   cursor: pointer;
   font-size: 11px;
   font-family: inherit;
@@ -153,8 +158,8 @@ html, body {
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  padding: 4px 8px;
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -175,7 +180,7 @@ html, body {
   white-space: nowrap;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 2px 8px;
 }
 
@@ -185,8 +190,8 @@ html, body {
   white-space: nowrap;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 3px 10px;
+  border-radius: var(--radius-md);
+  padding: 4px 8px;
 }
 
 .branch-repo {
@@ -255,14 +260,14 @@ html, body {
   width: 50px;
   height: 3px;
   background: var(--border);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
   background: var(--add-fg);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   transition: width 0.3s ease;
 }
 
@@ -315,11 +320,11 @@ html, body {
 .comments-panel-item {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   padding: 4px 12px;
   cursor: pointer;
   font-size: 12px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   margin: 0 4px;
 }
 
@@ -369,7 +374,7 @@ html, body {
   background: var(--bg-dark);
   color: var(--accent);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   width: 20px;
   height: 18px;
   font-size: 12px;
@@ -437,7 +442,7 @@ html, body {
   background: var(--bg);
   color: var(--fg-muted);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 4px 12px;
   cursor: pointer;
   font-family: inherit;
@@ -588,7 +593,7 @@ html, body {
 mark {
   background: rgba(255, 200, 50, 0.3);
   color: inherit;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   padding: 0 1px;
 }
 
@@ -606,7 +611,7 @@ mark {
 /* --- Legend --- */
 
 .legend {
-  padding: 6px 16px;
+  padding: 8px 16px;
   background: var(--bg-dark);
   border-top: 1px solid var(--border);
   color: var(--fg-muted);
@@ -633,7 +638,7 @@ mark {
 .legend kbd {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   padding: 0 4px;
   font-family: inherit;
   font-size: 11px;
@@ -645,8 +650,8 @@ mark {
   background: var(--bg);
   color: var(--fg-muted);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  padding: 4px 12px;
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -662,8 +667,8 @@ mark {
   background: var(--bg);
   color: var(--fg-muted);
   border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  padding: 4px 8px;
   font-size: 16px;
   cursor: pointer;
   line-height: 1;
@@ -680,7 +685,7 @@ mark {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
+  padding: 8px 16px;
   background: var(--bg-dark);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -696,7 +701,7 @@ mark {
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 4px 8px;
   font-family: inherit;
   font-size: 13px;
@@ -733,7 +738,7 @@ mark {
 .search-hl {
   background: rgba(250, 180, 40, 0.35);
   color: inherit;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   padding: 0 1px;
   outline: 1px solid rgba(250, 180, 40, 0.5);
   outline-offset: -1px;
@@ -754,7 +759,7 @@ mark {
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 8px;
   font-family: inherit;
   font-size: 13px;
@@ -776,7 +781,7 @@ mark {
   background: var(--accent);
   color: var(--bg);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 4px 12px;
   cursor: pointer;
   font-family: inherit;
@@ -792,7 +797,7 @@ mark {
   background: var(--bg);
   color: var(--fg-muted);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 4px 12px;
   cursor: pointer;
   font-family: inherit;
@@ -816,7 +821,7 @@ mark {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 10px;
+  padding: 4px 8px;
   background: var(--comment-header-bg);
 }
 
@@ -849,24 +854,24 @@ mark {
 }
 
 .comment-body {
-  padding: 6px 10px;
+  padding: 4px 8px;
   color: var(--fg);
   font-size: 13px;
   white-space: pre-wrap;
 }
 
 .comment-edit-box {
-  padding: 6px 10px;
+  padding: 4px 8px;
 }
 
 .comment-reply {
-  padding: 2px 10px;
+  padding: 2px 8px;
   color: var(--fg-muted);
   font-size: 12px;
 }
 
 .comment-reply-box {
-  padding: 6px 10px;
+  padding: 4px 8px;
 }
 
 .comment-reply-input {
@@ -881,7 +886,7 @@ mark {
 .comment-status-badge {
   font-size: 10px;
   padding: 1px 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   margin-left: 6px;
   font-weight: 400;
 }
@@ -900,7 +905,7 @@ mark {
 .comment-reply-md p { display: inline; }
 
 .comment-collapsed-hint {
-  padding: 2px 10px;
+  padding: 2px 8px;
   color: var(--fg-muted);
   font-size: 11px;
   font-style: italic;
@@ -909,7 +914,7 @@ mark {
 .comment-category-badge {
   font-size: 10px;
   padding: 1px 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   margin-left: 6px;
   font-weight: 600;
   text-transform: uppercase;
@@ -925,7 +930,7 @@ mark {
   background: var(--bg);
   color: var(--fg-muted);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 4px 8px;
   font-family: inherit;
   font-size: 12px;
@@ -943,7 +948,7 @@ mark {
 .comment-suggestion {
   margin: 4px 10px 6px;
   border: 1px solid var(--add-hover);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -962,8 +967,8 @@ mark {
   background: var(--add-hover);
   color: var(--add-fg);
   border: 1px solid var(--add-fg);
-  border-radius: 4px;
-  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
   cursor: pointer;
   font-family: inherit;
   font-size: 11px;
@@ -974,7 +979,7 @@ mark {
 .comment-suggestion-apply:disabled { opacity: 0.5; cursor: default; }
 
 .comment-suggestion-code {
-  padding: 6px 8px;
+  padding: 8px 8px;
   background: var(--bg);
   color: var(--fg);
   font-family: inherit;
@@ -1003,14 +1008,14 @@ mark {
   height: 100%;
   background: var(--bg-dark);
   border-left: 1px solid var(--border);
-  padding: 20px;
+  padding: 24px;
   overflow-y: auto;
 }
 
 .settings-title {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .settings-label {
@@ -1025,7 +1030,7 @@ mark {
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 8px 12px;
   font-family: inherit;
   font-size: 13px;
@@ -1042,7 +1047,7 @@ mark {
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 8px;
   cursor: pointer;
   font-family: inherit;
@@ -1057,7 +1062,7 @@ mark {
 
 .toast-container {
   position: fixed;
-  bottom: 40px;
+  bottom: 32px;
   right: 16px;
   z-index: 200;
   display: flex;
@@ -1070,11 +1075,11 @@ mark {
   color: var(--fg);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 8px 16px;
   font-size: 13px;
   animation: toast-in 0.2s ease-out;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-low);
   cursor: pointer;
 }
 
@@ -1123,7 +1128,7 @@ mark {
 .mode-toggle {
   display: flex;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -1132,7 +1137,7 @@ mark {
   color: var(--fg-muted);
   border: none;
   border-right: 1px solid var(--border);
-  padding: 4px 10px;
+  padding: 4px 8px;
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
@@ -1276,7 +1281,7 @@ mark {
 .tree-group-toggle {
   display: flex;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -1338,7 +1343,7 @@ mark {
 .tree-badge {
   background: var(--accent);
   color: var(--bg);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0 5px;
   font-size: 10px;
   font-weight: 600;
@@ -1355,14 +1360,14 @@ mark {
 }
 
 .tree-file {
-  padding: 3px 12px 3px 20px;
+  padding: 4px 12px 4px 20px;
   cursor: pointer;
   font-size: 12px;
   color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   margin: 0 4px;
 }
 
@@ -1413,7 +1418,7 @@ mark {
 .stats-file {
   display: flex;
   min-width: 2px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -1439,10 +1444,10 @@ mark {
 .shortcut-panel {
   background: var(--bg-dark);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 24px 32px;
   min-width: 380px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-high);
 }
 
 .shortcut-title {
@@ -1465,7 +1470,7 @@ mark {
 .shortcut-keys kbd {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 2px 6px;
   font-family: inherit;
   font-size: 12px;
@@ -1490,14 +1495,14 @@ mark {
 .comment-md p:last-child { margin-bottom: 0; }
 .comment-md code {
   background: var(--bg);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   padding: 1px 4px;
   font-family: inherit;
   font-size: 12px;
 }
 .comment-md pre {
   background: var(--bg);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 8px;
   margin: 4px 0;
   overflow-x: auto;
@@ -1533,7 +1538,7 @@ mark {
   left: 0;
   right: 0;
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   pointer-events: none;
 }
 
@@ -1562,8 +1567,8 @@ mark {
   background: var(--bg);
   color: var(--fg-muted);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  padding: 4px 8px;
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
@@ -1602,8 +1607,8 @@ mark {
   max-height: 400px;
   background: var(--bg-dark);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-high);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1616,7 +1621,7 @@ mark {
   color: var(--fg);
   border: none;
   border-bottom: 1px solid var(--border);
-  padding: 14px 16px;
+  padding: 12px 16px;
   font-family: inherit;
   font-size: 14px;
   outline: none;
@@ -1659,7 +1664,7 @@ mark {
   font-size: 11px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 1px 6px;
 }
 
@@ -1684,17 +1689,32 @@ mark {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  animation: fade-in 0.3s ease-out;
+  animation: fade-in 0.15s ease-out;
 }
 
 .completion-content {
   text-align: center;
 }
 
-.completion-sparkle {
-  font-size: 48px;
-  margin-bottom: 16px;
-  color: var(--accent);
+.completion-check {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--add-fg);
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  position: relative;
+}
+
+.completion-check::after {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 8px;
+  width: 12px;
+  height: 22px;
+  border: solid var(--add-fg);
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg);
 }
 
 .completion-title {
@@ -1716,8 +1736,8 @@ mark {
   font-size: 14px;
   background: var(--bg-dark);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 14px;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
 }
 
 .completion-stat.open {
@@ -1763,7 +1783,7 @@ mark {
   max-width: 100%;
   max-height: 80vh;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .agent-btn { color: var(--purple); }
@@ -1781,9 +1801,9 @@ mark {
   width: 440px;
   background: var(--bg-dark);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-high);
   align-self: flex-start;
   margin-top: 15vh;
 }
@@ -1819,7 +1839,7 @@ mark {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 16px;
+  padding: 8px 16px;
   background: var(--purple-bg);
   border-bottom: 1px solid var(--purple-border);
   color: var(--purple);

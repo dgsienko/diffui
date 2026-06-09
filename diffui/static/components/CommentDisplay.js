@@ -25,7 +25,6 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
   const editRef = useRef(null);
 
   const isUser = comment.author_type === 'user';
-  const icon = isUser ? '💬' : '🤖';
   const authorStyle = !isUser ? { color: agentColor(comment.author) } : {};
   const replies = comment.replies || [];
   const hasAgentReply = replies.some(r => (r.author_type || 'agent') !== 'user');
@@ -60,7 +59,7 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
     <div class=${'comment-display' + (isResolved ? ' comment-resolved' : '')}>
       <div class="comment-header">
         <span class="comment-author" style=${authorStyle}>
-          ${icon} ${comment.author || 'User'}
+          ${comment.author || 'User'}
           ${category && html`<span class=${'comment-category-badge category-' + category}>${category}</span>`}
           ${isResolved && html`<span class="comment-status-badge resolved">Resolved</span>`}
         </span>
@@ -118,10 +117,9 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
       `}
       ${!collapsed && replies.map(r => {
         const rIsUser = (r.author_type || 'agent') === 'user';
-        const rIcon = rIsUser ? '💬' : '🤖';
         const rStyle = !rIsUser ? { color: agentColor(r.author) } : {};
         return html`
-          <div class="comment-reply">↳ ${rIcon} <span style=${rStyle}>${r.author || 'agent'}</span>: <div class="comment-reply-md comment-md" dangerouslySetInnerHTML=${renderMd(r.text)}></div></div>
+          <div class="comment-reply"><span style=${rStyle}>${r.author || 'agent'}</span>: <div class="comment-reply-md comment-md" dangerouslySetInnerHTML=${renderMd(r.text)}></div></div>
         `;
       })}
       ${collapsed && replies.length > 0 && html`
