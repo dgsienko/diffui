@@ -626,8 +626,7 @@ function App() {
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
         e.preventDefault();
-        setShowFileFilter(v => !v);
-        if (showFileFilter) setFileFilter('');
+        setShowFileFilter(v => { if (v) setFileFilter(''); return !v; });
       } else if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
         setShowSearch(v => !v);
@@ -738,6 +737,7 @@ function App() {
       showReviewed=${showReviewed}
       files=${files}
       comments=${comments}
+      openCommentCount=${commentStats.open}
       onViewChange=${handleViewChange}
       onRepoSwitch=${handleRepoSwitch}
       diffMode=${diffMode}
@@ -750,8 +750,6 @@ function App() {
       onToggleCommentsPanel=${() => setShowCommentsPanel(v => !v)}
       agentRunning=${agentRunning}
       onSendToAgent=${handleSendToAgent}
-      fileFilter=${fileFilter}
-      onFileFilterChange=${setFileFilter}
     />
     ${taskStatus && html`
       <${AgentStatusBar}

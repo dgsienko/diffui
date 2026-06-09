@@ -5,7 +5,7 @@ import { isPreviewable } from './PreviewViewer.js';
 
 const html = htm.bind(h);
 
-export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, comments, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, agentRunning, onSendToAgent }) {
+export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, openCommentCount, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, agentRunning, onSendToAgent }) {
   const activeRepo = repos.find(r => r.active);
   const showRepoSelect = repos.length > 1;
 
@@ -20,13 +20,6 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
 
   const totalAdds = useMemo(() => (files || []).reduce((s, f) => s + (f.adds || 0), 0), [files]);
   const totalDels = useMemo(() => (files || []).reduce((s, f) => s + (f.dels || 0), 0), [files]);
-  const openCommentCount = useMemo(() => {
-    let count = 0;
-    for (const arr of Object.values(comments || {})) {
-      count += arr.filter(c => (c.status || 'open') !== 'resolved').length;
-    }
-    return count;
-  }, [comments]);
 
   const progressPct = fileCount > 0 ? (reviewedCount / fileCount) * 100 : 0;
 

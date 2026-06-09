@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useRef, useCallback } from 'preact/hooks';
+import { useState, useRef, useCallback, useEffect } from 'preact/hooks';
 import htm from 'htm';
 
 const html = htm.bind(h);
@@ -18,8 +18,8 @@ function groupByDir(files) {
 function groupByType(files) {
   const groups = {};
   for (const f of files) {
-    const ext = f.path.includes('.') ? '.' + f.path.rsplit ? f.path.split('.').pop() : f.path.split('.').pop() : 'other';
-    const label = ext === 'other' ? 'Other' : `.${ext}`;
+    const ext = f.path.includes('.') ? f.path.split('.').pop() : null;
+    const label = ext ? `.${ext}` : 'Other';
     if (!groups[label]) groups[label] = [];
     groups[label].push(f);
   }
@@ -27,17 +27,13 @@ function groupByType(files) {
 }
 
 function groupByStatus(files) {
-  const groups = { modified: [], added: [], deleted: [] };
+  const groups = {};
   for (const f of files) {
-    if (f.adds > 0 && f.dels > 0) {
-      groups.modified.push(f);
-    } else if (f.adds > 0) {
-      (groups.added || (groups.added = [])).push(f);
-    } else {
-      (groups.deleted || (groups.deleted = [])).push(f);
-    }
+    const status = f.adds > 0 && f.dels > 0 ? 'modified' : f.dels > 0 ? 'deleted' : 'added';
+    if (!groups[status]) groups[status] = [];
+    groups[status].push(f);
   }
-  return Object.fromEntries(Object.entries(groups).filter(([, v]) => v.length > 0));
+  return groups;
 }
 
 const GROUP_MODES = [
@@ -88,9 +84,17 @@ export function FileTree({ files, activeFile, onSelect, onClose }) {
   const [groupMode, setGroupMode] = useState('dir');
   const [width, setWidth] = useState(260);
   const treeRef = useRef(null);
+  const dragListeners = useRef(null);
   const grouper = GROUPERS[groupMode] || groupByDir;
   const groups = grouper(files);
   const groupNames = Object.keys(groups).sort();
+
+  useEffect(() => () => {
+    if (dragListeners.current) {
+      document.removeEventListener('mousemove', dragListeners.current.onMove);
+      document.removeEventListener('mouseup', dragListeners.current.onUp);
+    }
+  }, []);
 
   const onResizeStart = useCallback((e) => {
     e.preventDefault();
@@ -103,8 +107,10 @@ export function FileTree({ files, activeFile, onSelect, onClose }) {
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      dragListeners.current = null;
       if (treeRef.current) setWidth(treeRef.current.offsetWidth);
     };
+    dragListeners.current = { onMove, onUp };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   }, []);
