@@ -610,6 +610,8 @@ function App() {
         setShowReviewed(v => !v);
       } else if (e.key === 'y') {
         handleCopyPath();
+      } else if (e.key === 's') {
+        setSortByRisk(v => { showToast(v ? 'Default file order' : 'Sorted by risk'); return !v; });
       } else if (e.key === 'S') {
         handleExportSummary();
       } else if (e.key === 'Y') {
@@ -691,7 +693,7 @@ function App() {
     { id: 'expand-context', label: 'Expand diff context', category: 'Actions' },
     { id: 'collapse-context', label: 'Collapse diff context', category: 'Actions' },
     { id: 'export-summary', label: 'Copy review summary', keys: 'S', category: 'Actions' },
-    { id: 'sort-risk', label: 'Toggle sort by risk', category: 'Actions' },
+    { id: 'sort-risk', label: 'Toggle sort by risk', keys: 's', category: 'Actions' },
     { id: 'send-to-agent', label: 'Send comments to agent', category: 'Agent' },
     { id: 'explain', label: 'Explain changes (generate HTML)', category: 'Agent' },
   ], []);
@@ -755,6 +757,8 @@ function App() {
       showFileFilter=${showFileFilter}
       agentRunning=${agentRunning}
       onSendToAgent=${handleSendToAgent}
+      explainRunning=${explainRunning}
+      onExplain=${handleExplain}
     />
     ${taskStatus && html`
       <${AgentStatusBar}

@@ -5,7 +5,7 @@ import { isPreviewable } from './PreviewViewer.js';
 
 const html = htm.bind(h);
 
-export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, openCommentCount, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, onToggleFileTree, onToggleFileFilter, showFileTree, showFileFilter, showCommentsPanel, agentRunning, onSendToAgent }) {
+export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, openCommentCount, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, onToggleFileTree, onToggleFileFilter, showFileTree, showFileFilter, showCommentsPanel, agentRunning, onSendToAgent, explainRunning, onExplain }) {
   const activeRepo = repos.find(r => r.active);
   const showRepoSelect = repos.length > 1;
 
@@ -83,6 +83,14 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
               onClick=${onSendToAgent}
               disabled=${agentRunning}
             >${agentRunning ? 'Agent running...' : 'Send to agent'}</button>
+          `}
+          ${onExplain && html`
+            <button
+              class="toolbar-btn"
+              onClick=${onExplain}
+              disabled=${explainRunning}
+              title="Generate HTML walkthrough of changes"
+            >${explainRunning ? 'Generating...' : 'Explain changes'}</button>
           `}
         </div>
       </div>
