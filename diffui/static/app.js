@@ -368,55 +368,42 @@ function App() {
     if (data.css) setThemeCss(data.css);
   }, []);
 
-  const [agentRunning, setAgentRunning] = useState(false);
+  const pollTimers = useRef([]);
+  useEffect(() => () => pollTimers.current.forEach(clearInterval), []);
 
-  const handleRunAgent = useCallback(async () => {
-    const r = await fetch('/api/agent/run', { method: 'POST' });
+  const runAsyncTask = useCallback(async (runUrl, statusUrl, setRunning, { startMsg, doneMsg, failMsg }) => {
+    const r = await fetch(runUrl, { method: 'POST' });
     const data = await r.json();
-    if (data.ok) {
-      setAgentRunning(true);
-      showToast('Agent started — addressing comments', 'success');
-      const poll = setInterval(async () => {
-        const s = await fetch('/api/agent/status');
+    if (!data.ok) { showToast(data.error || 'Failed to start', 'error'); return data; }
+    setRunning(true);
+    showToast(startMsg, 'success');
+    const poll = setInterval(async () => {
+      try {
+        const s = await fetch(statusUrl);
         const status = await s.json();
         if (!status.running) {
           clearInterval(poll);
-          setAgentRunning(false);
-          showToast('Agent finished', 'success');
+          pollTimers.current = pollTimers.current.filter(t => t !== poll);
+          setRunning(false);
+          showToast(status.exit_code === 0 ? (typeof doneMsg === 'function' ? doneMsg(data) : doneMsg) : failMsg, status.exit_code === 0 ? 'success' : 'error');
         }
-      }, 3000);
-    } else {
-      showToast(data.error || 'Failed to start agent', 'error');
-    }
+      } catch { clearInterval(poll); setRunning(false); }
+    }, 3000);
+    pollTimers.current.push(poll);
+    return data;
   }, []);
+
+  const [agentRunning, setAgentRunning] = useState(false);
+  const handleRunAgent = useCallback(() => runAsyncTask(
+    '/api/agent/run', '/api/agent/status', setAgentRunning,
+    { startMsg: 'Agent started — addressing comments', doneMsg: 'Agent finished', failMsg: 'Agent failed' },
+  ), [runAsyncTask]);
 
   const [explainRunning, setExplainRunning] = useState(false);
-  const [explainPath, setExplainPath] = useState(null);
-
-  const handleExplain = useCallback(async () => {
-    const r = await fetch('/api/explain', { method: 'POST' });
-    const data = await r.json();
-    if (data.ok) {
-      setExplainRunning(true);
-      setExplainPath(data.output_path);
-      showToast('Generating explanation...', 'success');
-      const poll = setInterval(async () => {
-        const s = await fetch('/api/explain/status');
-        const status = await s.json();
-        if (!status.running) {
-          clearInterval(poll);
-          setExplainRunning(false);
-          if (status.exit_code === 0) {
-            showToast(`Explanation ready: ${data.output_path}`, 'success');
-          } else {
-            showToast('Explanation generation failed', 'error');
-          }
-        }
-      }, 3000);
-    } else {
-      showToast(data.error || 'Failed to start', 'error');
-    }
-  }, []);
+  const handleExplain = useCallback(() => runAsyncTask(
+    '/api/explain', '/api/explain/status', setExplainRunning,
+    { startMsg: 'Generating explanation...', doneMsg: (d) => `Explanation ready: ${d.output_path}`, failMsg: 'Explanation generation failed' },
+  ), [runAsyncTask]);
 
   const handleCopyPath = useCallback(() => {
     const af = activeFileRef.current;
@@ -681,7 +668,7 @@ function App() {
       case 'expand-context': handleExpandContext('expand'); break;
       case 'collapse-context': handleExpandContext('collapse'); break;
       case 'export-summary': handleExportSummary(); break;
-      case 'sort-risk': setSortByRisk(v => !v); showToast(sortByRisk ? 'Default file order' : 'Sorted by risk'); break;
+      case 'sort-risk': setSortByRisk(v => { showToast(v ? 'Default file order' : 'Sorted by risk'); return !v; }); break;
       case 'run-agent': handleRunAgent(); break;
       case 'explain': handleExplain(); break;
       case 'prev-hunk': scrollToHunk('prev'); break;

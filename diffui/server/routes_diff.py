@@ -53,9 +53,9 @@ _HIGH_RISK_PATTERNS = {"migration", "alembic", "schema", "deploy", "infra", "ter
 _CONFIG_EXTS = {".yml", ".yaml", ".toml", ".json", ".cfg", ".ini", ".env"}
 
 
-def _score_risk(path: str, adds: int, dels: int) -> tuple[int, str]:
+def _score_risk(path: str, adds: int, dels: int) -> tuple[int, str, list[str]]:
     score = 0
-    reasons = []
+    reasons: list[str] = []
     name_lower = path.lower()
     ext = "." + path.rsplit(".", 1)[-1].lower() if "." in path else ""
 
@@ -79,11 +79,8 @@ def _score_risk(path: str, adds: int, dels: int) -> tuple[int, str]:
         score += 2
         reasons.append("test removal")
 
-    if score >= 5:
-        return score, "high"
-    if score >= 3:
-        return score, "medium"
-    return score, "low"
+    level = "high" if score >= 5 else "medium" if score >= 3 else "low"
+    return score, level, reasons
 
 
 @router.get("/files")
@@ -101,9 +98,8 @@ def list_files(view: str = "all"):
 
     result = []
     for f in files:
-        adds = numstat.get(f, (0, 0))[0]
-        dels = numstat.get(f, (0, 0))[1]
-        risk_score, risk_level = _score_risk(f, adds, dels)
+        adds, dels = numstat.get(f, (0, 0))
+        risk_score, risk_level, risk_reasons = _score_risk(f, adds, dels)
         result.append(
             {
                 "path": f,
@@ -117,6 +113,7 @@ def list_files(view: str = "all"):
                 "dels": dels,
                 "risk_score": risk_score,
                 "risk_level": risk_level,
+                "risk_reasons": risk_reasons,
             }
         )
     return result
