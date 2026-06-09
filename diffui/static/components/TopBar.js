@@ -68,11 +68,11 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
           <span class="toolbar-stat"><span class="stats-add">+${totalAdds}</span> <span class="stats-del">−${totalDels}</span></span>
         </div>
         <div class="toolbar-right">
-          <button class=${'toolbar-btn panel-toggle' + (showFileTree ? ' panel-active' : '')} onClick=${onToggleFileTree} title="Toggle file tree (b)">
-            Files
+          <button class=${'toolbar-btn panel-toggle' + (showFileTree ? ' panel-active' : '')} onClick=${onToggleFileTree} title="Toggle explorer (b)">
+            Explorer
           </button>
-          <button class=${'toolbar-btn panel-toggle' + (showFileFilter ? ' panel-active' : '')} onClick=${onToggleFileFilter} title="Filter files (Ctrl+Shift+F)">
-            Filter
+          <button class=${'toolbar-btn panel-toggle' + (showFileFilter ? ' panel-active' : '')} onClick=${onToggleFileFilter} title="Search files (Ctrl+Shift+F)">
+            Search files
           </button>
           ${openCommentCount > 0 && html`
             <button class="toolbar-btn" onClick=${onToggleCommentsPanel}>
