@@ -2,11 +2,10 @@ import { h } from 'preact';
 import { useMemo } from 'preact/hooks';
 import htm from 'htm';
 import { isPreviewable } from './PreviewViewer.js';
-import { shortName } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
-export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount, showReviewed, diffMode, comments, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onCommentSelect, agentRunning, onSendToAgent }) {
+export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, comments, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, agentRunning, onSendToAgent, onNextUnreviewed, fileFilter, onFileFilterChange }) {
   const activeRepo = repos.find(r => r.active);
   const showRepoSelect = repos.length > 1;
 
@@ -19,20 +18,17 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
     })).reverse(),
   ];
 
-  const commentOptions = useMemo(() => {
-    const opts = [];
-    for (const [filePath, fileComments] of Object.entries(comments || {})) {
-      const fname = shortName(filePath);
-      for (const c of fileComments) {
-        const lineNum = c.file_line_num || c.line_index;
-        const label = fileComments.length > 1
-          ? `${fname} (line ${lineNum})`
-          : fname;
-        opts.push({ label, filePath, lineNum });
-      }
+  const totalAdds = useMemo(() => (files || []).reduce((s, f) => s + (f.adds || 0), 0), [files]);
+  const totalDels = useMemo(() => (files || []).reduce((s, f) => s + (f.dels || 0), 0), [files]);
+  const openCommentCount = useMemo(() => {
+    let count = 0;
+    for (const arr of Object.values(comments || {})) {
+      count += arr.filter(c => (c.status || 'open') !== 'resolved').length;
     }
-    return opts;
+    return count;
   }, [comments]);
+
+  const progressPct = fileCount > 0 ? (reviewedCount / fileCount) * 100 : 0;
 
   return html`
     <div class="top-bar">
@@ -60,24 +56,6 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
             <option value=${o.value}>${o.label}</option>
           `)}
         </select>
-        <select
-          class="top-bar-select comment-select"
-          aria-label="Jump to comment"
-          onChange=${(e) => {
-            const idx = Number(e.target.value);
-            if (idx >= 0 && commentOptions[idx]) {
-              const opt = commentOptions[idx];
-              onCommentSelect(opt.filePath, opt.lineNum);
-            }
-            e.target.value = '';
-          }}
-          disabled=${!commentOptions.length}
-        >
-          <option value="">${commentOptions.length ? `Comments (${commentOptions.length})` : 'No comments'}</option>
-          ${commentOptions.map((o, i) => html`
-            <option value=${i}>${o.label}</option>
-          `)}
-        </select>
       </div>
       <div class="top-bar-center">
         <div class="mode-toggle">
@@ -96,9 +74,26 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
         <button class="top-bar-btn" onClick=${onToggleReviewed}>
           ${showReviewed ? 'Hide reviewed' : 'Show all'}
         </button>
-        <span class="top-bar-badge">${reviewedCount}/${fileCount}</span>
+        <div class="review-progress" title=${`${reviewedCount} of ${fileCount} files reviewed`}>
+          <span class="top-bar-badge">${reviewedCount}/${fileCount}</span>
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${progressPct}%"></div>
+          </div>
+        </div>
+        ${reviewedCount < fileCount && html`
+          <button class="top-bar-btn next-unreviewed-btn" onClick=${onNextUnreviewed} title="Jump to next unreviewed file (])">▶</button>
+        `}
       </div>
       <div class="top-bar-right">
+        <div class="diff-stat-summary">
+          <span class="stats-add">+${totalAdds}</span>
+          <span class="stats-del">−${totalDels}</span>
+        </div>
+        ${openCommentCount > 0 && html`
+          <button class="top-bar-btn comment-panel-btn" onClick=${onToggleCommentsPanel} title="Open comments panel">
+            ${openCommentCount} comment${openCommentCount === 1 ? '' : 's'}
+          </button>
+        `}
         ${onSendToAgent && html`
           <button
             class=${'top-bar-btn agent-btn' + (agentRunning ? ' agent-running' : '')}
@@ -113,6 +108,16 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
         </span>
         <button class="settings-btn" onClick=${onOpenSettings} aria-label="Settings">⚙</button>
       </div>
+    </div>
+    <div class="sub-bar">
+      <input
+        class="file-filter-input"
+        type="text"
+        placeholder="Filter files..."
+        value=${fileFilter || ''}
+        onInput=${(e) => onFileFilterChange(e.target.value)}
+        aria-label="Filter files by name"
+      />
     </div>
   `;
 }

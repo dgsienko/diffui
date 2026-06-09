@@ -11,6 +11,7 @@ const SHORTCUTS = [
   { keys: 'n p', action: 'Next / previous comment' },
   { keys: 'y', action: 'Copy file path' },
   { keys: 'Y', action: 'Copy GitLab link' },
+  { keys: ']', action: 'Next unreviewed file' },
   { keys: 'b', action: 'Toggle file tree' },
   { keys: 'Ctrl+K', action: 'Command palette' },
   { keys: 'Ctrl+F', action: 'Search' },

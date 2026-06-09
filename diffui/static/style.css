@@ -163,8 +163,200 @@ html, body {
   font-weight: 600;
 }
 
+.tab-dir {
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+
 .tab.reviewed {
   opacity: 0.5;
+}
+
+/* --- Review Progress --- */
+
+.review-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.progress-bar {
+  width: 60px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--add-fg);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.next-unreviewed-btn {
+  font-size: 10px;
+  padding: 4px 8px;
+}
+
+/* --- Sub Bar (file filter) --- */
+
+.sub-bar {
+  padding: 4px 12px;
+  background: var(--bg-dark);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.file-filter-input {
+  width: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.file-filter-input:focus { outline: none; border-color: var(--accent); }
+.file-filter-input::placeholder { color: var(--fg-muted); }
+
+/* --- Diff Stat Summary --- */
+
+.diff-stat-summary {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.diff-stat-summary .stats-add { margin-right: 4px; }
+
+/* --- Comment Panel Button --- */
+
+.comment-panel-btn {
+  color: var(--accent);
+  border-color: var(--accent);
+  font-size: 11px;
+}
+
+/* --- Comments Panel --- */
+
+.comments-panel {
+  width: 300px;
+  min-width: 240px;
+  max-width: 400px;
+  background: var(--bg-dark);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  animation: slide-right 0.15s ease-out;
+}
+
+.comments-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.comments-panel-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.comments-panel-content {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+
+.comments-panel-file { padding: 4px 0; }
+
+.comments-panel-filename {
+  padding: 4px 12px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.comments-panel-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  margin: 0 4px;
+}
+
+.comments-panel-item:hover { background: var(--hover-bg); }
+
+.comments-panel-line {
+  color: var(--fg-muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.comments-panel-text {
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comments-panel-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+/* --- Line Actions (hover toolbar) --- */
+
+.line-actions {
+  display: none;
+  position: absolute;
+  right: 16px;
+  top: 0;
+  height: 20px;
+  align-items: center;
+  gap: 2px;
+}
+
+.diff-line {
+  position: relative;
+}
+
+.diff-line:hover .line-actions {
+  display: flex;
+}
+
+.line-action-btn {
+  background: var(--bg-dark);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  width: 20px;
+  height: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.line-action-btn:hover {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
 }
 
 .risk-dot {

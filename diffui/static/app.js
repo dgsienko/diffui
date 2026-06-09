@@ -18,6 +18,7 @@ import { CommandPalette } from './components/CommandPalette.js';
 import { PreviewViewer, isPreviewable } from './components/PreviewViewer.js';
 import { AgentStatusBar } from './components/AgentStatusBar.js';
 import { AgentConfirmDialog } from './components/AgentConfirmDialog.js';
+import { CommentsPanel } from './components/CommentsPanel.js';
 import { shortName } from './lib/utils.js';
 
 const html = htm.bind(h);
@@ -51,6 +52,8 @@ function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showFileTree, setShowFileTree] = useState(false);
+  const [showCommentsPanel, setShowCommentsPanel] = useState(false);
+  const [fileFilter, setFileFilter] = useState('');
   const [diffMode, setDiffMode] = useState('unified');
   const [contextLines, setContextLines] = useState(3);
   const [showCompletion, setShowCompletion] = useState(false);
@@ -445,6 +448,17 @@ function App() {
     showToast('Review summary copied to clipboard', 'success');
   }, []);
 
+  const handleNextUnreviewed = useCallback(() => {
+    const vf = visibleFilesRef.current;
+    const next = vf.find(f => !f.reviewed);
+    if (next) {
+      handleFileSelect(next.path);
+      showToast(`Jumped to ${next.short_name}`);
+    } else {
+      showToast('All files reviewed');
+    }
+  }, [handleFileSelect]);
+
   const handleExpandContext = useCallback((direction = 'expand') => {
     const levels = [3, 10, 50, 9999];
     let next;
@@ -522,9 +536,13 @@ function App() {
 
   const visibleFiles = useMemo(() => {
     let filtered = showReviewed ? files : files.filter(f => !f.reviewed);
+    if (fileFilter) {
+      const lower = fileFilter.toLowerCase();
+      filtered = filtered.filter(f => f.path.toLowerCase().includes(lower));
+    }
     if (sortByRisk) filtered = [...filtered].sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
     return filtered;
-  }, [files, showReviewed, sortByRisk]);
+  }, [files, showReviewed, sortByRisk, fileFilter]);
   const activeFileReviewed = useMemo(() => files.find(f => f.path === activeFile)?.reviewed, [files, activeFile]);
 
   visibleFilesRef.current = visibleFiles;
@@ -596,6 +614,8 @@ function App() {
         handleCopyGitLabLink();
       } else if (e.key === 'b') {
         setShowFileTree(v => !v);
+      } else if (e.key === ']') {
+        handleNextUnreviewed();
       } else if (e.key === 'c') {
         document.dispatchEvent(new CustomEvent('diffui:comment-on-hovered'));
       } else if (e.key === 'n' || e.key === 'p') {
@@ -710,6 +730,7 @@ function App() {
       fileCount=${files.length}
       reviewedCount=${reviewedCount}
       showReviewed=${showReviewed}
+      files=${files}
       comments=${comments}
       onViewChange=${handleViewChange}
       onRepoSwitch=${handleRepoSwitch}
@@ -720,9 +741,12 @@ function App() {
       activeFile=${activeFile}
       onToggleReviewed=${() => setShowReviewed(v => !v)}
       onOpenSettings=${() => setShowSettings(v => !v)}
-      onCommentSelect=${handleCommentSelect}
+      onToggleCommentsPanel=${() => setShowCommentsPanel(v => !v)}
       agentRunning=${agentRunning}
       onSendToAgent=${handleSendToAgent}
+      onNextUnreviewed=${handleNextUnreviewed}
+      fileFilter=${fileFilter}
+      onFileFilterChange=${setFileFilter}
     />
     ${taskStatus && html`
       <${AgentStatusBar}
@@ -750,6 +774,13 @@ function App() {
           activeFile=${activeFile}
           onSelect=${handleFileSelect}
           onClose=${() => setShowFileTree(false)}
+        />
+      `}
+      ${showCommentsPanel && html`
+        <${CommentsPanel}
+          comments=${comments}
+          onSelect=${handleCommentSelect}
+          onClose=${() => setShowCommentsPanel(false)}
         />
       `}
       ${loading

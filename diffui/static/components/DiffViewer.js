@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'preact/hooks';
 import htm from 'htm';
 import { CommentBox } from './CommentBox.js';
 import { CommentDisplay } from './CommentDisplay.js';
+import { LineActions } from './LineActions.js';
 import { mergeRef } from '../lib/utils.js';
 
 const html = htm.bind(h);
@@ -58,7 +59,7 @@ function BlameCell({ blame }) {
   return html`<span class="blame-cell" title=${blame.author + ' · ' + blame.sha}>${name} ${label}</span>`;
 }
 
-function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover, blame }) {
+function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, blame }) {
   const typeClass = {
     add: 'add',
     remove: 'remove',
@@ -102,11 +103,17 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover, bl
         <span class="gutter-sep">│</span>
       </div>
       <div class="diff-code" dangerouslySetInnerHTML=${{ __html: lineHtml }}></div>
+      ${line.type !== 'meta' && line.type !== 'hunk' && html`
+        <${LineActions}
+          onComment=${() => onRightClick(line)}
+          onOpenInEditor=${onOpenInEditor && line.new_num ? () => onCtrlClick(parseInt(line.new_num) || 1) : null}
+        />
+      `}
     </div>
   `;
 }
 
-function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, filePath, blameData }) {
+function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, filePath, blameData }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return html`
@@ -124,6 +131,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onLineHov
               searchTerm=${searchTerm}
               onRightClick=${onRightClick}
               onCtrlClick=${onCtrlClick}
+              onOpenInEditor=${onOpenInEditor}
               onLineHover=${onLineHover}
               blame=${blameData && line.new_num ? blameData[parseInt(line.new_num) - 1] : null}
             />
@@ -243,6 +251,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           setCommentingLine=${setCommentingLine}
           onRightClick=${handleRightClick}
           onCtrlClick=${handleCtrlClick}
+          onOpenInEditor=${onOpenInEditor ? handleCtrlClick : null}
           onLineHover=${handleLineHover}
           onAddComment=${onAddComment}
           onDeleteComment=${onDeleteComment}
