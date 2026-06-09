@@ -64,6 +64,15 @@ diffui --open        # Web UI: also open the URL in a browser
   file view
 - **View selector** — switch between all branch changes, individual
   commits (most recent first), or uncommitted working changes
+- **Risk scoring** — files scored by risk (migrations, configs, large
+  deletions, test removal) with colored dots on tabs and tree; sort by
+  risk via command palette
+- **Agent orchestration** — "Send to agent" button spawns Claude to
+  address open comments; agent replies appear in real-time via
+  auto-refresh; status indicator with pulse animation
+- **Explain changes** — generate a self-contained HTML walkthrough of
+  branch changes via command palette (TL;DR, file-by-file analysis,
+  architecture notes, risk flags)
 - **Blame gutter** — toggleable git blame column showing author and age
 - **Markdown/image preview** — toggleable rendered preview for `.md`
   files and inline display for images

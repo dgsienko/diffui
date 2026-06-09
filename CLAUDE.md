@@ -102,6 +102,19 @@ diffui/
 - **Session persistence** — `session.json` per branch saves active file,
   diff mode, file tree state, show-reviewed toggle, and scroll positions.
   Restored on page load; saved with 1-second debounce.
+- **Risk scoring** — `_score_risk()` in `routes_diff.py` assigns
+  risk_level (low/medium/high) based on file patterns (migrations,
+  configs, large deletions, test removal, high churn). Shown as colored
+  dots on file tabs and tree items. Sort-by-risk toggle via command
+  palette.
+- **Agent orchestration** — `/api/agent/run` spawns `claude -p` with
+  open comments. `/api/agent/status` polls for completion. Frontend
+  shows a pulsing "Send to agent" button with status. The agent modifies
+  `comments.json` and source files; watchfiles picks up changes.
+- **Explain changes** — `/api/explain` spawns `claude -p` to generate
+  a self-contained HTML walkthrough at `/tmp/diffui-explain-{branch}.html`.
+  `/api/explain/status` polls. Includes TL;DR, file-by-file analysis,
+  architecture notes, and risk flags.
 - **Blame gutter** — toggleable per-file. Fetches `git blame --porcelain`
   via `/api/blame/{path}`. Results cached client-side in a `Map`.
 - **Preview mode** — toggleable for `.md` and image files. Backend uses
