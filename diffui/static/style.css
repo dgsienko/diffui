@@ -50,16 +50,18 @@ html, body {
 
 /* --- Top bar --- */
 
+.top-bar-wrapper {
+  background: var(--bg-dark);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
 .top-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--bg-dark);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  padding: 6px 12px;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .top-bar-left, .top-bar-center, .top-bar-right {
@@ -71,6 +73,42 @@ html, body {
 .top-bar-left { flex: 1; min-width: 0; }
 .top-bar-center { flex-shrink: 0; }
 .top-bar-right { flex-shrink: 0; }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  border-top: 1px solid var(--border);
+  gap: 8px;
+}
+
+.toolbar-left, .toolbar-center, .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-btn {
+  background: var(--bg);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.toolbar-btn:hover { border-color: var(--accent); color: var(--fg); }
+
+.toolbar-btn-sm { padding: 3px 6px; }
+
+.toolbar-stat {
+  font-size: 11px;
+  white-space: nowrap;
+}
 
 .top-bar-sep {
   width: 1px;
@@ -164,35 +202,13 @@ html, body {
 
 /* --- File tabs --- */
 
-.tab-bar-container {
+.tab-bar {
   display: flex;
   background: var(--bg-dark);
   border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  align-items: stretch;
-}
-
-.tab-bar {
-  display: flex;
   overflow-x: auto;
-  flex: 1;
-  min-width: 0;
-}
-
-.tab-filter {
-  width: 120px;
-  background: var(--bg);
-  color: var(--fg);
-  border: none;
-  border-left: 1px solid var(--border);
-  padding: 0 8px;
-  font-family: inherit;
-  font-size: 11px;
   flex-shrink: 0;
 }
-
-.tab-filter:focus { outline: none; background: var(--hover-bg); }
-.tab-filter::placeholder { color: var(--fg-muted); }
 
 .tab-bar::-webkit-scrollbar {
   height: 2px;

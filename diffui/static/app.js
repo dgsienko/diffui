@@ -19,6 +19,7 @@ import { PreviewViewer, isPreviewable } from './components/PreviewViewer.js';
 import { AgentStatusBar } from './components/AgentStatusBar.js';
 import { AgentConfirmDialog } from './components/AgentConfirmDialog.js';
 import { CommentsPanel } from './components/CommentsPanel.js';
+import { FileFilterBar } from './components/FileFilterBar.js';
 import { shortName } from './lib/utils.js';
 
 const html = htm.bind(h);
@@ -53,6 +54,7 @@ function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showFileTree, setShowFileTree] = useState(false);
   const [showCommentsPanel, setShowCommentsPanel] = useState(false);
+  const [showFileFilter, setShowFileFilter] = useState(false);
   const [fileFilter, setFileFilter] = useState('');
   const [diffMode, setDiffMode] = useState('unified');
   const [contextLines, setContextLines] = useState(3);
@@ -622,6 +624,10 @@ function App() {
         navigateComment(e.key === 'n' ? 'next' : 'prev');
       } else if (e.key === 'j' || e.key === 'k') {
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
+        e.preventDefault();
+        setShowFileFilter(v => !v);
+        if (showFileFilter) setFileFilter('');
       } else if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
         setShowSearch(v => !v);
@@ -655,7 +661,7 @@ function App() {
     return { total, open };
   }, [comments]);
   showCompletionRef.current = showCompletion;
-  dialogOpenRef.current = showSettings || showSearch || showShortcuts || showCommandPalette;
+  dialogOpenRef.current = showSettings || showSearch || showFileFilter || showShortcuts || showCommandPalette;
   const prevReviewedRef = useRef(null);
   useEffect(() => {
     if (prevReviewedRef.current !== null && files.length > 0
@@ -762,12 +768,18 @@ function App() {
         matchCount=${searchMatchCount}
       />
     `}
+    ${showFileFilter && html`
+      <${FileFilterBar}
+        value=${fileFilter}
+        onChange=${setFileFilter}
+        onClose=${() => { setShowFileFilter(false); setFileFilter(''); }}
+        fileCount=${visibleFiles.length}
+      />
+    `}
     <${FileTabs}
       files=${visibleFiles}
       activeFile=${activeFile}
       onSelect=${handleFileSelect}
-      fileFilter=${fileFilter}
-      onFileFilterChange=${setFileFilter}
     />
     <div class="main-content">
       ${showFileTree && html`

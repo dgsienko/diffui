@@ -31,60 +31,66 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
   const progressPct = fileCount > 0 ? (reviewedCount / fileCount) * 100 : 0;
 
   return html`
-    <div class="top-bar">
-      <div class="top-bar-left">
-        ${showRepoSelect && html`
-          <select class="top-bar-select repo-select" aria-label="Repository" onChange=${(e) => onRepoSwitch(Number(e.target.value))}>
-            ${repos.map(r => html`<option value=${r.index} selected=${r.active}>${r.has_changes ? '● ' : '  '}${r.name}</option>`)}
+    <div class="top-bar-wrapper">
+      <div class="top-bar">
+        <div class="top-bar-left">
+          ${showRepoSelect && html`
+            <select class="top-bar-select repo-select" aria-label="Repository" onChange=${(e) => onRepoSwitch(Number(e.target.value))}>
+              ${repos.map(r => html`<option value=${r.index} selected=${r.active}>${r.has_changes ? '● ' : '  '}${r.name}</option>`)}
+            </select>
+          `}
+          <select class="top-bar-select view-select" aria-label="View filter" value=${view} onChange=${(e) => onViewChange(e.target.value)}>
+            ${viewOptions.map(o => html`<option value=${o.value}>${o.label}</option>`)}
           </select>
-        `}
-        <select class="top-bar-select view-select" aria-label="View filter" value=${view} onChange=${(e) => onViewChange(e.target.value)}>
-          ${viewOptions.map(o => html`<option value=${o.value}>${o.label}</option>`)}
-        </select>
-        <span class="top-bar-stat"><span class="stats-add">+${totalAdds}</span> <span class="stats-del">−${totalDels}</span></span>
-      </div>
-
-      <div class="top-bar-center">
-        <div class="mode-toggle">
-          ${[['unified', 'U'], ['split', 'S'], ['file', 'F']].map(([val, label]) => html`
-            <button class=${'mode-btn' + (diffMode === val ? ' active' : '')} onClick=${() => onDiffModeChange(val)} title=${{unified: 'Unified', split: 'Split', file: 'Full file'}[val]}>${label}</button>
-          `)}
         </div>
-        ${activeFile && isPreviewable(activeFile) && html`
-          <button class=${'mode-btn' + (showPreview ? ' active' : '')} onClick=${onTogglePreview} title=${showPreview ? 'Show raw diff' : 'Preview rendered'}>P</button>
-        `}
-        <div class="top-bar-sep"></div>
-        <div class="review-progress" title=${`${reviewedCount} of ${fileCount} files reviewed`}>
-          <div class="progress-bar"><div class="progress-fill" style="width: ${progressPct}%"></div></div>
-          <span class="progress-label">${reviewedCount}/${fileCount}</span>
+        <div class="top-bar-right">
+          <span class="branch-pill">
+            ${showRepoSelect && activeRepo ? html`<span class="branch-repo">${activeRepo.name}</span>` : ''}
+            ${branch?.name || ''}
+          </span>
+          <button class="settings-btn" onClick=${onOpenSettings} aria-label="Settings">⚙</button>
         </div>
-        ${reviewedCount < fileCount && html`
-          <button class="top-bar-icon-btn" onClick=${onNextUnreviewed} title="Next unreviewed (])">▶</button>
-        `}
-        <button class="top-bar-icon-btn" onClick=${onToggleReviewed} title=${showReviewed ? 'Hide reviewed files' : 'Show all files'}>
-          ${showReviewed ? '◉' : '○'}
-        </button>
       </div>
-
-      <div class="top-bar-right">
-        ${openCommentCount > 0 && html`
-          <button class="top-bar-icon-btn comment-count-btn" onClick=${onToggleCommentsPanel} title="Open comments panel">
-            💬 ${openCommentCount}
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="mode-toggle">
+            ${[['unified', 'Unified'], ['split', 'Split'], ['file', 'File']].map(([val, label]) => html`
+              <button class=${'mode-btn' + (diffMode === val ? ' active' : '')} onClick=${() => onDiffModeChange(val)}>${label}</button>
+            `)}
+          </div>
+          ${activeFile && isPreviewable(activeFile) && html`
+            <button class=${'toolbar-btn' + (showPreview ? ' preview-active' : '')} onClick=${onTogglePreview}>
+              ${showPreview ? 'Raw' : 'Preview'}
+            </button>
+          `}
+          <button class="toolbar-btn" onClick=${onToggleReviewed}>
+            ${showReviewed ? 'Hide reviewed' : 'Show all'}
           </button>
-        `}
-        ${onSendToAgent && html`
-          <button
-            class=${'top-bar-icon-btn agent-btn' + (agentRunning ? ' agent-running' : '')}
-            onClick=${onSendToAgent}
-            disabled=${agentRunning}
-            title=${agentRunning ? 'Agent is running...' : 'Send comments to agent'}
-          >${agentRunning ? '⟳' : '▷'}</button>
-        `}
-        <span class="branch-pill">
-          ${showRepoSelect && activeRepo ? html`<span class="branch-repo">${activeRepo.name}</span>` : ''}
-          ${branch?.name || ''}
-        </span>
-        <button class="settings-btn" onClick=${onOpenSettings} aria-label="Settings">⚙</button>
+        </div>
+        <div class="toolbar-center">
+          <div class="review-progress" title=${`${reviewedCount} of ${fileCount} files reviewed`}>
+            <div class="progress-bar"><div class="progress-fill" style="width: ${progressPct}%"></div></div>
+            <span class="progress-label">${reviewedCount}/${fileCount}</span>
+          </div>
+          ${reviewedCount < fileCount && html`
+            <button class="toolbar-btn toolbar-btn-sm" onClick=${onNextUnreviewed} title="Next unreviewed (])">Next ▶</button>
+          `}
+          <span class="toolbar-stat"><span class="stats-add">+${totalAdds}</span> <span class="stats-del">−${totalDels}</span></span>
+        </div>
+        <div class="toolbar-right">
+          ${openCommentCount > 0 && html`
+            <button class="toolbar-btn" onClick=${onToggleCommentsPanel}>
+              ${openCommentCount} comment${openCommentCount === 1 ? '' : 's'}
+            </button>
+          `}
+          ${onSendToAgent && html`
+            <button
+              class=${'toolbar-btn agent-btn' + (agentRunning ? ' agent-running' : '')}
+              onClick=${onSendToAgent}
+              disabled=${agentRunning}
+            >${agentRunning ? 'Agent running...' : 'Send to agent'}</button>
+          `}
+        </div>
       </div>
     </div>
   `;
