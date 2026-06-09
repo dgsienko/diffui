@@ -833,6 +833,10 @@ function App() {
         <span><kbd>Ctrl+F</kbd> search</span>
         <span><kbd>y</kbd> copy path</span>
       </div>
+      <div class="legend-fixed">
+        <span class="risk-dot risk-medium"></span> medium risk
+        <span class="risk-dot risk-high" style="margin-left: 8px"></span> high risk
+      </div>
     </div>
     ${showCommandPalette && html`
       <${CommandPalette}
