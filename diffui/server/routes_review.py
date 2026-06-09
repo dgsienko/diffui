@@ -10,6 +10,7 @@ from diffui.server.state import app_state
 
 _agent_process: subprocess.Popen | None = None
 _explain_process: subprocess.Popen | None = None
+_explain_output_path: str | None = None
 _process_lock = threading.Lock()
 
 router = APIRouter(prefix="/api")
@@ -255,7 +256,7 @@ def agent_status():
 
 @router.post("/explain")
 def explain_changes():
-    global _explain_process
+    global _explain_process, _explain_output_path
     with _process_lock:
         if _explain_process and _explain_process.poll() is None:
             return {"ok": False, "error": "Explanation already generating"}
@@ -301,9 +302,23 @@ def explain_changes():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+    _explain_output_path = output_path
     return {"ok": True, "output_path": output_path}
 
 
 @router.get("/explain/status")
 def explain_status():
     return _process_status(_explain_process)
+
+
+@router.get("/explain/view")
+def view_explanation():
+    from pathlib import Path
+
+    from fastapi.responses import HTMLResponse
+
+    if not _explain_output_path or not Path(_explain_output_path).exists():
+        return HTMLResponse(
+            "<html><body style='background:#1e1e2e;color:#cdd6f4;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh'><p>No explanation generated yet. Click 'Explain changes' in diffui.</p></body></html>"
+        )
+    return HTMLResponse(Path(_explain_output_path).read_text())

@@ -432,7 +432,7 @@ function App() {
   const [explainRunning, setExplainRunning] = useState(false);
   const handleExplain = useCallback(() => runAsyncTask(
     '/api/explain', '/api/explain/status', setExplainRunning,
-    { label: 'Generating explanation', doneMsg: (d) => `Explanation ready: ${d.output_path}`, failMsg: 'Explanation generation failed' },
+    { label: 'Generating explanation', doneMsg: () => `Explanation ready at ${location.origin}/api/explain/view`, failMsg: 'Explanation generation failed' },
   ), [runAsyncTask]);
 
   const handleCopyPath = useCallback(() => {
