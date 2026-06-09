@@ -429,10 +429,14 @@ function App() {
     );
   }, [runAsyncTask]);
 
+  const handleSortByRisk = useCallback(() => {
+    setSortByRisk(v => { showToast(v ? 'Default file order' : 'Sorted by risk'); return !v; });
+  }, []);
+
   const [explainRunning, setExplainRunning] = useState(false);
   const handleExplain = useCallback(() => runAsyncTask(
     '/api/explain', '/api/explain/status', setExplainRunning,
-    { label: 'Generating explanation', doneMsg: () => `Explanation ready at ${location.origin}/api/explain/view`, failMsg: 'Explanation generation failed' },
+    { label: 'Generating explanation', doneMsg: () => ({ text: 'Explanation ready', url: `${location.origin}/api/explain/view` }), failMsg: 'Explanation generation failed' },
   ), [runAsyncTask]);
 
   const handleCopyPath = useCallback(() => {
@@ -611,7 +615,7 @@ function App() {
       } else if (e.key === 'y') {
         handleCopyPath();
       } else if (e.key === 's') {
-        setSortByRisk(v => { showToast(v ? 'Default file order' : 'Sorted by risk'); return !v; });
+        handleSortByRisk();
       } else if (e.key === 'S') {
         handleExportSummary();
       } else if (e.key === 'Y') {
@@ -720,7 +724,7 @@ function App() {
       case 'expand-context': handleExpandContext('expand'); break;
       case 'collapse-context': handleExpandContext('collapse'); break;
       case 'export-summary': handleExportSummary(); break;
-      case 'sort-risk': setSortByRisk(v => { showToast(v ? 'Default file order' : 'Sorted by risk'); return !v; }); break;
+      case 'sort-risk': handleSortByRisk(); break;
       case 'send-to-agent': handleSendToAgent(); break;
       case 'explain': handleExplain(); break;
       case 'prev-hunk': scrollToHunk('prev'); break;

@@ -403,6 +403,11 @@ class TestServerRoutes:
         assert r.status_code == 200
         assert r.json()["running"] is False
 
+    def test_explain_view_placeholder(self, _server_app):
+        r = _server_app.get("/api/explain/view")
+        assert r.status_code == 200
+        assert "No explanation generated yet" in r.text
+
 
 class TestRiskScoring:
     def test_migration_file_high_risk(self):

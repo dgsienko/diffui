@@ -302,7 +302,7 @@ def explain_changes():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-    _explain_output_path = output_path
+        _explain_output_path = output_path
     return {"ok": True, "output_path": output_path}
 
 
@@ -313,12 +313,17 @@ def explain_status():
 
 @router.get("/explain/view")
 def view_explanation():
+    import tempfile
     from pathlib import Path
 
     from fastapi.responses import HTMLResponse
 
-    if not _explain_output_path or not Path(_explain_output_path).exists():
-        return HTMLResponse(
-            "<html><body style='background:#1e1e2e;color:#cdd6f4;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh'><p>No explanation generated yet. Click 'Explain changes' in diffui.</p></body></html>"
-        )
-    return HTMLResponse(Path(_explain_output_path).read_text())
+    _placeholder = "<html><body style='background:#1e1e2e;color:#cdd6f4;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh'><p>No explanation generated yet. Click 'Explain changes' in diffui.</p></body></html>"
+    if not _explain_output_path:
+        return HTMLResponse(_placeholder)
+    resolved = Path(_explain_output_path).resolve()
+    if not str(resolved).startswith(tempfile.gettempdir()):
+        return HTMLResponse(_placeholder, status_code=400)
+    if not resolved.exists():
+        return HTMLResponse(_placeholder)
+    return HTMLResponse(resolved.read_text())

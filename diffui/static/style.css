@@ -1890,6 +1890,13 @@ mark {
   font-size: 11px;
 }
 
+.agent-status-link {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.agent-status-link:hover { opacity: 0.8; }
+
 .agent-status-dismiss {
   background: none;
   border: none;

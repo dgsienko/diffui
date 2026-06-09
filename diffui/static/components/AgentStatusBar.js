@@ -32,7 +32,9 @@ export function AgentStatusBar({ task, onDismiss }) {
           ${isRunning ? html`<span class="agent-status-spinner"></span>` : isDone ? '✓' : '✕'}
         </span>
         <span class="agent-status-label">
-          ${isRunning ? task.label : task.message || task.label}
+          ${isRunning ? task.label
+            : task.message?.url ? html`${task.message.text} — <a class="agent-status-link" href=${task.message.url} target="_blank">${task.message.url}</a>`
+            : (task.message || task.label)}
         </span>
         <span class="agent-status-elapsed">
           ${formatDuration(isRunning ? Date.now() - task.startTime : (task.endTime || Date.now()) - task.startTime)}
