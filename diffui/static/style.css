@@ -602,12 +602,17 @@ mark {
 
 .empty-state {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  flex: 1;
   height: 100%;
   color: var(--fg-muted);
-  font-size: 14px;
+  gap: 8px;
 }
+
+.empty-state-title { font-size: 15px; font-weight: 600; color: var(--fg); }
+.empty-state-hint { font-size: 12px; }
 
 /* --- Legend --- */
 

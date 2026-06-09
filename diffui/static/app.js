@@ -802,8 +802,8 @@ function App() {
         ? html`<div class="loading">Loading...</div>`
         : !activeFile
           ? files.length === 0
-            ? html`<div class="empty-state">No changed files</div>`
-            : html`<div class="loading">Select a file</div>`
+            ? html`<div class="empty-state"><span class="empty-state-title">No changed files</span><span class="empty-state-hint">This branch has no diff against the merge base</span></div>`
+            : html`<div class="empty-state"><span class="empty-state-title">Select a file</span><span class="empty-state-hint">Choose a file from the tabs or explorer</span></div>`
           : showPreview && isPreviewable(activeFile)
             ? html`<${PreviewViewer}
                 containerRef=${diffRef}
