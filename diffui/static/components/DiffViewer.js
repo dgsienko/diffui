@@ -210,7 +210,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
   };
 
   if (!data || !data.hunks) {
-    return html`<div class="empty-state">No diff data</div>`;
+    return html`<div class="empty-state"><span class="empty-state-title">No diff data</span></div>`;
   }
 
   return html`

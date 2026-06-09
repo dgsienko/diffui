@@ -138,28 +138,28 @@ function App() {
     setLoading(false);
   }, [view, fetchDiff]);
 
-  // Restore scroll position after diff renders, or scroll to a specific line
   useEffect(() => {
-    if (activeFile && diffRef.current) {
-      const targetLine = scrollToLineRef.current;
-      if (targetLine !== null) {
-        scrollToLineRef.current = null;
-        requestAnimationFrame(() => {
-          if (!diffRef.current) return;
-          const el = diffRef.current.querySelector(`[data-line-new="${targetLine}"]`);
-          if (el) {
-            el.scrollIntoView({ block: 'center' });
-            el.style.outline = '2px solid var(--accent)';
-            setTimeout(() => { el.style.outline = ''; }, 2000);
-          }
-        });
-      } else {
-        const saved = scrollPositions.current.get(activeFile) || 0;
-        requestAnimationFrame(() => {
-          if (diffRef.current) diffRef.current.scrollTop = saved;
-        });
-      }
+    if (!activeFile || !diffRef.current) return;
+    const targetLine = scrollToLineRef.current;
+    let rafId, timerId;
+    if (targetLine !== null) {
+      scrollToLineRef.current = null;
+      rafId = requestAnimationFrame(() => {
+        if (!diffRef.current) return;
+        const el = diffRef.current.querySelector(`[data-line-new="${targetLine}"]`);
+        if (el) {
+          el.scrollIntoView({ block: 'center' });
+          el.style.outline = '2px solid var(--accent)';
+          timerId = setTimeout(() => { el.style.outline = ''; }, 2000);
+        }
+      });
+    } else {
+      const saved = scrollPositions.current.get(activeFile) || 0;
+      rafId = requestAnimationFrame(() => {
+        if (diffRef.current) diffRef.current.scrollTop = saved;
+      });
     }
+    return () => { cancelAnimationFrame(rafId); clearTimeout(timerId); };
   }, [diffData, activeFile]);
 
   latestCallbacks.current = { fetchFiles, fetchCommits, fetchComments, fetchDiff, fetchRepos, activeFile, comments };
@@ -748,6 +748,7 @@ function App() {
       onToggleReviewed=${() => setShowReviewed(v => !v)}
       onOpenSettings=${() => setShowSettings(v => !v)}
       onToggleCommentsPanel=${() => setShowCommentsPanel(v => !v)}
+      showCommentsPanel=${showCommentsPanel}
       onToggleFileTree=${() => setShowFileTree(v => !v)}
       onToggleFileFilter=${() => setShowFileFilter(v => { if (v) setFileFilter(''); return !v; })}
       showFileTree=${showFileTree}

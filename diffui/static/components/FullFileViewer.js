@@ -53,7 +53,7 @@ export function FullFileViewer({ filePath, view, onToggleReview, reviewed, conta
   }, [onScroll]);
 
   if (loading) return html`<div class="loading">Loading...</div>`;
-  if (!data?.lines?.length) return html`<div class="empty-state">File is empty</div>`;
+  if (!data?.lines?.length) return html`<div class="empty-state"><span class="empty-state-title">File is empty</span></div>`;
 
   const headerHeight = 44;
   const totalLines = data.lines.length;
