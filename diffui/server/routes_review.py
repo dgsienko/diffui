@@ -214,7 +214,14 @@ def get_agent_prompt():
     if result[0] is None:
         return {"ok": False, "error": result[1]}
     prompt, _, context_path = result
-    return {"ok": True, "prompt": prompt, "context_path": context_path}
+    open_count = sum(1 for fc in app_state.comments.values() for c in fc if c.get("status", "open") != "resolved")
+    return {
+        "ok": True,
+        "prompt": prompt,
+        "context_path": context_path,
+        "agent_cli": app_state.agent_cli,
+        "comment_count": open_count,
+    }
 
 
 @router.post("/agent/run")

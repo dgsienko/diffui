@@ -1514,6 +1514,44 @@ mark {
   50% { opacity: 0.6; }
 }
 
+/* --- Agent Confirm Dialog --- */
+
+.agent-confirm-dialog {
+  width: 440px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  align-self: flex-start;
+  margin-top: 15vh;
+}
+
+.agent-confirm-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--purple);
+}
+
+.agent-confirm-body {
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.agent-confirm-body p { margin: 0 0 8px; }
+.agent-confirm-body ul { margin: 4px 0 12px; padding-left: 20px; }
+.agent-confirm-body li { margin: 2px 0; }
+.agent-confirm-body strong { color: var(--fg); }
+
+.agent-confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 /* --- Agent Status Bar --- */
 
 .agent-status-bar {

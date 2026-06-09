@@ -405,22 +405,22 @@ function App() {
   }, []);
 
   const [agentRunning, setAgentRunning] = useState(false);
+  const [showAgentConfirm, setShowAgentConfirm] = useState(null);
 
-  const handleCopyAgentPrompt = useCallback(async () => {
+  const handleSendToAgent = useCallback(async () => {
     const r = await fetch('/api/agent/prompt', { method: 'POST' });
     const data = await r.json();
-    if (data.ok) {
-      await navigator.clipboard.writeText(data.prompt);
-      showToast(`Prompt copied (context: ${data.context_path})`, 'success');
-    } else {
-      showToast(data.error || 'No comments to address', 'error');
-    }
+    if (!data.ok) { showToast(data.error || 'No comments to address', 'error'); return; }
+    setShowAgentConfirm(data);
   }, []);
 
-  const handleSpawnAgent = useCallback(() => runAsyncTask(
-    '/api/agent/run', '/api/agent/status', setAgentRunning,
-    { label: 'Addressing comments', doneMsg: 'Comments addressed', failMsg: 'Agent failed' },
-  ), [runAsyncTask]);
+  const handleConfirmAgent = useCallback(() => {
+    setShowAgentConfirm(null);
+    runAsyncTask(
+      '/api/agent/run', '/api/agent/status', setAgentRunning,
+      { label: 'Addressing comments', doneMsg: 'Comments addressed', failMsg: 'Agent failed' },
+    );
+  }, [runAsyncTask]);
 
   const [explainRunning, setExplainRunning] = useState(false);
   const handleExplain = useCallback(() => runAsyncTask(
@@ -665,8 +665,7 @@ function App() {
     { id: 'collapse-context', label: 'Collapse diff context', category: 'Actions' },
     { id: 'export-summary', label: 'Copy review summary', keys: 'S', category: 'Actions' },
     { id: 'sort-risk', label: 'Toggle sort by risk', category: 'Actions' },
-    { id: 'copy-agent-prompt', label: 'Copy agent prompt to clipboard', category: 'Agent' },
-    { id: 'spawn-agent', label: 'Spawn agent to address comments', category: 'Agent' },
+    { id: 'send-to-agent', label: 'Send comments to agent', category: 'Agent' },
     { id: 'explain', label: 'Explain changes (generate HTML)', category: 'Agent' },
   ], []);
 
@@ -693,8 +692,7 @@ function App() {
       case 'collapse-context': handleExpandContext('collapse'); break;
       case 'export-summary': handleExportSummary(); break;
       case 'sort-risk': setSortByRisk(v => { showToast(v ? 'Default file order' : 'Sorted by risk'); return !v; }); break;
-      case 'copy-agent-prompt': handleCopyAgentPrompt(); break;
-      case 'spawn-agent': handleSpawnAgent(); break;
+      case 'send-to-agent': handleSendToAgent(); break;
       case 'explain': handleExplain(); break;
       case 'prev-hunk': scrollToHunk('prev'); break;
       case 'next-hunk': scrollToHunk('next'); break;
@@ -722,8 +720,7 @@ function App() {
       onOpenSettings=${() => setShowSettings(v => !v)}
       onCommentSelect=${handleCommentSelect}
       agentRunning=${agentRunning}
-      onCopyAgentPrompt=${handleCopyAgentPrompt}
-      onSpawnAgent=${handleSpawnAgent}
+      onSendToAgent=${handleSendToAgent}
     />
     ${taskStatus && html`
       <${AgentStatusBar}
@@ -841,6 +838,28 @@ function App() {
         onExecute=${handleCommand}
         onClose=${() => setShowCommandPalette(false)}
       />
+    `}
+    ${showAgentConfirm && html`
+      <div class="settings-overlay" onClick=${(e) => { if (e.target.classList.contains('settings-overlay')) setShowAgentConfirm(null); }}>
+        <div class="agent-confirm-dialog">
+          <div class="agent-confirm-title">Send to agent</div>
+          <div class="agent-confirm-body">
+            <p>This will spawn <strong>${showAgentConfirm.agent_cli || 'your configured agent'}</strong> to address <strong>${showAgentConfirm.comment_count || 'the'} open comment${showAgentConfirm.comment_count === 1 ? '' : 's'}</strong>.</p>
+            <p>The agent will:</p>
+            <ul>
+              <li>Read the diff and each comment in context</li>
+              <li>Make fixes and reply to comments explaining what it did</li>
+              <li>Ask clarifying questions for anything unclear</li>
+              <li>Leave unresolved comments in place</li>
+            </ul>
+            <p>Changes will appear in real-time as the agent works.</p>
+          </div>
+          <div class="agent-confirm-actions">
+            <button class="comment-cancel-btn" onClick=${() => setShowAgentConfirm(null)}>Cancel</button>
+            <button class="comment-submit-btn" onClick=${handleConfirmAgent}>Start agent</button>
+          </div>
+        </div>
+      </div>
     `}
     ${showCompletion && html`
       <${CompletionScreen}

@@ -6,7 +6,7 @@ import { shortName } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
-export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount, showReviewed, diffMode, comments, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onCommentSelect, agentRunning, onCopyAgentPrompt, onSpawnAgent }) {
+export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount, showReviewed, diffMode, comments, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onCommentSelect, agentRunning, onSendToAgent }) {
   const activeRepo = repos.find(r => r.active);
   const showRepoSelect = repos.length > 1;
 
@@ -99,12 +99,12 @@ export function TopBar({ repos, branch, commits, view, fileCount, reviewedCount,
         <span class="top-bar-badge">${reviewedCount}/${fileCount}</span>
       </div>
       <div class="top-bar-right">
-        ${onCopyAgentPrompt && html`
+        ${onSendToAgent && html`
           <button
             class=${'top-bar-btn agent-btn' + (agentRunning ? ' agent-running' : '')}
-            onClick=${(e) => e.shiftKey ? onSpawnAgent() : onCopyAgentPrompt()}
+            onClick=${onSendToAgent}
             disabled=${agentRunning}
-            title=${agentRunning ? 'Agent is running...' : 'Copy prompt (Shift+click to spawn agent)'}
+            title=${agentRunning ? 'Agent is running...' : 'Send open comments to agent'}
           >${agentRunning ? 'Agent running...' : 'Send to agent'}</button>
         `}
         <span class="branch-pill">
