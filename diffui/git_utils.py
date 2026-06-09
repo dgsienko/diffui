@@ -372,6 +372,10 @@ def save_reviewed(reviewed: dict[str, float]) -> None:
     _save_json(_reviewed_path(), reviewed)
 
 
+def is_comment_open(c: dict) -> bool:
+    return c.get("status", "open") != "resolved"
+
+
 def load_comments() -> dict[str, list[dict]]:
     return _load_json(_comments_path(), {})
 

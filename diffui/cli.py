@@ -9,6 +9,7 @@ from diffui.git_utils import (
     get_changed_files,
     get_main_branch,
     get_merge_base,
+    is_comment_open,
     load_comments,
     load_reviewed,
     resolve_repos,
@@ -27,10 +28,6 @@ def _setup_repo() -> tuple[list, int]:
     repos, active_index = resolve_repos(repo_args or None)
     set_active_repo(repos[active_index])
     return repos, active_index
-
-
-def is_comment_open(c: dict) -> bool:
-    return c.get("status", "open") != "resolved"
 
 
 def print_comments() -> None:

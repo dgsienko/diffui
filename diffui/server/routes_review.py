@@ -89,19 +89,18 @@ def _process_status(proc: subprocess.Popen | None) -> dict:
     rc = proc.poll()
     if rc is None:
         return {"running": True, "pid": proc.pid}
-    proc.wait()
     return {"running": False, "exit_code": rc}
 
 
 _AGENT_CMDS = {
-    "claude": lambda prompt, cwd: ["claude", "-p", prompt, "--allowedTools", "Edit,Read,Bash,Write"],
-    "codex": lambda prompt, cwd: ["codex", "--prompt", prompt, "--auto-edit"],
-    "opencode": lambda prompt, cwd: ["opencode", "-p", prompt],
-    "cursor": lambda prompt, cwd: ["cursor-agent", "-p", prompt],
+    "claude": lambda prompt: ["claude", "-p", prompt, "--allowedTools", "Edit,Read,Bash,Write"],
+    "codex": lambda prompt: ["codex", "--prompt", prompt, "--auto-edit"],
+    "opencode": lambda prompt: ["opencode", "-p", prompt],
+    "cursor": lambda prompt: ["cursor-agent", "-p", prompt],
 }
 
 
-def _build_agent_context() -> tuple[str, str, str] | tuple[None, str, str]:
+def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, int]:
     import tempfile
 
     from diffui.git_utils import (
@@ -119,7 +118,7 @@ def _build_agent_context() -> tuple[str, str, str] | tuple[None, str, str]:
                 open_comments.append({**c, "_file": file_path})
 
     if not open_comments:
-        return None, "No open comments", ""
+        return None, "No open comments", "", 0
 
     comments_path = str(_comments_path())
     repo_root = str(get_repo_root())
@@ -205,7 +204,7 @@ def _build_agent_context() -> tuple[str, str, str] | tuple[None, str, str]:
         f"existing thread replies.\n\n"
         f"Open comments ({len(open_comments)}):\n" + "\n".join(comment_summary)
     )
-    return prompt, repo_root, context_path
+    return prompt, repo_root, context_path, len(open_comments)
 
 
 @router.post("/agent/prompt")
@@ -213,8 +212,7 @@ def get_agent_prompt():
     result = _build_agent_context()
     if result[0] is None:
         return {"ok": False, "error": result[1]}
-    prompt, _, context_path = result
-    open_count = sum(1 for fc in app_state.comments.values() for c in fc if c.get("status", "open") != "resolved")
+    prompt, _, context_path, open_count = result
     return {
         "ok": True,
         "prompt": prompt,
@@ -234,7 +232,7 @@ def run_agent():
         result = _build_agent_context()
         if result[0] is None:
             return {"ok": False, "error": result[1]}
-        prompt, repo_root, _ = result
+        prompt, repo_root, _, _ = result
 
         agent = app_state.agent_cli
         cmd_builder = _AGENT_CMDS.get(agent)
@@ -242,7 +240,7 @@ def run_agent():
             return {"ok": False, "error": f"Unknown agent CLI: {agent}"}
 
         _agent_process = subprocess.Popen(
-            cmd_builder(prompt, repo_root),
+            cmd_builder(prompt),
             cwd=repo_root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -298,7 +296,7 @@ def explain_changes():
             return {"ok": False, "error": f"Unknown agent CLI: {agent}"}
 
         _explain_process = subprocess.Popen(
-            cmd_builder(prompt, repo_root),
+            cmd_builder(prompt),
             cwd=repo_root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

@@ -17,6 +17,7 @@ import { CompletionScreen } from './components/CompletionScreen.js';
 import { CommandPalette } from './components/CommandPalette.js';
 import { PreviewViewer, isPreviewable } from './components/PreviewViewer.js';
 import { AgentStatusBar } from './components/AgentStatusBar.js';
+import { AgentConfirmDialog } from './components/AgentConfirmDialog.js';
 import { shortName } from './lib/utils.js';
 
 const html = htm.bind(h);
@@ -370,7 +371,8 @@ function App() {
   }, []);
 
   const pollTimers = useRef([]);
-  useEffect(() => () => pollTimers.current.forEach(clearInterval), []);
+  const dismissTimer = useRef(null);
+  useEffect(() => () => { pollTimers.current.forEach(clearInterval); clearTimeout(dismissTimer.current); }, []);
 
   const [taskStatus, setTaskStatus] = useState(null);
 
@@ -392,7 +394,7 @@ function App() {
           const ok = status.exit_code === 0;
           const msg = ok ? (typeof doneMsg === 'function' ? doneMsg(data) : doneMsg) : failMsg;
           setTaskStatus({ label, startTime, status: ok ? 'done' : 'failed', message: msg, endTime: Date.now() });
-          setTimeout(() => setTaskStatus(s => s?.startTime === startTime ? null : s), 10000);
+          dismissTimer.current = setTimeout(() => setTaskStatus(s => s?.startTime === startTime ? null : s), 10000);
         }
       } catch {
         clearInterval(poll);
@@ -840,26 +842,12 @@ function App() {
       />
     `}
     ${showAgentConfirm && html`
-      <div class="settings-overlay" onClick=${(e) => { if (e.target.classList.contains('settings-overlay')) setShowAgentConfirm(null); }}>
-        <div class="agent-confirm-dialog">
-          <div class="agent-confirm-title">Send to agent</div>
-          <div class="agent-confirm-body">
-            <p>This will spawn <strong>${showAgentConfirm.agent_cli || 'your configured agent'}</strong> to address <strong>${showAgentConfirm.comment_count || 'the'} open comment${showAgentConfirm.comment_count === 1 ? '' : 's'}</strong>.</p>
-            <p>The agent will:</p>
-            <ul>
-              <li>Read the diff and each comment in context</li>
-              <li>Make fixes and reply to comments explaining what it did</li>
-              <li>Ask clarifying questions for anything unclear</li>
-              <li>Leave unresolved comments in place</li>
-            </ul>
-            <p>Changes will appear in real-time as the agent works.</p>
-          </div>
-          <div class="agent-confirm-actions">
-            <button class="comment-cancel-btn" onClick=${() => setShowAgentConfirm(null)}>Cancel</button>
-            <button class="comment-submit-btn" onClick=${handleConfirmAgent}>Start agent</button>
-          </div>
-        </div>
-      </div>
+      <${AgentConfirmDialog}
+        agentCli=${showAgentConfirm.agent_cli}
+        commentCount=${showAgentConfirm.comment_count}
+        onConfirm=${handleConfirmAgent}
+        onCancel=${() => setShowAgentConfirm(null)}
+      />
     `}
     ${showCompletion && html`
       <${CompletionScreen}
