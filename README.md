@@ -132,13 +132,19 @@ feedback and reply to comments.
 including branch info, per-file review status, comments, and a summary
 with open/resolved counts — useful for programmatic agent workflows.
 
-To have an agent address your comments, just ask:
+To have an agent address your comments, either:
 
-> "Go address the diffui comments"
+- Click **"Send to agent"** in the top bar — spawns Claude to address
+  all open comments, with real-time updates as the agent works
+- Or tell an agent directly: "Go address the diffui comments"
 
 The agent will read the comments, reply with what it did, make the
 changes, and remove addressed comments from the file. diffui
 auto-refreshes when the file changes.
+
+Use **"Explain changes"** from the command palette to generate a
+self-contained HTML walkthrough of the branch (TL;DR, file-by-file
+analysis, architecture notes, risk flags).
 
 ## State
 
@@ -160,7 +166,7 @@ directories.
 # Install with dev deps
 pipx inject diffui pytest ruff
 
-# Run tests (167 tests)
+# Run tests (179 tests)
 cd ~/code/diffui && pytest
 
 # Lint
@@ -207,6 +213,7 @@ diffui/
     ├── test_events.py      # Watcher + broadcast tests (24 tests)
     ├── test_git_utils.py   # Blame, session, utility tests (31 tests)
     ├── test_highlight.py   # HTML highlight adapter tests (18 tests)
-    ├── test_server.py      # API routes, WebSocket, export tests (34 tests)
+    ├── test_server.py      # API routes, WebSocket, risk scoring,
+    │                       #   agent/explain endpoints, export (46 tests)
     └── test_themes.py      # Theme definitions and CSS tests (12 tests)
 ```

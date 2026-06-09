@@ -374,6 +374,76 @@ class TestServerRoutes:
             data = json.loads(ws.receive_text())
             assert data == {"type": "pong"}
 
+    def test_files_include_risk_scoring(self, _server_app):
+        r = _server_app.get("/api/files?view=all")
+        assert r.status_code == 200
+        data = r.json()
+        if data:
+            f = data[0]
+            assert "risk_score" in f
+            assert "risk_level" in f
+            assert f["risk_level"] in ("low", "medium", "high")
+            assert "risk_reasons" in f
+            assert isinstance(f["risk_reasons"], list)
+
+    def test_agent_status_not_running(self, _server_app):
+        r = _server_app.get("/api/agent/status")
+        assert r.status_code == 200
+        assert r.json()["running"] is False
+
+    def test_agent_run_no_comments(self, _server_app):
+        r = _server_app.post("/api/agent/run")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is False
+        assert "No open comments" in data["error"]
+
+    def test_explain_status_not_running(self, _server_app):
+        r = _server_app.get("/api/explain/status")
+        assert r.status_code == 200
+        assert r.json()["running"] is False
+
+
+class TestRiskScoring:
+    def test_migration_file_high_risk(self):
+        from diffui.server.routes_diff import _score_risk
+
+        score, level, reasons = _score_risk("alembic/versions/001_init.py", 50, 0)
+        assert level in ("medium", "high")
+        assert "infra/migration" in reasons
+
+    def test_config_file_scored(self):
+        from diffui.server.routes_diff import _score_risk
+
+        score, level, reasons = _score_risk("config/settings.yaml", 10, 5)
+        assert score >= 2
+        assert "config" in reasons
+
+    def test_large_deletion_scored(self):
+        from diffui.server.routes_diff import _score_risk
+
+        score, level, reasons = _score_risk("src/module.py", 0, 100)
+        assert "large deletion" in reasons
+
+    def test_test_removal_scored(self):
+        from diffui.server.routes_diff import _score_risk
+
+        score, level, reasons = _score_risk("tests/test_auth.py", 5, 30)
+        assert "test removal" in reasons
+
+    def test_low_risk_source_file(self):
+        from diffui.server.routes_diff import _score_risk
+
+        score, level, reasons = _score_risk("src/utils.py", 10, 5)
+        assert level == "low"
+        assert reasons == []
+
+    def test_high_churn_scored(self):
+        from diffui.server.routes_diff import _score_risk
+
+        score, level, reasons = _score_risk("src/big_refactor.py", 150, 100)
+        assert "high churn" in reasons
+
 
 class TestExportJson:
     def test_output_structure(self):

@@ -33,9 +33,10 @@ diffui/
 │   │                   #   watcher with 400ms debounce
 │   ├── highlight.py    # Pygments-to-HTML adapter, word highlight overlay
 │   ├── routes_comments.py  # Comment CRUD, suggestion apply endpoint
-│   ├── routes_diff.py      # Diff, files, blame, and preview endpoints
+│   ├── routes_diff.py      # Diff, files, blame, preview, risk scoring
 │   ├── routes_repo.py      # Repo listing and switching
-│   ├── routes_review.py    # Review toggle and summary export
+│   ├── routes_review.py    # Review toggle, summary export, agent/explain
+│   │                       #   orchestration (thread-safe process management)
 │   ├── routes_settings.py  # Settings, editor open, session persistence
 │   ├── state.py        # AppState singleton — shared server state
 │   └── theme_css.py    # generate_css_vars(theme) — CSS custom properties
@@ -174,7 +175,7 @@ diffui --open                        # Web UI + open in browser
 diffui-tui                           # Terminal UI
 diffui --comments                    # Dump comments to stdout
 diffui --json                        # Export review session as JSON
-pytest                               # Run tests (167 tests)
+pytest                               # Run tests (179 tests)
 ruff check diffui/ tests/           # Lint
 ```
 
@@ -197,11 +198,13 @@ would require `app.run_test()` with a headless terminal.
 - `tests/test_highlight.py` — 18 tests: highlight_line_html escaping and
   coloring, _apply_word_highlights with spans/entities/malformed HTML,
   parse_diff_to_json structure, highlight_file_to_json
-- `tests/test_server.py` — 34 tests: CSS vars generation, all API routes
+- `tests/test_server.py` — 46 tests: CSS vars generation, all API routes
   (repos, branch, commits, files, diff, themes, settings, comments CRUD,
   comment resolution toggle, review toggle, static files, JSON export),
   comment categories, code suggestions, blame, preview, review summary,
-  session persistence, WebSocket connect and ping/pong
+  session persistence, WebSocket connect and ping/pong, risk scoring
+  (migration, config, deletion, test removal, churn patterns), agent
+  and explain status endpoints
 - `tests/test_themes.py` — 12 tests: all themes have valid hex colors,
   unique names, syntax maps; CSS generation; theme state get/set
 
