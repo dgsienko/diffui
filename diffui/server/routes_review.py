@@ -101,41 +101,120 @@ _AGENT_CMDS = {
 }
 
 
-def _build_agent_prompt() -> tuple[str, str] | tuple[None, str]:
-    from diffui.git_utils import _comments_path, get_repo_root
+def _build_agent_context() -> tuple[str, str, str] | tuple[None, str, str]:
+    import tempfile
 
-    open_comments = []
+    from diffui.git_utils import (
+        _comments_path,
+        current_branch,
+        get_full_diff,
+        get_repo_root,
+        short_name,
+    )
+
+    open_comments: list[dict] = []
     for file_path, file_comments in app_state.comments.items():
         for c in file_comments:
             if c.get("status", "open") != "resolved":
-                line_num = c.get("file_line_num", c.get("line_index", "?"))
-                cat = c.get("category", "")
-                prefix = f"[{cat}] " if cat else ""
-                open_comments.append(f"{file_path}:{line_num} — {prefix}{c.get('comment', '')}")
+                open_comments.append({**c, "_file": file_path})
 
     if not open_comments:
-        return None, "No open comments"
+        return None, "No open comments", ""
 
     comments_path = str(_comments_path())
     repo_root = str(get_repo_root())
-    comment_text = "\n".join(open_comments)
+    branch_name = current_branch()
+
+    # Build rich context file
+    ctx_lines = [
+        f"# diffui Agent Context — {branch_name}",
+        "",
+        f"Repository: {repo_root}",
+        f"Comments file: {comments_path}",
+        f"Branch: {branch_name}",
+        "",
+        "## Review State",
+        "",
+        f"- {len(app_state.all_files)} files changed",
+        f"- {sum(1 for f in app_state.all_files if f in app_state.reviewed)}/{len(app_state.all_files)} reviewed",
+        f"- {len(open_comments)} open comments",
+        "",
+    ]
+
+    # Group comments by file with diffs
+    commented_files: dict[str, list[dict]] = {}
+    for c in open_comments:
+        commented_files.setdefault(c["_file"], []).append(c)
+
+    ctx_lines.append("## Open Comments with Diffs")
+    ctx_lines.append("")
+
+    for file_path, comments_list in commented_files.items():
+        ctx_lines.append(f"### {file_path}")
+        ctx_lines.append("")
+
+        # Include the diff for context
+        try:
+            diff = get_full_diff(app_state.merge_base, file_path)
+            if diff:
+                ctx_lines.append("```diff")
+                ctx_lines.append(diff.rstrip())
+                ctx_lines.append("```")
+                ctx_lines.append("")
+        except Exception:
+            pass
+
+        for c in comments_list:
+            line_num = c.get("file_line_num", c.get("line_index", "?"))
+            cat = c.get("category", "")
+            cat_label = f" [{cat}]" if cat else ""
+            ctx_lines.append(f"**Line {line_num}**{cat_label}: {c.get('comment', '')}")
+            if c.get("line_text"):
+                ctx_lines.append(f"> `{c['line_text'].strip()}`")
+            if c.get("suggestion"):
+                ctx_lines.append(f"Suggested replacement: `{c['suggestion'].strip()}`")
+            replies = c.get("replies", [])
+            for r in replies:
+                ctx_lines.append(f"  ↳ {r.get('author', 'agent')}: {r.get('text', '')}")
+            ctx_lines.append("")
+
+    # Write context file
+    context_path = f"{tempfile.gettempdir()}/diffui-agent-context-{branch_name.replace('/', '-')}.md"
+    with open(context_path, "w") as f:
+        f.write("\n".join(ctx_lines))
+
+    # Build the prompt — explicit about conversation behavior
+    comment_summary = []
+    for c in open_comments:
+        line_num = c.get("file_line_num", c.get("line_index", "?"))
+        cat = c.get("category", "")
+        prefix = f"[{cat}] " if cat else ""
+        comment_summary.append(f"  {short_name(c['_file'])}:{line_num} — {prefix}{c.get('comment', '')}")
 
     prompt = (
-        f"Address these diffui review comments in the repo at {repo_root}. "
-        f"The comments file is at {comments_path}. "
-        f"For each comment, make the fix, then add a reply to the comment in the JSON file "
-        f"explaining what you did. Remove comments you've fully addressed.\n\n"
-        f"{comment_text}"
+        f"You are addressing review comments left in diffui for the repo at {repo_root}.\n\n"
+        f"IMPORTANT — treat these comments as a conversation, not a task list:\n"
+        f"- ALWAYS reply to a comment before removing it. Add a reply object to the comment's "
+        f"'replies' array in {comments_path} explaining what you did.\n"
+        f"- If a comment is unclear or you're unsure how to address it, reply with a question "
+        f"and LEAVE the comment in place. Do not guess.\n"
+        f"- If a comment has a code suggestion, apply it if it looks correct, or explain why not.\n"
+        f"- Only remove a comment from the JSON after you've replied AND fully addressed it.\n"
+        f"- Prioritize by category: bug > suggestion > question > nit.\n\n"
+        f"Read the full context file at {context_path} for diffs, review state, and "
+        f"existing thread replies.\n\n"
+        f"Open comments ({len(open_comments)}):\n" + "\n".join(comment_summary)
     )
-    return prompt, repo_root
+    return prompt, repo_root, context_path
 
 
 @router.post("/agent/prompt")
 def get_agent_prompt():
-    result = _build_agent_prompt()
+    result = _build_agent_context()
     if result[0] is None:
         return {"ok": False, "error": result[1]}
-    return {"ok": True, "prompt": result[0]}
+    prompt, _, context_path = result
+    return {"ok": True, "prompt": prompt, "context_path": context_path}
 
 
 @router.post("/agent/run")
@@ -145,10 +224,10 @@ def run_agent():
         if _agent_process and _agent_process.poll() is None:
             return {"ok": False, "error": "Agent already running"}
 
-        result = _build_agent_prompt()
+        result = _build_agent_context()
         if result[0] is None:
             return {"ok": False, "error": result[1]}
-        prompt, repo_root = result
+        prompt, repo_root, _ = result
 
         agent = app_state.agent_cli
         cmd_builder = _AGENT_CMDS.get(agent)

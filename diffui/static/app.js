@@ -400,7 +400,7 @@ function App() {
     const data = await r.json();
     if (data.ok) {
       await navigator.clipboard.writeText(data.prompt);
-      showToast('Agent prompt copied — paste into your terminal session', 'success');
+      showToast(`Prompt copied (context: ${data.context_path})`, 'success');
     } else {
       showToast(data.error || 'No comments to address', 'error');
     }
