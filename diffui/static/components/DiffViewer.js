@@ -56,7 +56,7 @@ function BlameCell({ blame }) {
   const days = Math.floor(age / 86400);
   const label = days < 1 ? 'today' : days < 30 ? `${days}d` : days < 365 ? `${Math.floor(days / 30)}mo` : `${Math.floor(days / 365)}y`;
   const name = (blame.author || '').split(' ')[0].slice(0, 8);
-  return html`<span class="blame-cell" title=${blame.author + ' · ' + blame.sha}>${name} ${label}</span>`;
+  return html`<span class="blame-cell" title=${blame.author + ' · ' + blame.sha}><span class="blame-name">${name}</span><span class="blame-age">${label}</span></span>`;
 }
 
 function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, blame }) {

@@ -549,13 +549,11 @@ html, body {
 }
 
 .blame-cell {
-  display: inline-block;
-  width: 100px;
+  display: inline-flex;
+  width: 110px;
   padding: 0 6px;
   color: var(--fg-muted);
   font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   flex-shrink: 0;
   opacity: 0.7;
@@ -563,6 +561,20 @@ html, body {
 }
 
 .blame-cell:hover { opacity: 1; }
+
+.blame-name {
+  display: inline-block;
+  width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.blame-age {
+  display: inline-block;
+  width: 36px;
+  text-align: right;
+  color: var(--fg-muted);
+}
 
 .diff-code {
   flex: 1;
