@@ -5,7 +5,7 @@ import { isPreviewable } from './PreviewViewer.js';
 
 const html = htm.bind(h);
 
-export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, openCommentCount, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, agentRunning, onSendToAgent }) {
+export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, openCommentCount, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, onToggleFileTree, onToggleFileFilter, showFileTree, showFileFilter, agentRunning, onSendToAgent }) {
   const activeRepo = repos.find(r => r.active);
   const showRepoSelect = repos.length > 1;
 
@@ -68,6 +68,12 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
           <span class="toolbar-stat"><span class="stats-add">+${totalAdds}</span> <span class="stats-del">−${totalDels}</span></span>
         </div>
         <div class="toolbar-right">
+          <button class=${'toolbar-btn panel-toggle' + (showFileTree ? ' panel-active' : '')} onClick=${onToggleFileTree} title="Toggle file tree (b)">
+            Files
+          </button>
+          <button class=${'toolbar-btn panel-toggle' + (showFileFilter ? ' panel-active' : '')} onClick=${onToggleFileFilter} title="Filter files (Ctrl+Shift+F)">
+            Filter
+          </button>
           ${openCommentCount > 0 && html`
             <button class="toolbar-btn" onClick=${onToggleCommentsPanel}>
               ${openCommentCount} comment${openCommentCount === 1 ? '' : 's'}

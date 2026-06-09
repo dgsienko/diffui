@@ -107,6 +107,7 @@ html, body {
 }
 
 .toolbar-btn:hover { border-color: var(--accent); color: var(--fg); }
+.toolbar-btn.panel-active { background: var(--hover-bg); color: var(--fg); border-color: var(--accent); }
 
 .toolbar-btn-sm { padding: 4px 8px; }
 

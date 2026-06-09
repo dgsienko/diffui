@@ -52,7 +52,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [showFileTree, setShowFileTree] = useState(false);
+  const [showFileTree, setShowFileTree] = useState(true);
   const [showCommentsPanel, setShowCommentsPanel] = useState(false);
   const [showFileFilter, setShowFileFilter] = useState(false);
   const [fileFilter, setFileFilter] = useState('');
@@ -748,6 +748,10 @@ function App() {
       onToggleReviewed=${() => setShowReviewed(v => !v)}
       onOpenSettings=${() => setShowSettings(v => !v)}
       onToggleCommentsPanel=${() => setShowCommentsPanel(v => !v)}
+      onToggleFileTree=${() => setShowFileTree(v => !v)}
+      onToggleFileFilter=${() => setShowFileFilter(v => { if (v) setFileFilter(''); return !v; })}
+      showFileTree=${showFileTree}
+      showFileFilter=${showFileFilter}
       agentRunning=${agentRunning}
       onSendToAgent=${handleSendToAgent}
     />
