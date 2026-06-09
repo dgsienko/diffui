@@ -1231,15 +1231,28 @@ mark {
 /* --- File Tree --- */
 
 .file-tree {
-  width: 260px;
-  min-width: 200px;
-  max-width: 350px;
+  position: relative;
   background: var(--bg-dark);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   animation: slide-right 0.15s ease-out;
+}
+
+.file-tree-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.file-tree-resize:hover {
+  background: var(--accent);
+  opacity: 0.3;
 }
 
 @keyframes slide-right {
