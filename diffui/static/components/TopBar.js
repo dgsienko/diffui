@@ -5,7 +5,7 @@ import { isPreviewable } from './PreviewViewer.js';
 
 const html = htm.bind(h);
 
-export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, comments, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, agentRunning, onSendToAgent, onNextUnreviewed }) {
+export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, comments, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, agentRunning, onSendToAgent }) {
   const activeRepo = repos.find(r => r.active);
   const showRepoSelect = repos.length > 1;
 
@@ -72,9 +72,6 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
             <div class="progress-bar"><div class="progress-fill" style="width: ${progressPct}%"></div></div>
             <span class="progress-label">${reviewedCount}/${fileCount}</span>
           </div>
-          ${reviewedCount < fileCount && html`
-            <button class="toolbar-btn toolbar-btn-sm" onClick=${onNextUnreviewed} title="Next unreviewed (])">Next ▶</button>
-          `}
           <span class="toolbar-stat"><span class="stats-add">+${totalAdds}</span> <span class="stats-del">−${totalDels}</span></span>
         </div>
         <div class="toolbar-right">

@@ -750,7 +750,6 @@ function App() {
       onToggleCommentsPanel=${() => setShowCommentsPanel(v => !v)}
       agentRunning=${agentRunning}
       onSendToAgent=${handleSendToAgent}
-      onNextUnreviewed=${handleNextUnreviewed}
       fileFilter=${fileFilter}
       onFileFilterChange=${setFileFilter}
     />
