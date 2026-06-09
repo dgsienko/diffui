@@ -154,6 +154,26 @@ diffui/
   activation on file tabs, `role="treeitem"` on file tree items, focus
   trapping in settings dialog.
 
+### Design System
+
+All frontend changes must follow these rules:
+
+- **Spacing:** 4/8pt grid only (4, 8, 12, 16, 24, 32px)
+- **Border radius:** use `--radius-sm`, `--radius-md`, `--radius-lg` tokens
+- **Shadows:** use `--shadow-low`, `--shadow-high` tokens
+- **Colors:** all via CSS variables, no hardcoded hex
+- **Buttons:** consistent padding/font-size within each context
+- **Animations:** 0.15s duration, intentional only
+- **No emoji as UI elements** — use text labels or CSS indicators
+- **Loading states** for every async action
+- **Every interactive element must work**
+
+After making changes, always:
+1. Add/update tests for new endpoints or logic
+2. Update README.md and AGENTS.md
+3. Bump version (patch for fixes, minor for features)
+4. Verify CSS consistency against the design tokens
+
 ### TUI Patterns
 
 - **Lazy tab loading** — only the active tab builds a DiffViewer. Others
