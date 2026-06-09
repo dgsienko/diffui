@@ -1220,6 +1220,35 @@ mark {
   font-size: 13px;
 }
 
+.tree-group-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.tree-group-btn {
+  background: var(--bg);
+  color: var(--fg-muted);
+  border: none;
+  border-right: 1px solid var(--border);
+  padding: 2px 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+}
+
+.tree-group-btn:last-child { border-right: none; }
+.tree-group-btn:hover { color: var(--fg); }
+.tree-group-btn.active { background: var(--accent); color: var(--bg); font-weight: 600; }
+
+.tree-dir-count {
+  color: var(--fg-muted);
+  font-size: 10px;
+  margin-left: auto;
+  margin-right: 4px;
+}
+
 .file-tree-close {
   background: none;
   border: none;
