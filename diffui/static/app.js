@@ -766,6 +766,8 @@ function App() {
       files=${visibleFiles}
       activeFile=${activeFile}
       onSelect=${handleFileSelect}
+      fileFilter=${fileFilter}
+      onFileFilterChange=${setFileFilter}
     />
     <div class="main-content">
       ${showFileTree && html`

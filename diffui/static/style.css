@@ -65,12 +65,51 @@ html, body {
 .top-bar-left, .top-bar-center, .top-bar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .top-bar-left { flex: 1; min-width: 0; }
 .top-bar-center { flex-shrink: 0; }
 .top-bar-right { flex-shrink: 0; }
+
+.top-bar-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 2px;
+}
+
+.top-bar-stat {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.top-bar-icon-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--fg-muted);
+  border-radius: 4px;
+  padding: 3px 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.top-bar-icon-btn:hover { color: var(--fg); border-color: var(--border); }
+
+.comment-count-btn { color: var(--accent); }
+
+.review-progress {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress-label {
+  font-size: 11px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
 
 .top-bar-select {
   background: var(--bg);
@@ -125,13 +164,35 @@ html, body {
 
 /* --- File tabs --- */
 
-.tab-bar {
+.tab-bar-container {
   display: flex;
   background: var(--bg-dark);
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  align-items: stretch;
+}
+
+.tab-bar {
+  display: flex;
   overflow-x: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.tab-filter {
+  width: 120px;
+  background: var(--bg);
+  color: var(--fg);
+  border: none;
+  border-left: 1px solid var(--border);
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 11px;
   flex-shrink: 0;
 }
+
+.tab-filter:focus { outline: none; background: var(--hover-bg); }
+.tab-filter::placeholder { color: var(--fg-muted); }
 
 .tab-bar::-webkit-scrollbar {
   height: 2px;
@@ -174,15 +235,9 @@ html, body {
 
 /* --- Review Progress --- */
 
-.review-progress {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .progress-bar {
-  width: 60px;
-  height: 4px;
+  width: 50px;
+  height: 3px;
   background: var(--border);
   border-radius: 2px;
   overflow: hidden;
@@ -195,50 +250,7 @@ html, body {
   transition: width 0.3s ease;
 }
 
-.next-unreviewed-btn {
-  font-size: 10px;
-  padding: 4px 8px;
-}
-
-/* --- Sub Bar (file filter) --- */
-
-.sub-bar {
-  padding: 4px 12px;
-  background: var(--bg-dark);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.file-filter-input {
-  width: 100%;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-family: inherit;
-  font-size: 12px;
-}
-
-.file-filter-input:focus { outline: none; border-color: var(--accent); }
-.file-filter-input::placeholder { color: var(--fg-muted); }
-
-/* --- Diff Stat Summary --- */
-
-.diff-stat-summary {
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.diff-stat-summary .stats-add { margin-right: 4px; }
-
-/* --- Comment Panel Button --- */
-
-.comment-panel-btn {
-  color: var(--accent);
-  border-color: var(--accent);
-  font-size: 11px;
-}
+/* (file filter is now in tab-bar-container) */
 
 /* --- Comments Panel --- */
 
@@ -1713,22 +1725,9 @@ mark {
   border-radius: 4px;
 }
 
-.agent-btn {
-  border-color: var(--purple-border);
-  color: var(--purple);
-}
-
-.agent-btn:hover {
-  background: var(--purple-bg);
-  border-color: var(--purple);
-}
-
-.agent-running {
-  background: var(--purple-bg);
-  border-color: var(--purple);
-  color: var(--purple);
-  animation: pulse 1.5s ease-in-out infinite;
-}
+.agent-btn { color: var(--purple); }
+.agent-btn:hover { color: var(--purple); border-color: var(--purple-border); background: var(--purple-bg); }
+.agent-running { color: var(--purple); border-color: var(--purple); background: var(--purple-bg); animation: pulse 1.5s ease-in-out infinite; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
