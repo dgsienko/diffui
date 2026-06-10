@@ -471,11 +471,12 @@ function App() {
   const [showAgentConfirm, setShowAgentConfirm] = useState(null);
 
   const handleSendToAgent = useCallback(async () => {
+    if (!commentStats.open) { showToast('No open comments to send', 'error'); return; }
     const r = await fetch('/api/agent/prompt', { method: 'POST' });
     const data = await r.json();
     if (!data.ok) { showToast(data.error || 'No comments to address', 'error'); return; }
     setShowAgentConfirm(data);
-  }, []);
+  }, [commentStats.open]);
 
   const handleConfirmAgent = useCallback(() => {
     setShowAgentConfirm(null);

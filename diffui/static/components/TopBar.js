@@ -87,8 +87,8 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
             <button
               class=${'toolbar-btn agent-btn' + (agentRunning ? ' agent-running' : '')}
               onClick=${onSendToAgent}
-              disabled=${agentRunning || !openCommentCount}
-              title=${openCommentCount ? 'Send open comments to your configured agent CLI' : 'No open comments to send'}
+              disabled=${agentRunning}
+              title="Send open comments to your configured agent CLI"
             >${agentRunning ? 'Agent running...' : 'Send to agent'}</button>
           `}
           ${onExplain && html`
