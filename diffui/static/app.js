@@ -471,12 +471,15 @@ function App() {
   const [showAgentConfirm, setShowAgentConfirm] = useState(null);
 
   const handleSendToAgent = useCallback(async () => {
-    if (!commentStats.open) { showToast('No open comments to send', 'error'); return; }
+    const hasOpen = Object.values(latestCallbacks.current.comments || {}).some(
+      arr => arr.some(c => (c.status || 'open') !== 'resolved')
+    );
+    if (!hasOpen) { showToast('No open comments to send', 'error'); return; }
     const r = await fetch('/api/agent/prompt', { method: 'POST' });
     const data = await r.json();
     if (!data.ok) { showToast(data.error || 'No comments to address', 'error'); return; }
     setShowAgentConfirm(data);
-  }, [commentStats.open]);
+  }, []);
 
   const handleConfirmAgent = useCallback(() => {
     setShowAgentConfirm(null);
@@ -776,10 +779,10 @@ function App() {
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
       } else if (e.key === 'w') {
         handleToggleWhitespace();
-      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
+      } else if (e.ctrlKey && !e.metaKey && e.shiftKey && e.key === 'f') {
         e.preventDefault();
         setShowFileFilter(v => { if (v) setFileFilter(''); return !v; });
-      } else if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      } else if (e.ctrlKey && !e.metaKey && e.key === 'f') {
         e.preventDefault();
         setShowSearch(v => !v);
       } else if (e.key === '?') {
@@ -802,7 +805,7 @@ function App() {
     { id: 'copy-path', label: 'Copy file path', keys: keybindings['copy-path'] || 'y', category: 'Actions' },
     { id: 'copy-gitlab-link', label: 'Copy GitLab link', keys: 'Y', category: 'Actions' },
     { id: 'toggle-file-tree', label: 'Toggle file tree', keys: keybindings['toggle-file-tree'] || 'b', category: 'Actions' },
-    { id: 'search', label: 'Search in diff', keys: `${mod}+F`, category: 'Actions' },
+    { id: 'search', label: 'Search in diff', keys: 'Ctrl+F', category: 'Actions' },
     { id: 'shortcuts', label: 'Show keyboard shortcuts', keys: '?', category: 'Help' },
     { id: 'settings', label: 'Open settings', category: 'Settings' },
     { id: 'mode-unified', label: 'Switch to unified diff', category: 'Settings' },
@@ -1035,7 +1038,7 @@ function App() {
         <span><kbd>r</kbd> toggle reviewed</span>
         <span><kbd>a</kbd> show/hide reviewed</span>
         <span><kbd>c</kbd> comment</span>
-        <span><kbd>${mod}+F</kbd> search</span>
+        <span><kbd>Ctrl+F</kbd> search</span>
         <span><kbd>y</kbd> copy path</span>
       </div>
       <div class="legend-fixed">

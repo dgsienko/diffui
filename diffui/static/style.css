@@ -1944,16 +1944,20 @@ mark {
 
 /* --- Font size variable --- */
 
-html, body {
+:root {
   --code-font-size: 13px;
 }
 
-.diff-container, .split-diff-container, .full-file-container {
+.diff-container, .split-container {
   font-size: var(--code-font-size);
+}
+
+.diff-line {
+  min-height: calc(var(--code-font-size) + 7px);
   line-height: calc(var(--code-font-size) + 7px);
 }
 
-.diff-line, .split-line {
+.split-line {
   min-height: calc(var(--code-font-size) + 7px);
   line-height: calc(var(--code-font-size) + 7px);
 }

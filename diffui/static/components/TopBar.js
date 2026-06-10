@@ -4,8 +4,6 @@ import htm from 'htm';
 import { isPreviewable } from './PreviewViewer.js';
 
 const html = htm.bind(h);
-const isMac = navigator.platform.includes('Mac');
-const mod = isMac ? '⌘' : 'Ctrl';
 
 export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, openCommentCount, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, onToggleFileTree, onToggleFileFilter, showFileTree, showFileFilter, showCommentsPanel, agentRunning, onSendToAgent, explainRunning, onExplain, wsConnected, ignoreWhitespace, onToggleWhitespace, keybindings }) {
   const activeRepo = repos.find(r => r.active);
@@ -77,7 +75,7 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
           <button class=${'toolbar-btn' + (showFileTree ? ' panel-active' : '')} onClick=${onToggleFileTree} title=${`Toggle explorer (${kb('toggle-file-tree', 'b')})`}>
             Explorer
           </button>
-          <button class=${'toolbar-btn' + (showFileFilter ? ' panel-active' : '')} onClick=${onToggleFileFilter} title=${`Search files (${mod}+Shift+F)`}>
+          <button class=${'toolbar-btn' + (showFileFilter ? ' panel-active' : '')} onClick=${onToggleFileFilter} title="Search files (Ctrl+Shift+F)">
             Search files
           </button>
           <button class=${'toolbar-btn' + (showCommentsPanel ? ' panel-active' : '')} onClick=${onToggleCommentsPanel} title="Toggle comments panel">
