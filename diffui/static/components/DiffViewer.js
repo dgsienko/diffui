@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useRef, useEffect, useCallback } from 'preact/hooks';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'preact/hooks';
 import htm from 'htm';
 import { CommentBox } from './CommentBox.js';
 import { CommentDisplay } from './CommentDisplay.js';
@@ -121,11 +121,14 @@ function hunkStats(lines) {
 
 function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, filePath, blameData, collapseAll }) {
   const [collapsed, setCollapsed] = useState(false);
-  const stats = hunkStats(hunk.lines);
+  const stats = useMemo(() => hunkStats(hunk.lines), [hunk.lines]);
+  const lastCollapseVersion = useRef(0);
 
   useEffect(() => {
-    if (collapseAll === 'collapse') setCollapsed(true);
-    if (collapseAll === 'expand') setCollapsed(false);
+    if (collapseAll && collapseAll.version !== lastCollapseVersion.current) {
+      lastCollapseVersion.current = collapseAll.version;
+      setCollapsed(collapseAll.action === 'collapse');
+    }
   }, [collapseAll]);
 
   return html`

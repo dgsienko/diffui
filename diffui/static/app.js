@@ -68,6 +68,7 @@ function App() {
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   const [showIgnored, setShowIgnored] = useState(false);
   const [collapseAll, setCollapseAll] = useState(null);
+  const collapseVersion = useRef(0);
   const [fontSize, setFontSize] = useState(13);
   const [wordWrap, setWordWrap] = useState(false);
   const [keybindings, setKeybindings] = useState({});
@@ -117,11 +118,11 @@ function App() {
     setComments(await res.json());
   }, []);
 
-  const fetchDiff = useCallback(async (path, ctx) => {
+  const fetchDiff = useCallback(async (path, ctx, wsOverride) => {
     if (!path) return;
     const c = ctx ?? contextRef.current;
     const v = viewRef.current;
-    const ws = ignoreWsRef.current;
+    const ws = wsOverride !== undefined ? wsOverride : ignoreWsRef.current;
     const cacheKey = `${path}:${v}:c${c}:ws${ws}`;
     const cached = diffCache.current.get(cacheKey);
     if (cached) {
@@ -154,26 +155,18 @@ function App() {
   useEffect(() => {
     if (!activeFile || !diffRef.current) return;
     const targetLine = scrollToLineRef.current;
-    let rafId, timerId;
+    let rafId;
     if (targetLine !== null) {
       scrollToLineRef.current = null;
-      rafId = requestAnimationFrame(() => {
-        if (!diffRef.current) return;
-        const el = diffRef.current.querySelector(`[data-line-new="${targetLine}"]`);
-        if (el) {
-          el.scrollIntoView({ block: 'center' });
-          el.style.outline = '2px solid var(--accent)';
-          timerId = setTimeout(() => { el.style.outline = ''; }, 2000);
-        }
-      });
+      rafId = requestAnimationFrame(() => scrollToLineAndFlash(targetLine));
     } else {
       const saved = scrollPositions.current.get(activeFile) || 0;
       rafId = requestAnimationFrame(() => {
         if (diffRef.current) diffRef.current.scrollTop = saved;
       });
     }
-    return () => { cancelAnimationFrame(rafId); clearTimeout(timerId); };
-  }, [diffData, activeFile]);
+    return () => cancelAnimationFrame(rafId);
+  }, [diffData, activeFile, scrollToLineAndFlash]);
 
   latestCallbacks.current = { fetchFiles, fetchCommits, fetchComments, fetchDiff, fetchRepos, activeFile, comments };
 
@@ -220,7 +213,6 @@ function App() {
     document.documentElement.classList.toggle('word-wrap-enabled', wordWrap);
   }, [wordWrap]);
 
-  // Real-time updates — WebSocket with SSE fallback
   useEffect(() => {
     let cleanup = () => {};
 
@@ -541,33 +533,35 @@ function App() {
       showToast(next ? 'Hiding whitespace changes' : 'Showing whitespace changes');
       diffCache.current.clear();
       const af = activeFileRef.current;
-      if (af) {
-        setTimeout(() => fetchDiff(af), 0);
-      }
+      if (af) fetchDiff(af, undefined, next);
       return next;
     });
   }, [fetchDiff]);
 
   const handleCollapseAll = useCallback((action) => {
-    setCollapseAll(action);
-    setTimeout(() => setCollapseAll(null), 50);
+    collapseVersion.current += 1;
+    setCollapseAll({ action, version: collapseVersion.current });
     showToast(action === 'collapse' ? 'All hunks collapsed' : 'All hunks expanded');
+  }, []);
+
+  const flashLineRef = useRef(null);
+  const scrollToLineAndFlash = useCallback((lineNum) => {
+    if (!diffRef.current) return false;
+    const el = diffRef.current.querySelector(`[data-line-new="${lineNum}"]`);
+    if (!el) return false;
+    el.scrollIntoView({ block: 'center' });
+    el.style.outline = '2px solid var(--accent)';
+    clearTimeout(flashLineRef.current);
+    flashLineRef.current = setTimeout(() => { el.style.outline = ''; }, 2000);
+    return true;
   }, []);
 
   const handleGoToLine = useCallback((lineNum) => {
     setShowGoToLine(false);
-    scrollToLineRef.current = lineNum;
-    if (diffRef.current) {
-      const el = diffRef.current.querySelector(`[data-line-new="${lineNum}"]`);
-      if (el) {
-        el.scrollIntoView({ block: 'center' });
-        el.style.outline = '2px solid var(--accent)';
-        setTimeout(() => { el.style.outline = ''; }, 2000);
-      } else {
-        showToast(`Line ${lineNum} not found in diff`);
-      }
+    if (!scrollToLineAndFlash(lineNum)) {
+      showToast(`Line ${lineNum} not found in diff`);
     }
-  }, []);
+  }, [scrollToLineAndFlash]);
 
   const commentNavRef = useRef(0);
   const navigateComment = useCallback((direction) => {
@@ -624,7 +618,6 @@ function App() {
     showToast(lineNum ? `GitLab link copied (line ${lineNum})` : 'GitLab link copied');
   }, []);
 
-  // Search match navigation
   const searchMatches = useMemo(() => {
     if (!searchTerm || !diffData?.hunks) return [];
     const lower = searchTerm.toLowerCase();
@@ -684,7 +677,6 @@ function App() {
     return { total, open };
   }, [comments]);
 
-  // Persist session state on changes (debounced)
   const saveTimerRef = useRef(null);
   useEffect(() => {
     clearTimeout(saveTimerRef.current);
@@ -717,7 +709,6 @@ function App() {
     prevReviewedRef.current = reviewedCount;
   }, [reviewedCount, files.length]);
 
-  // Keyboard shortcuts — reads keybindings for custom overrides
   useEffect(() => {
     const key = (id) => keybindings[id] || null;
 

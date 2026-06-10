@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from fnmatch import fnmatch
 
 from fastapi import APIRouter
 
@@ -47,6 +48,8 @@ def _get_diff(path: str, view: str, context: int = 3, ignore_whitespace: bool = 
         result = get_commit_diff(view, path, context, ignore_whitespace=ignore_whitespace)
 
     with _cache_lock:
+        if cache_key in _diff_cache:
+            return _diff_cache[cache_key]
         stale = next((k for k in _diff_cache if k[2] == path and k[3] == f"{view}:c{context}:{ws_flag}"), None)
         if stale is not None:
             del _diff_cache[stale]
@@ -95,7 +98,6 @@ def _score_risk(path: str, adds: int, dels: int) -> tuple[int, str, list[str]]:
 
 
 def _is_ignored(path: str) -> bool:
-    from fnmatch import fnmatch
 
     return any(fnmatch(path, p) or fnmatch(path.split("/")[-1], p) for p in app_state.ignore_patterns)
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import atexit
 import os
 import subprocess
 import tempfile
@@ -37,10 +36,6 @@ def _cleanup_temp_files() -> None:
         except OSError:
             pass
     _temp_files.clear()
-
-
-atexit.register(_cleanup_processes)
-atexit.register(_cleanup_temp_files)
 
 
 def register_shutdown(app) -> None:

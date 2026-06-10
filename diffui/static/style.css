@@ -470,6 +470,9 @@ html, body {
 }
 
 .hunk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 4px 16px;
   background: var(--hunk-bg);
   color: var(--hunk-fg);
@@ -2056,12 +2059,6 @@ html.word-wrap-enabled .diff-gutter {
 }
 
 /* --- Hunk stats --- */
-
-.hunk-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
 
 .hunk-stats {
   display: flex;
