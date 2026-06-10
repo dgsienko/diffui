@@ -4,15 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "diffui"
-version = "0.5.2"
+version = "0.6.0"
 description = "UI for reviewing AI agent diffs"
 requires-python = ">=3.10"
 dependencies = [
-    "textual>=1.0.0",
     "fastapi>=0.110",
     "uvicorn[standard]>=0.28",
     "pygments>=2.17",
-    "rich>=13.0",
     "watchfiles>=1.0",
 ]
 
@@ -24,7 +22,6 @@ dev = [
 
 [project.scripts]
 diffui = "diffui.cli:main"
-diffui-tui = "diffui.cli_tui:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -48,8 +45,7 @@ select = [
 ignore = [
     "E501",   # line too long (handled by formatter)
     "SIM108", # ternary instead of if/else (readability preference)
-    "SIM105", # contextlib.suppress — try/except/pass is clearer for single-line queries
-    "RUF012", # mutable class attrs — BINDINGS is a Textual convention
+    "SIM105", # contextlib.suppress — try/except/pass is clearer for single-line cases
 ]
 
 [tool.ruff.lint.isort]

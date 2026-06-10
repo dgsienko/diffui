@@ -1,4 +1,3 @@
-from diffui.themes.css import generate_css
 from diffui.themes.definitions import ALL_THEMES, CATPPUCCIN_MOCHA
 from diffui.themes.theme import Theme
 
@@ -18,7 +17,6 @@ __all__ = [
     "ALL_THEMES",
     "CATPPUCCIN_MOCHA",
     "Theme",
-    "generate_css",
     "get_current_theme",
     "set_current_theme",
 ]

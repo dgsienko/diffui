@@ -1,15 +1,13 @@
 # diffui
 
-UI for reviewing AI agent diffs. Two frontends sharing the same backend:
-- **Web UI** (`diffui`) — FastAPI + Preact, opens in browser
-- **TUI** (`diffui-tui`) — Textual, runs in terminal
+UI for reviewing AI agent diffs. FastAPI backend + Preact frontend,
+no build step required.
 
 ## Tech Stack
 
 - **Python 3.10+**
-- **FastAPI + uvicorn** (web UI server)
-- **Preact + HTM** (web UI frontend, no build step)
-- **Textual** (TUI framework)
+- **FastAPI + uvicorn** (server)
+- **Preact + HTM** (frontend, no build step)
 - **Pygments** for syntax highlighting
 - **watchfiles** for real-time filesystem watching (Rust-backed FSEvents/inotify)
 - Git operations via `subprocess` (no gitpython dependency)
@@ -19,10 +17,7 @@ UI for reviewing AI agent diffs. Two frontends sharing the same backend:
 
 ```text
 diffui/
-├── cli.py              # Web UI entry point — starts FastAPI server
-├── cli_tui.py          # TUI entry point — launches Textual app
-├── app.py              # Textual TUI app class
-├── widgets.py          # TUI widget classes
+├── cli.py              # Entry point — starts FastAPI server
 ├── diff.py             # Pure functions — diff parsing, line classification, syntax
 │                       #   highlighting, word-level diff ranges
 ├── git_utils.py        # Git subprocess helpers, blame, state persistence,
@@ -58,8 +53,7 @@ diffui/
 └── themes/
     ├── __init__.py     # Theme state (get/set_current_theme), re-exports
     ├── theme.py        # Theme dataclass (30+ color fields)
-    ├── definitions.py  # 15 theme instances with Pygments token color maps
-    └── css.py          # generate_css(theme) — Textual CSS template
+    └── definitions.py  # 15 theme instances with Pygments token color maps
 ```
 
 ### Shared Patterns
@@ -174,35 +168,12 @@ After making changes, always:
 3. Bump version (patch for fixes, minor for features)
 4. Verify CSS consistency against the design tokens
 
-### TUI Patterns
-
-- **Lazy tab loading** — only the active tab builds a DiffViewer. Others
-  use `LazyPlaceholder` and compose on activation.
-- **Background polling** — `@work(thread=True, exclusive=True)` polls
-  git mtimes every 3 seconds. Results posted to main thread via
-  `call_from_thread`.
-- **Theme switching** — writes CSS to a temp file, copies+reparses the
-  stylesheet, calls `stylesheet.update()` on all screens.
-
 ### Things to Know
 
-- `_SENTINEL = object()` is used as the default for
-  `_refresh_tabs(restore_file=)` to distinguish "auto-detect current
-  tab" from "don't restore any tab" (`None`).
 - The `_current_theme` global lives in `themes/__init__.py` and is
-  accessed by widgets via `get_current_theme()`. No circular imports.
-- `_poll_worker` snapshots `self.all_files` at entry to avoid race
-  conditions with the main thread.
-- Textual's `OptionList` renders options as Rich renderables in a single
-  panel, not as individual widgets. CSS on dropdown options is limited.
-- The review button inside DiffViewer (`#inline-review-btn`) uses
-  `variant="default"` with explicit CSS classes to avoid Textual's
-  built-in variant styling.
+  accessed via `get_current_theme()`. No circular imports.
 - Search is debounced at 400ms. Comment navigation uses `commentNavRef`
   index cycling through a flat comment list.
-- `FullFileViewer` uses `_FileLineStatic` (single Static per line) for
-  performance. `DiffViewer` uses `DiffLine` (Horizontal with gutter +
-  code split) for proper line wrapping.
 - `get_branch_commits` uses a single `git log --name-only` call instead
   of N+1 `git diff-tree` subprocesses.
 
@@ -210,23 +181,21 @@ After making changes, always:
 
 ```bash
 pipx install -e .                    # Install (editable)
-diffui                               # Web UI (from any git repo)
-diffui --open                        # Web UI + open in browser
-diffui-tui                           # Terminal UI
+diffui                               # Start server (from any git repo)
+diffui --open                        # Start + open in browser
 diffui --comments                    # Dump comments to stdout
 diffui --json                        # Export review session as JSON
-pytest                               # Run tests (183 tests)
+pytest                               # Run tests (177 tests)
 ruff check diffui/ tests/           # Lint
 ```
 
 ## Testing
 
 Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
-`themes/`) and the web server (`server/`). No Textual app tests —
-would require `app.run_test()` with a headless terminal.
+`themes/`) and the web server (`server/`).
 
-- `tests/test_diff.py` — 48 tests: line classification, number parsing,
-  hunk splitting, prefix stripping, lexer selection, syntax highlighting,
+- `tests/test_diff.py` — 46 tests: line classification, number parsing,
+  hunk splitting, prefix stripping, lexer selection, token color,
   word diff ranges, pair diff lines
 - `tests/test_events.py` — 24 tests: change classification (source files,
   git paths, comments, mixed, empty, dedup), watch filter (accept/reject
@@ -245,17 +214,13 @@ would require `app.run_test()` with a headless terminal.
   session persistence, WebSocket connect and ping/pong, risk scoring
   (migration, config, deletion, test removal, churn patterns), agent
   and explain status endpoints
-- `tests/test_themes.py` — 12 tests: all themes have valid hex colors,
-  unique names, syntax maps; CSS generation; theme state get/set
+- `tests/test_themes.py` — 8 tests: all themes have valid hex colors,
+  unique names, syntax maps; theme state get/set
 
 ## Linting
 
 Uses ruff with: pycodestyle, pyflakes, isort, pyupgrade, bugbear,
-simplify, ruff-specific rules. Intentional ignores:
-
-- `SIM105` — `try/except/pass` preferred over `contextlib.suppress` for
-  single-line Textual queries
-- `RUF012` — `BINDINGS` as mutable class attr is a Textual convention
+simplify, ruff-specific rules.
 
 ## State Files
 

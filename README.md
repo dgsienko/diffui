@@ -1,7 +1,7 @@
 # diffui
 
-UI for reviewing AI agent diffs. Comes in two flavors: a web UI
-(default) and a terminal TUI.
+UI for reviewing AI agent diffs. Runs as a local web server with a
+Preact frontend — no build step required.
 
 ## Install
 
@@ -14,8 +14,7 @@ pipx install -e ~/code/diffui
 `cd` into any git repo on a feature branch and run:
 
 ```bash
-diffui              # Web UI — starts a local server, prints the URL
-diffui-tui          # Terminal UI — runs in the terminal via Textual
+diffui              # Starts a local server, prints the URL
 ```
 
 diffui shows all files changed on the current branch (vs the merge base
@@ -183,7 +182,7 @@ directories.
 # Install with dev deps
 pipx inject diffui pytest ruff
 
-# Run tests (183 tests)
+# Run tests (177 tests)
 cd ~/code/diffui && pytest
 
 # Lint
@@ -194,10 +193,7 @@ ruff check diffui/ tests/
 
 ```text
 diffui/
-├── cli.py              # Web UI entry point
-├── cli_tui.py          # TUI entry point
-├── app.py              # Textual TUI app class
-├── widgets.py          # TUI widgets
+├── cli.py              # Entry point — starts FastAPI server
 ├── diff.py             # Diff parsing, syntax highlighting, word diff
 ├── git_utils.py        # Git operations, blame, state persistence
 ├── server/             # FastAPI backend (web UI)
@@ -225,14 +221,13 @@ diffui/
 │   └── style.css       # Styles using CSS custom properties
 ├── themes/
 │   ├── theme.py        # Theme dataclass
-│   ├── definitions.py  # 15 theme definitions
-│   └── css.py          # Textual CSS template generator
+│   └── definitions.py  # 15 theme definitions
 └── tests/
-    ├── test_diff.py        # Diff parsing tests (48 tests)
+    ├── test_diff.py        # Diff parsing tests (46 tests)
     ├── test_events.py      # Watcher + broadcast tests (24 tests)
     ├── test_git_utils.py   # Blame, session, utility tests (31 tests)
     ├── test_highlight.py   # HTML highlight adapter tests (18 tests)
     ├── test_server.py      # API routes, WebSocket, risk scoring,
     │                       #   agent/explain endpoints, settings, export (50 tests)
-    └── test_themes.py      # Theme definitions and CSS tests (12 tests)
+    └── test_themes.py      # Theme definitions and state tests (8 tests)
 ```

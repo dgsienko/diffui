@@ -3,10 +3,8 @@ from __future__ import annotations
 import difflib
 import re
 
-from pygments import lex
 from pygments.lexers import get_lexer_for_filename
 from pygments.lexers.special import TextLexer
-from rich.text import Text
 
 _META_PREFIXES = ("---", "+++", "diff ", "index ")
 _HUNK_RE = re.compile(r"^@@ -(\d+)")
@@ -30,19 +28,6 @@ def token_color(token_type, style_map: dict) -> str | None:
             return style_map[token_type]
         token_type = token_type.parent
     return None
-
-
-def highlight_line(code: str, lexer, style_map: dict) -> Text:
-    text = Text()
-    for token_type, value in lex(code, lexer):
-        color = token_color(token_type, style_map)
-        if color:
-            text.append(value, style=color)
-        else:
-            text.append(value)
-    if text.plain.endswith("\n"):
-        text.right_crop(1)
-    return text
 
 
 def parse_line_numbers(diff_text: str) -> list[tuple[str | None, str | None]]:

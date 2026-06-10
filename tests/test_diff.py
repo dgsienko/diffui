@@ -6,7 +6,6 @@ from diffui.diff import (
     _is_meta_line,
     classify_line,
     get_lexer,
-    highlight_line,
     pair_diff_lines,
     parse_line_numbers,
     resolve_line_num,
@@ -186,18 +185,6 @@ class TestTokenColor:
     def test_no_match(self):
         style_map = {Token.Keyword: "#ff0000"}
         assert token_color(Token.Name, style_map) is None
-
-
-class TestHighlightLine:
-    def test_returns_text(self):
-        lexer = get_lexer("test.py")
-        result = highlight_line("x = 1", lexer, {})
-        assert result.plain == "x = 1"
-
-    def test_strips_trailing_newline(self):
-        lexer = get_lexer("test.py")
-        result = highlight_line("x = 1\n", lexer, {})
-        assert not result.plain.endswith("\n")
 
 
 class TestWordDiffRanges:
