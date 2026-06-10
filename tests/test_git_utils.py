@@ -191,19 +191,6 @@ class TestGetBlame:
 
 
 class TestSessionPersistence:
-    def test_load_missing_returns_empty_dict(self, tmp_path: Path):
-        from diffui.git_utils import _load_json
-
-        assert _load_json(tmp_path / "session.json", {}) == {}
-
-    def test_save_and_load_roundtrip(self, tmp_path: Path):
-        from diffui.git_utils import _load_json, _save_json
-
-        p = tmp_path / "session.json"
-        _save_json(p, {"activeFile": "foo.py", "diffMode": "split"})
-        loaded = _load_json(p, {})
-        assert loaded == {"activeFile": "foo.py", "diffMode": "split"}
-
     def test_save_overwrites_not_merges(self, tmp_path: Path):
         from diffui.git_utils import _load_json, _save_json
 

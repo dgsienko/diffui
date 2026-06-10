@@ -6,7 +6,7 @@ Preact frontend — no build step required.
 ## Install
 
 ```bash
-pipx install -e ~/code/diffui
+pipx install -e .
 ```
 
 ## Usage
@@ -199,7 +199,7 @@ directories.
 # Install with dev deps
 pipx inject diffui pytest ruff
 
-# Run tests (186 tests)
+# Run tests (187 tests)
 cd ~/code/diffui && pytest
 
 # Lint
@@ -243,10 +243,10 @@ diffui/
 └── tests/
     ├── test_diff.py        # Diff parsing tests (46 tests)
     ├── test_events.py      # Watcher + broadcast tests (24 tests)
-    ├── test_git_utils.py   # Blame, session, utility tests (31 tests)
+    ├── test_git_utils.py   # Blame, session, utility tests (29 tests)
     ├── test_highlight.py   # HTML highlight adapter tests (18 tests)
     ├── test_server.py      # API routes, WebSocket, risk scoring,
     │                       #   agent/explain endpoints, settings, export,
-    │                       #   bulk resolve, pydantic validation (59 tests)
+    │                       #   bulk resolve, pydantic validation (62 tests)
     └── test_themes.py      # Theme definitions and state tests (8 tests)
 ```

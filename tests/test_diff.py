@@ -164,13 +164,13 @@ class TestGetLexer:
         lexer = get_lexer("test.py")
         assert "python" in lexer.name.lower()
 
-    def test_unknown_extension(self):
+    def test_unknown_extension_falls_back_to_text(self):
         lexer = get_lexer("file.xyz_unknown")
-        assert lexer is not None  # falls back to TextLexer
+        assert "text" in lexer.name.lower()
 
     def test_terraform(self):
         lexer = get_lexer("main.tf")
-        assert lexer is not None
+        assert "terraform" in lexer.name.lower() or "hcl" in lexer.name.lower()
 
 
 class TestTokenColor:

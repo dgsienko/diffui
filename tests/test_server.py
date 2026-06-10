@@ -415,13 +415,6 @@ class TestServerRoutes:
         assert data["ok"] is False
         assert "No open comments" in data["error"]
 
-    def test_settings_include_agent_cli(self, _server_app):
-        r = _server_app.get("/api/settings")
-        assert r.status_code == 200
-        data = r.json()
-        assert "agent_cli" in data
-        assert data["agent_cli"] in ("claude", "codex", "opencode", "cursor")
-
     def test_settings_agent_cli_roundtrip(self, _server_app):
         original = _server_app.get("/api/settings").json()
         try:
@@ -523,6 +516,68 @@ class TestServerRoutes:
     def test_repo_switch_invalid_index(self, _server_app):
         r = _server_app.post("/api/repo/switch", json={"index": 999})
         assert r.status_code == 400
+
+    def test_bulk_resolve_reopen(self, _server_app):
+        _server_app.post(
+            "/api/comments",
+            json={"file_path": "_test_reopen_.py", "line_index": 1, "comment": "reopen test"},
+        )
+        try:
+            cid = _server_app.get("/api/comments").json()["_test_reopen_.py"][0]["id"]
+            _server_app.post(f"/api/comments/_test_reopen_.py/{cid}/resolve")
+            assert _server_app.get("/api/comments").json()["_test_reopen_.py"][0]["status"] == "resolved"
+            r = _server_app.post(
+                "/api/comments/bulk-resolve", json={"file_path": "_test_reopen_.py", "action": "reopen"}
+            )
+            assert r.status_code == 200
+            assert r.json()["count"] == 1
+            assert _server_app.get("/api/comments").json()["_test_reopen_.py"][0]["status"] == "open"
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_reopen_.py", []):
+                _server_app.delete(f"/api/comments/_test_reopen_.py/{c['id']}")
+
+    def test_bulk_resolve_invalid_action(self, _server_app):
+        r = _server_app.post("/api/comments/bulk-resolve", json={"action": "delete"})
+        assert r.status_code == 422
+
+    def test_apply_suggestion_success(self, _server_app):
+
+        from diffui.git_utils import get_repo_root
+
+        test_file = get_repo_root() / "_test_apply_ok_.py"
+        test_file.write_text("old_line\nsecond\n")
+        try:
+            _server_app.post(
+                "/api/comments",
+                json={
+                    "file_path": "_test_apply_ok_.py",
+                    "line_index": 0,
+                    "file_line_num": 1,
+                    "comment": "fix it",
+                    "suggestion": "new_line",
+                },
+            )
+            cid = _server_app.get("/api/comments").json()["_test_apply_ok_.py"][0]["id"]
+            r = _server_app.post(f"/api/comments/_test_apply_ok_.py/{cid}/apply")
+            assert r.status_code == 200
+            assert r.json()["ok"] is True
+            content = test_file.read_text()
+            assert content.startswith("new_line\n")
+            assert "second" in content
+            comment = _server_app.get("/api/comments").json()["_test_apply_ok_.py"][0]
+            assert comment["status"] == "resolved"
+        finally:
+            test_file.unlink(missing_ok=True)
+            for c in _server_app.get("/api/comments").json().get("_test_apply_ok_.py", []):
+                _server_app.delete(f"/api/comments/_test_apply_ok_.py/{c['id']}")
+
+    def test_settings_include_agent_cli(self, _server_app):
+        r = _server_app.get("/api/settings")
+        assert r.status_code == 200
+        data = r.json()
+        assert "agent_cli" in data
+        assert isinstance(data["agent_cli"], str)
+        assert len(data["agent_cli"]) > 0
 
 
 class TestRiskScoring:

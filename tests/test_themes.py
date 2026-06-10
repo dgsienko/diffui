@@ -9,8 +9,8 @@ from diffui.themes import (
 
 
 class TestThemeDefinitions:
-    def test_all_themes_not_empty(self):
-        assert len(ALL_THEMES) > 0
+    def test_all_themes_count(self):
+        assert len(ALL_THEMES) == 15
 
     def test_all_themes_have_names(self):
         for theme in ALL_THEMES:
@@ -64,8 +64,9 @@ class TestThemeDefinitions:
 
 
 class TestThemeState:
-    def test_default_theme(self):
-        assert get_current_theme() is not None
+    def test_current_theme_has_valid_name(self):
+        theme = get_current_theme()
+        assert theme.name in [t.name for t in ALL_THEMES]
 
     def test_set_and_get(self):
         original = get_current_theme()

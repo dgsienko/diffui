@@ -213,7 +213,7 @@ diffui                               # Start server (from any git repo)
 diffui --open                        # Start + open in browser
 diffui --comments                    # Dump comments to stdout
 diffui --json                        # Export review session as JSON
-pytest                               # Run tests (186 tests)
+pytest                               # Run tests (187 tests)
 ruff check diffui/ tests/           # Lint
 ```
 
@@ -229,13 +229,13 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
   git paths, comments, mixed, empty, dedup), watch filter (accept/reject
   for source, pyc, git paths, unrelated dirs), SSE broadcast, WebSocket
   broadcast delivery
-- `tests/test_git_utils.py` — 31 tests: short_name, _safe_name, JSON
+- `tests/test_git_utils.py` — 29 tests: short_name, _safe_name, JSON
   load/save roundtrips, diff_stat counting, resolve_repos,
   get_diff_numstat, get_blame, session persistence
 - `tests/test_highlight.py` — 18 tests: highlight_line_html escaping and
   coloring, _apply_word_highlights with spans/entities/malformed HTML,
   parse_diff_to_json structure, highlight_file_to_json
-- `tests/test_server.py` — 59 tests: CSS vars generation, all API routes
+- `tests/test_server.py` — 62 tests: CSS vars generation, all API routes
   (repos, branch, commits, files, diff, themes, settings, comments CRUD,
   comment resolution toggle, review toggle, static files, JSON export),
   comment categories, code suggestions, blame, preview, review summary,
