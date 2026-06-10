@@ -37,9 +37,9 @@ function groupByStatus(files) {
 }
 
 const GROUP_MODES = [
-  { value: 'dir', label: 'Dir' },
-  { value: 'type', label: 'Type' },
-  { value: 'status', label: 'Status' },
+  { value: 'dir', label: 'Dir', title: 'Group by directory' },
+  { value: 'type', label: 'Type', title: 'Group by file type' },
+  { value: 'status', label: 'Status', title: 'Group by change status' },
 ];
 
 const GROUPERS = { dir: groupByDir, type: groupByType, status: groupByStatus };
@@ -124,10 +124,11 @@ export function FileTree({ files, activeFile, onSelect, onClose }) {
             <button
               class=${'tree-group-btn' + (groupMode === m.value ? ' active' : '')}
               onClick=${() => setGroupMode(m.value)}
+              title=${m.title}
             >${m.label}</button>
           `)}
         </div>
-        <button class="file-tree-close" onClick=${onClose}>✕</button>
+        <button class="file-tree-close" onClick=${onClose} title="Close explorer">✕</button>
       </div>
       <div class="file-tree-content">
         ${groupNames.map(name => html`

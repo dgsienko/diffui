@@ -42,7 +42,7 @@ export function SearchBar({ value, onChange, onClose, matchCount, matchIndex, on
         <button class="search-nav-btn" onClick=${onPrev} title="Previous match (Shift+Enter)">↑</button>
         <button class="search-nav-btn" onClick=${onNext} title="Next match (Enter)">↓</button>
       `}
-      <button class="search-close-btn" onClick=${onClose}>✕</button>
+      <button class="search-close-btn" onClick=${onClose} title="Close search (Escape)">✕</button>
     </div>
   `;
 }

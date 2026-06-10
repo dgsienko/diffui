@@ -243,16 +243,16 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           <span class="diff-stat-del">-${data.dels}</span>
         </div>
         <div class="diff-header-actions">
-          <button class=${'expand-ctx-btn' + (showBlame ? ' active' : '')} onClick=${() => setShowBlame(v => !v)}>
+          <button class=${'expand-ctx-btn' + (showBlame ? ' active' : '')} onClick=${() => setShowBlame(v => !v)} title="Toggle git blame annotations">
             ${showBlame ? 'Hide blame' : 'Blame'}
           </button>
           ${onExpandContext && contextLines > 3 && html`
-            <button class="expand-ctx-btn" onClick=${() => onExpandContext('collapse')}>
+            <button class="expand-ctx-btn" onClick=${() => onExpandContext('collapse')} title="Show fewer context lines around changes">
               Less context
             </button>
           `}
           ${onExpandContext && contextLines < 9999 && html`
-            <button class="expand-ctx-btn" onClick=${() => onExpandContext('expand')}>
+            <button class="expand-ctx-btn" onClick=${() => onExpandContext('expand')} title="Show more context lines around changes">
               More context
             </button>
           `}
@@ -261,7 +261,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
               Resolve all (${fileCommentCount})
             </button>
           `}
-          <button class=${'review-btn' + (reviewed ? ' reviewed' : '')} onClick=${onToggleReview}>
+          <button class=${'review-btn' + (reviewed ? ' reviewed' : '')} onClick=${onToggleReview} title="Toggle reviewed status (r)">
             ${reviewed ? 'Mark unreviewed' : 'Mark reviewed'}
           </button>
         </div>

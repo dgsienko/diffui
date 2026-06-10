@@ -74,11 +74,11 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
               ${isResolved ? '○' : '✓'}
             </button>
           `}
-          <button class="comment-action-btn" onClick=${() => { setShowReply(true); setTimeout(() => replyRef.current?.focus(), 0); }}>↩</button>
+          <button class="comment-action-btn" onClick=${() => { setShowReply(true); setTimeout(() => replyRef.current?.focus(), 0); }} title="Reply">↩</button>
           ${canEdit && html`
-            <button class="comment-action-btn" onClick=${() => { setEditing(true); setTimeout(() => editRef.current?.focus(), 0); }}>✎</button>
+            <button class="comment-action-btn" onClick=${() => { setEditing(true); setTimeout(() => editRef.current?.focus(), 0); }} title="Edit">✎</button>
           `}
-          <button class="comment-action-btn delete" onClick=${() => { if (confirm('Delete this comment?')) onDelete(); }}>✕</button>
+          <button class="comment-action-btn delete" onClick=${() => { if (confirm('Delete this comment?')) onDelete(); }} title="Delete">✕</button>
         </div>
       </div>
       ${editing ? html`

@@ -894,6 +894,7 @@ function App() {
       wsConnected=${wsConnected}
       ignoreWhitespace=${ignoreWhitespace}
       onToggleWhitespace=${handleToggleWhitespace}
+      keybindings=${keybindings}
     />
     ${taskStatus && html`
       <${AgentStatusBar}

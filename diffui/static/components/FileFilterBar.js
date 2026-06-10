@@ -28,7 +28,7 @@ export function FileFilterBar({ value, onChange, onClose, fileCount }) {
         placeholder="Type to filter by path..."
       />
       ${value && html`<span class="search-count">${fileCount} matching</span>`}
-      <button class="search-close-btn" onClick=${onClose}>✕</button>
+      <button class="search-close-btn" onClick=${onClose} title="Close filter (Escape)">✕</button>
     </div>
   `;
 }
