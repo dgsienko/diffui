@@ -1,9 +1,8 @@
 import { h } from 'preact';
 import htm from 'htm';
+import { mod } from '../lib/utils.js';
 
 const html = htm.bind(h);
-const isMac = navigator.platform.includes('Mac');
-const mod = isMac ? '⌘' : 'Ctrl';
 
 const SHORTCUTS = [
   { keys: '← →', action: 'Previous / next file' },

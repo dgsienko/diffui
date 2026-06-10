@@ -21,11 +21,9 @@ import { AgentConfirmDialog } from './components/AgentConfirmDialog.js';
 import { CommentsPanel } from './components/CommentsPanel.js';
 import { FileFilterBar } from './components/FileFilterBar.js';
 import { GoToLineDialog } from './components/GoToLineDialog.js';
-import { shortName } from './lib/utils.js';
+import { shortName, mod } from './lib/utils.js';
 
 const html = htm.bind(h);
-const isMac = navigator.platform.includes('Mac');
-const mod = isMac ? '⌘' : 'Ctrl';
 
 async function safeFetch(url, opts) {
   try {

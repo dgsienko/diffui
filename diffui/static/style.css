@@ -1952,14 +1952,9 @@ mark {
   font-size: var(--code-font-size);
 }
 
-.diff-line {
-  min-height: calc(var(--code-font-size) + 7px);
-  line-height: calc(var(--code-font-size) + 7px);
-}
-
-.split-line {
-  min-height: calc(var(--code-font-size) + 7px);
-  line-height: calc(var(--code-font-size) + 7px);
+.diff-line, .split-line {
+  line-height: 1.54;
+  min-height: calc(var(--code-font-size) * 1.54);
 }
 
 /* --- Word wrap --- */
