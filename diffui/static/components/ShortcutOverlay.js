@@ -2,6 +2,8 @@ import { h } from 'preact';
 import htm from 'htm';
 
 const html = htm.bind(h);
+const isMac = navigator.platform.includes('Mac');
+const mod = isMac ? '⌘' : 'Ctrl';
 
 const SHORTCUTS = [
   { keys: '← →', action: 'Previous / next file' },
@@ -15,11 +17,11 @@ const SHORTCUTS = [
   { id: 'sort-risk', keys: 's', action: 'Sort by risk' },
   { keys: 'w', action: 'Toggle ignore whitespace' },
   { id: 'toggle-file-tree', keys: 'b', action: 'Toggle explorer' },
-  { keys: 'Ctrl+K', action: 'Command palette' },
-  { keys: 'Ctrl+F', action: 'Search in diff' },
-  { keys: 'Ctrl+Shift+F', action: 'Filter files' },
-  { keys: 'Ctrl+G', action: 'Go to line' },
-  { keys: 'Ctrl+Click', action: 'Open in editor' },
+  { keys: `${mod}+K`, action: 'Command palette' },
+  { keys: `${mod}+F`, action: 'Search in diff' },
+  { keys: `${mod}+Shift+F`, action: 'Filter files' },
+  { keys: `${mod}+G`, action: 'Go to line' },
+  { keys: `${mod}+Click`, action: 'Open in editor' },
   { id: 'comment-line', keys: 'c', action: 'Comment on hovered line' },
   { keys: 'Right-Click', action: 'Add comment' },
   { keys: 'Escape', action: 'Close panel / search' },

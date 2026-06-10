@@ -24,6 +24,8 @@ import { GoToLineDialog } from './components/GoToLineDialog.js';
 import { shortName } from './lib/utils.js';
 
 const html = htm.bind(h);
+const isMac = navigator.platform.includes('Mac');
+const mod = isMac ? '⌘' : 'Ctrl';
 
 async function safeFetch(url, opts) {
   try {
@@ -773,10 +775,10 @@ function App() {
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
       } else if (e.key === 'w') {
         handleToggleWhitespace();
-      } else if (e.ctrlKey && e.shiftKey && e.key === 'f') {
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
         e.preventDefault();
         setShowFileFilter(v => { if (v) setFileFilter(''); return !v; });
-      } else if (e.ctrlKey && e.key === 'f') {
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
         setShowSearch(v => !v);
       } else if (e.key === '?') {
@@ -795,11 +797,11 @@ function App() {
     { id: 'next-file', label: 'Next file', keys: '→', category: 'Navigation' },
     { id: 'prev-hunk', label: 'Previous hunk', keys: 'k', category: 'Navigation' },
     { id: 'next-hunk', label: 'Next hunk', keys: 'j', category: 'Navigation' },
-    { id: 'go-to-line', label: 'Go to line', keys: 'Ctrl+G', category: 'Navigation' },
+    { id: 'go-to-line', label: 'Go to line', keys: `${mod}+G`, category: 'Navigation' },
     { id: 'copy-path', label: 'Copy file path', keys: keybindings['copy-path'] || 'y', category: 'Actions' },
     { id: 'copy-gitlab-link', label: 'Copy GitLab link', keys: 'Y', category: 'Actions' },
     { id: 'toggle-file-tree', label: 'Toggle file tree', keys: keybindings['toggle-file-tree'] || 'b', category: 'Actions' },
-    { id: 'search', label: 'Search in diff', keys: 'Ctrl+F', category: 'Actions' },
+    { id: 'search', label: 'Search in diff', keys: `${mod}+F`, category: 'Actions' },
     { id: 'shortcuts', label: 'Show keyboard shortcuts', keys: '?', category: 'Help' },
     { id: 'settings', label: 'Open settings', category: 'Settings' },
     { id: 'mode-unified', label: 'Switch to unified diff', category: 'Settings' },
@@ -1025,14 +1027,14 @@ function App() {
     `}
     <div class="legend">
       <div class="legend-items">
-        <span><kbd>Ctrl+K</kbd> commands</span>
+        <span><kbd>${mod}+K</kbd> commands</span>
         <span><kbd>?</kbd> shortcuts</span>
         <span><kbd>←</kbd><kbd>→</kbd> prev/next file</span>
         <span><kbd>j</kbd><kbd>k</kbd> next/prev hunk</span>
         <span><kbd>r</kbd> toggle reviewed</span>
         <span><kbd>a</kbd> show/hide reviewed</span>
         <span><kbd>c</kbd> comment</span>
-        <span><kbd>Ctrl+F</kbd> search</span>
+        <span><kbd>${mod}+F</kbd> search</span>
         <span><kbd>y</kbd> copy path</span>
       </div>
       <div class="legend-fixed">
