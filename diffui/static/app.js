@@ -152,6 +152,18 @@ function App() {
     setLoading(false);
   }, [view, fetchDiff]);
 
+  const flashLineRef = useRef(null);
+  const scrollToLineAndFlash = useCallback((lineNum) => {
+    if (!diffRef.current) return false;
+    const el = diffRef.current.querySelector(`[data-line-new="${lineNum}"]`);
+    if (!el) return false;
+    el.scrollIntoView({ block: 'center' });
+    el.style.outline = '2px solid var(--accent)';
+    clearTimeout(flashLineRef.current);
+    flashLineRef.current = setTimeout(() => { el.style.outline = ''; }, 2000);
+    return true;
+  }, []);
+
   useEffect(() => {
     if (!activeFile || !diffRef.current) return;
     const targetLine = scrollToLineRef.current;
@@ -542,18 +554,6 @@ function App() {
     collapseVersion.current += 1;
     setCollapseAll({ action, version: collapseVersion.current });
     showToast(action === 'collapse' ? 'All hunks collapsed' : 'All hunks expanded');
-  }, []);
-
-  const flashLineRef = useRef(null);
-  const scrollToLineAndFlash = useCallback((lineNum) => {
-    if (!diffRef.current) return false;
-    const el = diffRef.current.querySelector(`[data-line-new="${lineNum}"]`);
-    if (!el) return false;
-    el.scrollIntoView({ block: 'center' });
-    el.style.outline = '2px solid var(--accent)';
-    clearTimeout(flashLineRef.current);
-    flashLineRef.current = setTimeout(() => { el.style.outline = ''; }, 2000);
-    return true;
   }, []);
 
   const handleGoToLine = useCallback((lineNum) => {
