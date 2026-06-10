@@ -773,7 +773,7 @@ function App() {
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
       } else if (e.key === 'w') {
         handleToggleWhitespace();
-      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
+      } else if (e.ctrlKey && e.shiftKey && e.key === 'f') {
         e.preventDefault();
         setShowFileFilter(v => { if (v) setFileFilter(''); return !v; });
       } else if (e.ctrlKey && e.key === 'f') {
