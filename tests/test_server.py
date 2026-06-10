@@ -584,40 +584,40 @@ class TestRiskScoring:
     def test_migration_file_high_risk(self):
         from diffui.server.routes_diff import _score_risk
 
-        score, level, reasons = _score_risk("alembic/versions/001_init.py", 50, 0)
+        _score, level, reasons = _score_risk("alembic/versions/001_init.py", 50, 0)
         assert level in ("medium", "high")
         assert "infra/migration" in reasons
 
     def test_config_file_scored(self):
         from diffui.server.routes_diff import _score_risk
 
-        score, level, reasons = _score_risk("config/settings.yaml", 10, 5)
+        score, _level, reasons = _score_risk("config/settings.yaml", 10, 5)
         assert score >= 2
         assert "config" in reasons
 
     def test_large_deletion_scored(self):
         from diffui.server.routes_diff import _score_risk
 
-        score, level, reasons = _score_risk("src/module.py", 0, 100)
+        _score, _level, reasons = _score_risk("src/module.py", 0, 100)
         assert "large deletion" in reasons
 
     def test_test_removal_scored(self):
         from diffui.server.routes_diff import _score_risk
 
-        score, level, reasons = _score_risk("tests/test_auth.py", 5, 30)
+        _score, _level, reasons = _score_risk("tests/test_auth.py", 5, 30)
         assert "test removal" in reasons
 
     def test_low_risk_source_file(self):
         from diffui.server.routes_diff import _score_risk
 
-        score, level, reasons = _score_risk("src/utils.py", 10, 5)
+        _score, level, reasons = _score_risk("src/utils.py", 10, 5)
         assert level == "low"
         assert reasons == []
 
     def test_high_churn_scored(self):
         from diffui.server.routes_diff import _score_risk
 
-        score, level, reasons = _score_risk("src/big_refactor.py", 150, 100)
+        _score, _level, reasons = _score_risk("src/big_refactor.py", 150, 100)
         assert "high churn" in reasons
 
 

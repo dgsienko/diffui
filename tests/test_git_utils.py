@@ -156,7 +156,7 @@ class TestResolveRepos:
         from diffui.git_utils import resolve_repos
 
         repo_path = str(Path(__file__).parent.parent)
-        repos, idx = resolve_repos([repo_path, repo_path])
+        repos, _idx = resolve_repos([repo_path, repo_path])
         assert len(repos) == 1
 
 

@@ -83,16 +83,16 @@ class TestParseDiffToJson:
         assert result["dels"] == 0
         assert len(result["hunks"]) > 0
         lines = result["hunks"][-1]["lines"]
-        add_lines = [l for l in lines if l["type"] == "add"]
+        add_lines = [line for line in lines if line["type"] == "add"]
         assert len(add_lines) == 2
-        assert all("html" in l for l in add_lines)
+        assert all("html" in line for line in add_lines)
 
     def test_line_numbers_present(self):
         diff = "diff --git a/f.py b/f.py\n--- a/f.py\n+++ b/f.py\n@@ -1,2 +1,2 @@\n-old\n+new\n ctx\n"
         result = parse_diff_to_json(diff, "f.py", CATPPUCCIN_MOCHA)
         lines = result["hunks"][-1]["lines"]
-        remove_line = next(l for l in lines if l["type"] == "remove")
-        add_line = next(l for l in lines if l["type"] == "add")
+        remove_line = next(line for line in lines if line["type"] == "remove")
+        add_line = next(line for line in lines if line["type"] == "add")
         assert remove_line["old_num"] is not None
         assert add_line["new_num"] is not None
 
@@ -122,7 +122,7 @@ class TestHighlightFileToJson:
         assert len(result["lines"]) == 3
         assert result["lines"][0]["num"] == 1
         assert result["lines"][2]["num"] == 3
-        assert all(l["type"] == "context" for l in result["lines"])
+        assert all(line["type"] == "context" for line in result["lines"])
 
     def test_with_diff_marks_added_lines(self):
         from diffui.server.highlight import highlight_file_to_json
