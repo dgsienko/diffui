@@ -83,9 +83,6 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor,
     onRightClick(line);
   };
 
-  // The HTML content is server-generated from Pygments (html.escape'd source code
-  // in <span> tags). No user content is rendered as HTML — diff lines come from git
-  // and are escaped server-side in highlight.py.
   return html`
     <div
       class=${'diff-line ' + typeClass + (isMatch ? ' search-match' : '')}
@@ -113,13 +110,32 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor,
   `;
 }
 
-function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, filePath, blameData }) {
+function hunkStats(lines) {
+  let adds = 0, dels = 0;
+  for (const l of lines) {
+    if (l.type === 'add') adds++;
+    else if (l.type === 'remove') dels++;
+  }
+  return { adds, dels };
+}
+
+function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, filePath, blameData, collapseAll }) {
   const [collapsed, setCollapsed] = useState(false);
+  const stats = hunkStats(hunk.lines);
+
+  useEffect(() => {
+    if (collapseAll === 'collapse') setCollapsed(true);
+    if (collapseAll === 'expand') setCollapsed(false);
+  }, [collapseAll]);
 
   return html`
     <div class="hunk">
       <div class="hunk-header" onClick=${() => setCollapsed(!collapsed)}>
-        ${collapsed ? '▶' : '▼'} ${hunk.header}
+        <span>${collapsed ? '▶' : '▼'} ${hunk.header}</span>
+        <span class="hunk-stats">
+          ${stats.adds > 0 ? html`<span class="hunk-stat-add">+${stats.adds}</span>` : ''}
+          ${stats.dels > 0 ? html`<span class="hunk-stat-del">-${stats.dels}</span>` : ''}
+        </span>
       </div>
       <div class=${'hunk-lines' + (collapsed ? ' collapsed' : '')}>
         ${hunk.lines.map(line => {
@@ -163,7 +179,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInE
   `;
 }
 
-export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, onOpenInEditor, onExpandContext, contextLines, onLineHover, reviewed, containerRef }) {
+export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, onOpenInEditor, onExpandContext, contextLines, onLineHover, reviewed, containerRef, collapseAll, onBulkResolve }) {
   const [commentingLine, setCommentingLine] = useState(null);
   const [showBlame, setShowBlame] = useState(false);
   const [blameData, setBlameData] = useState(null);
@@ -213,6 +229,8 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
     return html`<div class="empty-state"><span class="empty-state-title">No diff data</span></div>`;
   }
 
+  const fileCommentCount = (comments[data.file_path] || []).filter(c => (c.status || 'open') !== 'resolved').length;
+
   return html`
     <div class="diff-container" ref=${mergeRef(containerRef)}>
       <div class="diff-file-header">
@@ -233,6 +251,11 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           ${onExpandContext && contextLines < 9999 && html`
             <button class="expand-ctx-btn" onClick=${() => onExpandContext('expand')}>
               More context
+            </button>
+          `}
+          ${onBulkResolve && fileCommentCount > 0 && html`
+            <button class="expand-ctx-btn" onClick=${onBulkResolve} title="Resolve all open comments in this file">
+              Resolve all (${fileCommentCount})
             </button>
           `}
           <button class=${'review-btn' + (reviewed ? ' reviewed' : '')} onClick=${onToggleReview}>
@@ -260,6 +283,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           onResolveComment=${onResolveComment}
           onApplySuggestion=${onApplySuggestion}
           blameData=${showBlame ? blameData : null}
+          collapseAll=${collapseAll}
         />
       `)}
     </div>

@@ -112,7 +112,20 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
               >${applying ? 'Applying...' : 'Apply'}</button>
             `}
           </div>
-          <pre class="comment-suggestion-code">${comment.suggestion}</pre>
+          ${comment.line_text ? html`
+            <div class="suggestion-diff">
+              <div class="suggestion-diff-line suggestion-remove">
+                <span class="suggestion-diff-prefix">−</span>
+                <span>${comment.line_text.trimEnd()}</span>
+              </div>
+              <div class="suggestion-diff-line suggestion-add">
+                <span class="suggestion-diff-prefix">+</span>
+                <span>${comment.suggestion.trimEnd()}</span>
+              </div>
+            </div>
+          ` : html`
+            <pre class="comment-suggestion-code">${comment.suggestion}</pre>
+          `}
         </div>
       `}
       ${!collapsed && replies.map(r => {

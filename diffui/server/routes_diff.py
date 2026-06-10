@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 from fastapi import APIRouter
 
 from diffui.git_utils import (
@@ -17,35 +19,44 @@ from diffui.server.state import app_state
 router = APIRouter(prefix="/api")
 
 _diff_cache: dict[tuple[str, str, str, str, float], str] = {}
+_cache_lock = threading.Lock()
 _MAX_CACHE = 128
 
 
 def clear_diff_cache() -> None:
-    _diff_cache.clear()
+    with _cache_lock:
+        _diff_cache.clear()
 
 
-def _get_diff(path: str, view: str, context: int = 3) -> str:
+def _get_diff(path: str, view: str, context: int = 3, ignore_whitespace: bool = False) -> str:
     repo_id = str(get_repo_root())
     merge_base = app_state.merge_base
     mtime = get_file_mtime(path)
-    cache_key = (repo_id, merge_base, path, f"{view}:c{context}", mtime)
-    if cache_key in _diff_cache:
-        return _diff_cache[cache_key]
+    ws_flag = "w" if ignore_whitespace else ""
+    cache_key = (repo_id, merge_base, path, f"{view}:c{context}:{ws_flag}", mtime)
+
+    with _cache_lock:
+        if cache_key in _diff_cache:
+            return _diff_cache[cache_key]
+
     if view == "all":
-        result = get_full_diff(merge_base, path, context)
+        result = get_full_diff(merge_base, path, context, ignore_whitespace=ignore_whitespace)
     elif view == "working":
-        result = get_working_diff(path, context)
+        result = get_working_diff(path, context, ignore_whitespace=ignore_whitespace)
     else:
-        result = get_commit_diff(view, path, context)
-    stale = next((k for k in _diff_cache if k[2] == path and k[3] == f"{view}:c{context}"), None)
-    if stale is not None:
-        del _diff_cache[stale]
-    if len(_diff_cache) >= _MAX_CACHE:
-        try:
-            del _diff_cache[next(iter(_diff_cache))]
-        except StopIteration:
-            pass
-    _diff_cache[cache_key] = result
+        result = get_commit_diff(view, path, context, ignore_whitespace=ignore_whitespace)
+
+    with _cache_lock:
+        stale = next((k for k in _diff_cache if k[2] == path and k[3] == f"{view}:c{context}:{ws_flag}"), None)
+        if stale is not None:
+            del _diff_cache[stale]
+        if len(_diff_cache) >= _MAX_CACHE:
+            try:
+                del _diff_cache[next(iter(_diff_cache))]
+            except StopIteration:
+                pass
+        _diff_cache[cache_key] = result
+
     return result
 
 
@@ -83,6 +94,12 @@ def _score_risk(path: str, adds: int, dels: int) -> tuple[int, str, list[str]]:
     return score, level, reasons
 
 
+def _is_ignored(path: str) -> bool:
+    from fnmatch import fnmatch
+
+    return any(fnmatch(path, p) or fnmatch(path.split("/")[-1], p) for p in app_state.ignore_patterns)
+
+
 @router.get("/files")
 def list_files(view: str = "all"):
     if view == "all":
@@ -114,14 +131,15 @@ def list_files(view: str = "all"):
                 "risk_score": risk_score,
                 "risk_level": risk_level,
                 "risk_reasons": risk_reasons,
+                "ignored": _is_ignored(f),
             }
         )
     return result
 
 
 @router.get("/diff/{path:path}")
-def get_diff(path: str, view: str = "all", context: int = 3):
-    diff_text = _get_diff(path, view, context)
+def get_diff(path: str, view: str = "all", context: int = 3, ignore_whitespace: bool = False):
+    diff_text = _get_diff(path, view, context, ignore_whitespace=ignore_whitespace)
     return parse_diff_to_json(diff_text, path, app_state.theme)
 
 

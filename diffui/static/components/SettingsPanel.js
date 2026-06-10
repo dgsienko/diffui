@@ -18,15 +18,33 @@ const AGENTS = [
   { value: 'cursor', label: 'Cursor Agent' },
 ];
 
-export function SettingsPanel({ onChange, onClose }) {
+const REBINDABLE_KEYS = [
+  { id: 'toggle-review', label: 'Toggle reviewed', default: 'r' },
+  { id: 'toggle-show-reviewed', label: 'Show/hide reviewed', default: 'a' },
+  { id: 'comment-line', label: 'Comment on line', default: 'c' },
+  { id: 'copy-path', label: 'Copy file path', default: 'y' },
+  { id: 'sort-risk', label: 'Sort by risk', default: 's' },
+  { id: 'export-summary', label: 'Export summary', default: 'S' },
+  { id: 'toggle-file-tree', label: 'Toggle explorer', default: 'b' },
+  { id: 'next-unreviewed', label: 'Next unreviewed', default: ']' },
+];
+
+export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindings }) {
   const [settings, setSettings] = useState(null);
   const [themes, setThemes] = useState([]);
+  const [showKeybindings, setShowKeybindings] = useState(false);
+  const [localBindings, setLocalBindings] = useState(keybindings || {});
+  const [capturingKey, setCapturingKey] = useState(null);
   const panelRef = useRef(null);
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(setSettings);
     fetch('/api/themes').then(r => r.json()).then(setThemes);
   }, []);
+
+  useEffect(() => {
+    setLocalBindings(keybindings || {});
+  }, [keybindings]);
 
   useEffect(() => {
     const panel = panelRef.current;
@@ -54,6 +72,29 @@ export function SettingsPanel({ onChange, onClose }) {
   const update = async (changes) => {
     setSettings(s => ({ ...s, ...changes }));
     await onChange(changes);
+  };
+
+  const handleKeyCapture = (e, keyId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      setCapturingKey(null);
+      return;
+    }
+    if (e.key === 'Backspace') {
+      const next = { ...localBindings };
+      delete next[keyId];
+      setLocalBindings(next);
+      setCapturingKey(null);
+      onChange({ keybindings: next });
+      return;
+    }
+    if (e.key.length === 1 || e.key === '[' || e.key === ']') {
+      const next = { ...localBindings, [keyId]: e.key };
+      setLocalBindings(next);
+      setCapturingKey(null);
+      onChange({ keybindings: next });
+    }
   };
 
   return html`
@@ -102,6 +143,46 @@ export function SettingsPanel({ onChange, onClose }) {
           }}
           onKeyDown=${(e) => { if (e.key === 'Enter') e.target.blur(); }}
         />
+
+        <div class="settings-divider"></div>
+
+        <label class="settings-label">Font size</label>
+        <div class="settings-row">
+          <button class="settings-btn-sm" onClick=${() => update({ font_size: Math.max((fontSize || 13) - 1, 8) })}>−</button>
+          <span class="settings-value">${fontSize || 13}px</span>
+          <button class="settings-btn-sm" onClick=${() => update({ font_size: Math.min((fontSize || 13) + 1, 24) })}>+</button>
+        </div>
+
+        <label class="settings-label">Word wrap</label>
+        <div class="settings-row">
+          <button class=${'settings-toggle' + (wordWrap ? ' active' : '')} onClick=${() => update({ word_wrap: !wordWrap })}>
+            ${wordWrap ? 'On' : 'Off'}
+          </button>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        <button class="settings-keybind-toggle" onClick=${() => setShowKeybindings(v => !v)}>
+          ${showKeybindings ? '▾' : '▸'} Keybindings
+        </button>
+
+        ${showKeybindings && html`
+          <div class="keybindings-list">
+            ${REBINDABLE_KEYS.map(k => html`
+              <div class="keybinding-row">
+                <span class="keybinding-label">${k.label}</span>
+                <button
+                  class=${'keybinding-key' + (capturingKey === k.id ? ' capturing' : '')}
+                  onClick=${() => setCapturingKey(capturingKey === k.id ? null : k.id)}
+                  onKeyDown=${capturingKey === k.id ? (e) => handleKeyCapture(e, k.id) : undefined}
+                >
+                  ${capturingKey === k.id ? 'Press key...' : html`<kbd>${localBindings[k.id] || k.default}</kbd>`}
+                </button>
+              </div>
+            `)}
+            <div class="keybinding-hint">Click a key to rebind. Backspace to reset. Escape to cancel.</div>
+          </div>
+        `}
 
         <button class="settings-close-btn" onClick=${onClose}>Close</button>
       </div>

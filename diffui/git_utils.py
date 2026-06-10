@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+GIT_TIMEOUT = 30
+
 _active_repo_root: Path | None = None
 
 
@@ -31,6 +33,7 @@ def resolve_repo_root(path: str | Path) -> Path:
         ["git", "-C", str(path), "rev-parse", "--show-toplevel"],
         capture_output=True,
         text=True,
+        timeout=GIT_TIMEOUT,
     )
     if result.returncode != 0:
         raise RuntimeError(f"Not a git repository: {path}")
@@ -54,7 +57,7 @@ def resolve_repos(paths: list[str] | None = None) -> tuple[list[Path], int]:
 
 
 def _git_at(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", "-C", str(repo_root), *args], capture_output=True, text=True)
+    return subprocess.run(["git", "-C", str(repo_root), *args], capture_output=True, text=True, timeout=GIT_TIMEOUT)
 
 
 @functools.lru_cache(maxsize=32)
@@ -83,7 +86,7 @@ def _git(*args: str) -> subprocess.CompletedProcess[str]:
     if _active_repo_root:
         cmd.extend(["-C", str(_active_repo_root)])
     cmd.extend(args)
-    return subprocess.run(cmd, capture_output=True, text=True)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=GIT_TIMEOUT)
 
 
 def get_git_dir() -> Path:
@@ -156,16 +159,21 @@ def get_branch_commits(merge_base: str) -> list[Commit]:
     return commits
 
 
-def get_full_diff(merge_base: str, path: str, context: int = 3) -> str:
-    result = _git("diff", f"-U{context}", merge_base, "--", path).stdout
+def get_full_diff(merge_base: str, path: str, context: int = 3, *, ignore_whitespace: bool = False) -> str:
+    args = ["diff", f"-U{context}"]
+    if ignore_whitespace:
+        args.append("-w")
+    args.extend([merge_base, "--", path])
+    result = _git(*args).stdout
     if result.strip():
         return result
     return _diff_untracked(path)
 
 
-def get_working_diff(path: str, context: int = 3) -> str:
-    staged = _git("diff", f"-U{context}", "--cached", "--", path).stdout
-    unstaged = _git("diff", f"-U{context}", "--", path).stdout
+def get_working_diff(path: str, context: int = 3, *, ignore_whitespace: bool = False) -> str:
+    ws = ["-w"] if ignore_whitespace else []
+    staged = _git("diff", f"-U{context}", *ws, "--cached", "--", path).stdout
+    unstaged = _git("diff", f"-U{context}", *ws, "--", path).stdout
     parts = []
     if staged.strip():
         parts.append(staged)
@@ -194,11 +202,12 @@ def _diff_untracked(path: str) -> str:
     return header + body
 
 
-def get_commit_diff(commit_sha: str, path: str, context: int = 3) -> str:
-    result = _git("diff", f"-U{context}", f"{commit_sha}~1", commit_sha, "--", path)
+def get_commit_diff(commit_sha: str, path: str, context: int = 3, *, ignore_whitespace: bool = False) -> str:
+    ws = ["-w"] if ignore_whitespace else []
+    result = _git("diff", f"-U{context}", *ws, f"{commit_sha}~1", commit_sha, "--", path)
     if result.returncode != 0:
         empty_tree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-        return _git("diff", f"-U{context}", empty_tree, commit_sha, "--", path).stdout
+        return _git("diff", f"-U{context}", *ws, empty_tree, commit_sha, "--", path).stdout
     return result.stdout
 
 

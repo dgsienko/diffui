@@ -20,6 +20,7 @@ import { AgentStatusBar } from './components/AgentStatusBar.js';
 import { AgentConfirmDialog } from './components/AgentConfirmDialog.js';
 import { CommentsPanel } from './components/CommentsPanel.js';
 import { FileFilterBar } from './components/FileFilterBar.js';
+import { GoToLineDialog } from './components/GoToLineDialog.js';
 import { shortName } from './lib/utils.js';
 
 const html = htm.bind(h);
@@ -50,6 +51,7 @@ function App() {
   const [showReviewed, setShowReviewed] = useState(true);
   const [sortByRisk, setSortByRisk] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showFileTree, setShowFileTree] = useState(true);
@@ -61,6 +63,14 @@ function App() {
   const [showCompletion, setShowCompletion] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showGoToLine, setShowGoToLine] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
+  const [showIgnored, setShowIgnored] = useState(false);
+  const [collapseAll, setCollapseAll] = useState(null);
+  const [fontSize, setFontSize] = useState(13);
+  const [wordWrap, setWordWrap] = useState(false);
+  const [keybindings, setKeybindings] = useState({});
   const diffRef = useRef(null);
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
@@ -78,6 +88,8 @@ function App() {
   const visibleFilesRef = useRef([]);
   const showCompletionRef = useRef(false);
   const dialogOpenRef = useRef(false);
+  const ignoreWsRef = useRef(false);
+  ignoreWsRef.current = ignoreWhitespace;
 
   const fetchTheme = useCallback(async () => {
     const res = await safeFetch('/api/theme/css');
@@ -109,13 +121,14 @@ function App() {
     if (!path) return;
     const c = ctx ?? contextRef.current;
     const v = viewRef.current;
-    const cacheKey = `${path}:${v}:c${c}`;
+    const ws = ignoreWsRef.current;
+    const cacheKey = `${path}:${v}:c${c}:ws${ws}`;
     const cached = diffCache.current.get(cacheKey);
     if (cached) {
       setDiffData(cached);
       return;
     }
-    const res = await safeFetch(`/api/diff/${encodeURIComponent(path)}?view=${v}&context=${c}`);
+    const res = await safeFetch(`/api/diff/${encodeURIComponent(path)}?view=${v}&context=${c}&ignore_whitespace=${ws}`);
     const data = await res.json();
     diffCache.current.set(cacheKey, data);
     if (activeFileRef.current === path) {
@@ -166,18 +179,24 @@ function App() {
 
   useEffect(() => {
     Promise.all([fetchTheme(), fetchRepos(), fetchBranch(), fetchCommits(), fetchFiles(), fetchComments()]).then(async () => {
-      const res = await fetch('/api/session');
-      const session = await res.json();
-      if (session.activeFile) setActiveFile(session.activeFile);
-      if (session.diffMode) setDiffMode(session.diffMode);
-      if (session.showFileTree !== undefined) setShowFileTree(session.showFileTree);
-      if (session.showReviewed !== undefined) setShowReviewed(session.showReviewed);
-      if (session.scrollPositions) {
-        for (const [k, v] of Object.entries(session.scrollPositions)) {
-          scrollPositions.current.set(k, v);
+      try {
+        const [sessionRes, settingsRes] = await Promise.all([fetch('/api/session'), fetch('/api/settings')]);
+        const session = await sessionRes.json();
+        const settings = await settingsRes.json();
+        if (session.activeFile) setActiveFile(session.activeFile);
+        if (session.diffMode) setDiffMode(session.diffMode);
+        if (session.showFileTree !== undefined) setShowFileTree(session.showFileTree);
+        if (session.showReviewed !== undefined) setShowReviewed(session.showReviewed);
+        if (session.scrollPositions) {
+          for (const [k, v] of Object.entries(session.scrollPositions)) {
+            scrollPositions.current.set(k, v);
+          }
         }
-      }
-      if (session.activeFile) fetchDiff(session.activeFile);
+        if (settings.font_size) setFontSize(settings.font_size);
+        if (settings.word_wrap !== undefined) setWordWrap(settings.word_wrap);
+        if (settings.keybindings) setKeybindings(settings.keybindings);
+        if (session.activeFile) fetchDiff(session.activeFile);
+      } catch {}
     });
   }, []);
 
@@ -192,6 +211,14 @@ function App() {
       style.textContent = themeCss;
     }
   }, [themeCss]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--code-font-size', `${fontSize}px`);
+  }, [fontSize]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('word-wrap-enabled', wordWrap);
+  }, [wordWrap]);
 
   // Real-time updates — WebSocket with SSE fallback
   useEffect(() => {
@@ -212,25 +239,29 @@ function App() {
     };
 
     const connectSSE = () => {
+      setWsConnected(false);
       const es = new EventSource('/api/events');
+      es.onopen = () => setWsConnected(true);
+      es.onerror = () => setWsConnected(false);
       es.onmessage = (e) => {
         try { handleEvents(JSON.parse(e.data).events); } catch {}
       };
-      cleanup = () => es.close();
+      cleanup = () => { es.close(); setWsConnected(false); };
     };
 
     const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProto}//${location.host}/api/ws`;
     try {
       const ws = new WebSocket(wsUrl);
+      ws.onopen = () => setWsConnected(true);
+      ws.onclose = () => { setWsConnected(false); connectSSE(); };
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data);
           if (msg.events) handleEvents(msg.events);
         } catch {}
       };
-      ws.onclose = connectSSE;
-      cleanup = () => ws.close();
+      cleanup = () => { ws.close(); setWsConnected(false); };
     } catch {
       connectSSE();
     }
@@ -268,9 +299,10 @@ function App() {
     if (activeFileRef.current && diffRef.current) {
       scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
     }
-    const cacheKey = `${path}:${viewRef.current}:c${contextRef.current}`;
-    if (!diffCache.current.has(cacheKey)) {
-      setDiffData(null);
+    const cacheKey = `${path}:${viewRef.current}:c${contextRef.current}:ws${ignoreWsRef.current}`;
+    const cached = diffCache.current.get(cacheKey);
+    if (cached) {
+      setDiffData(cached);
     }
     setActiveFile(path);
     fetchDiff(path);
@@ -342,6 +374,21 @@ function App() {
     await fetchComments();
   }, [fetchComments]);
 
+  const handleBulkResolve = useCallback(async (filePath) => {
+    const r = await fetch('/api/comments/bulk-resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_path: filePath || null, action: 'resolve' }),
+    });
+    const data = await r.json();
+    if (data.count > 0) {
+      showToast(`Resolved ${data.count} comment${data.count === 1 ? '' : 's'}`, 'success');
+      await Promise.all([fetchComments(), fetchFiles()]);
+    } else {
+      showToast('No open comments to resolve');
+    }
+  }, [fetchComments, fetchFiles]);
+
   const handleApplySuggestion = useCallback(async (filePath, commentId) => {
     const r = await fetch(`/api/comments/${encodeURIComponent(filePath)}/${commentId}/apply`, {
       method: 'POST',
@@ -373,6 +420,9 @@ function App() {
     });
     const data = await res.json();
     if (data.css) setThemeCss(data.css);
+    if (settings.font_size !== undefined) setFontSize(settings.font_size);
+    if (settings.word_wrap !== undefined) setWordWrap(settings.word_wrap);
+    if (settings.keybindings !== undefined) setKeybindings(settings.keybindings);
   }, []);
 
   const pollTimers = useRef([]);
@@ -485,6 +535,40 @@ function App() {
     showToast(label);
   }, [contextLines, fetchDiff]);
 
+  const handleToggleWhitespace = useCallback(() => {
+    setIgnoreWhitespace(v => {
+      const next = !v;
+      showToast(next ? 'Hiding whitespace changes' : 'Showing whitespace changes');
+      diffCache.current.clear();
+      const af = activeFileRef.current;
+      if (af) {
+        setTimeout(() => fetchDiff(af), 0);
+      }
+      return next;
+    });
+  }, [fetchDiff]);
+
+  const handleCollapseAll = useCallback((action) => {
+    setCollapseAll(action);
+    setTimeout(() => setCollapseAll(null), 50);
+    showToast(action === 'collapse' ? 'All hunks collapsed' : 'All hunks expanded');
+  }, []);
+
+  const handleGoToLine = useCallback((lineNum) => {
+    setShowGoToLine(false);
+    scrollToLineRef.current = lineNum;
+    if (diffRef.current) {
+      const el = diffRef.current.querySelector(`[data-line-new="${lineNum}"]`);
+      if (el) {
+        el.scrollIntoView({ block: 'center' });
+        el.style.outline = '2px solid var(--accent)';
+        setTimeout(() => { el.style.outline = ''; }, 2000);
+      } else {
+        showToast(`Line ${lineNum} not found in diff`);
+      }
+    }
+  }, []);
+
   const commentNavRef = useRef(0);
   const navigateComment = useCallback((direction) => {
     const allComments = [];
@@ -540,18 +624,65 @@ function App() {
     showToast(lineNum ? `GitLab link copied (line ${lineNum})` : 'GitLab link copied');
   }, []);
 
+  // Search match navigation
+  const searchMatches = useMemo(() => {
+    if (!searchTerm || !diffData?.hunks) return [];
+    const lower = searchTerm.toLowerCase();
+    const matches = [];
+    for (const hunk of diffData.hunks) {
+      for (const line of hunk.lines) {
+        if (line.text && line.text.toLowerCase().includes(lower)) {
+          matches.push(line.new_num || line.old_num || line.index);
+        }
+      }
+    }
+    return matches;
+  }, [searchTerm, diffData]);
+
+  const searchMatchCount = searchMatches.length;
+
+  useEffect(() => {
+    setSearchMatchIndex(0);
+  }, [searchTerm]);
+
+  const navigateSearchMatch = useCallback((direction) => {
+    if (!searchMatches.length) return;
+    const nextIdx = direction === 'next'
+      ? (searchMatchIndex + 1) % searchMatches.length
+      : (searchMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+    setSearchMatchIndex(nextIdx);
+    const lineNum = searchMatches[nextIdx];
+    if (diffRef.current && lineNum) {
+      const el = diffRef.current.querySelector(`[data-line-new="${lineNum}"]`);
+      if (el) el.scrollIntoView({ block: 'center' });
+    }
+  }, [searchMatches, searchMatchIndex]);
+
   const visibleFiles = useMemo(() => {
     let filtered = showReviewed ? files : files.filter(f => !f.reviewed);
+    if (!showIgnored) {
+      filtered = filtered.filter(f => !f.ignored);
+    }
     if (fileFilter) {
       const lower = fileFilter.toLowerCase();
       filtered = filtered.filter(f => f.path.toLowerCase().includes(lower));
     }
     if (sortByRisk) filtered = [...filtered].sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
     return filtered;
-  }, [files, showReviewed, sortByRisk, fileFilter]);
+  }, [files, showReviewed, sortByRisk, fileFilter, showIgnored]);
   const activeFileReviewed = useMemo(() => files.find(f => f.path === activeFile)?.reviewed, [files, activeFile]);
 
   visibleFilesRef.current = visibleFiles;
+
+  const reviewedCount = useMemo(() => files.filter(f => f.reviewed).length, [files]);
+  const commentStats = useMemo(() => {
+    let total = 0, open = 0;
+    for (const arr of Object.values(comments || {})) {
+      total += arr.length;
+      open += arr.filter(c => (c.status || 'open') !== 'resolved').length;
+    }
+    return { total, open };
+  }, [comments]);
 
   // Persist session state on changes (debounced)
   const saveTimerRef = useRef(null);
@@ -574,13 +705,26 @@ function App() {
     }, 1000);
   }, [activeFile, diffMode, showFileTree, showReviewed]);
 
-  // Keyboard shortcuts — stable effect, reads current values via refs
+  showCompletionRef.current = showCompletion;
+  dialogOpenRef.current = showSettings || showSearch || showFileFilter || showShortcuts || showCommandPalette || showGoToLine;
+  const prevReviewedRef = useRef(null);
   useEffect(() => {
+    if (prevReviewedRef.current !== null && files.length > 0
+        && reviewedCount === files.length
+        && prevReviewedRef.current < files.length) {
+      setShowCompletion(true);
+    }
+    prevReviewedRef.current = reviewedCount;
+  }, [reviewedCount, files.length]);
+
+  // Keyboard shortcuts — reads keybindings for custom overrides
+  useEffect(() => {
+    const key = (id) => keybindings[id] || null;
+
     const handler = (e) => {
       if (showCompletionRef.current) { setShowCompletion(false); return; }
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
-      // Global shortcuts — work even when dialogs are open
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         setShowCommandPalette(v => !v);
@@ -591,12 +735,18 @@ function App() {
         setShowSearch(false);
         setShowShortcuts(false);
         setShowCommandPalette(false);
+        setShowGoToLine(false);
         setSearchTerm('');
         return;
       }
 
-      // Context-aware: skip action shortcuts when a dialog is open
       if (dialogOpenRef.current) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
+        e.preventDefault();
+        setShowGoToLine(v => !v);
+        return;
+      }
 
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         const vf = visibleFilesRef.current;
@@ -608,28 +758,30 @@ function App() {
           : (idx + 1) % vf.length;
         handleFileSelect(vf[next].path);
         e.preventDefault();
-      } else if (e.key === 'r') {
+      } else if (e.key === (key('toggle-review') || 'r')) {
         handleToggleReview();
-      } else if (e.key === 'a') {
+      } else if (e.key === (key('toggle-show-reviewed') || 'a')) {
         setShowReviewed(v => !v);
-      } else if (e.key === 'y') {
+      } else if (e.key === (key('copy-path') || 'y')) {
         handleCopyPath();
-      } else if (e.key === 's') {
+      } else if (e.key === (key('sort-risk') || 's')) {
         handleSortByRisk();
-      } else if (e.key === 'S') {
+      } else if (e.key === (key('export-summary') || 'S')) {
         handleExportSummary();
       } else if (e.key === 'Y') {
         handleCopyGitLabLink();
-      } else if (e.key === 'b') {
+      } else if (e.key === (key('toggle-file-tree') || 'b')) {
         setShowFileTree(v => !v);
-      } else if (e.key === ']') {
+      } else if (e.key === (key('next-unreviewed') || ']')) {
         handleNextUnreviewed();
-      } else if (e.key === 'c') {
+      } else if (e.key === (key('comment-line') || 'c')) {
         document.dispatchEvent(new CustomEvent('diffui:comment-on-hovered'));
       } else if (e.key === 'n' || e.key === 'p') {
         navigateComment(e.key === 'n' ? 'next' : 'prev');
       } else if (e.key === 'j' || e.key === 'k') {
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
+      } else if (e.key === 'w') {
+        handleToggleWhitespace();
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'f') {
         e.preventDefault();
         setShowFileFilter(v => { if (v) setFileFilter(''); return !v; });
@@ -642,52 +794,20 @@ function App() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, []);
-
-  const searchMatchCount = useMemo(() => {
-    if (!searchTerm || !diffData?.hunks) return 0;
-    const lower = searchTerm.toLowerCase();
-    let count = 0;
-    for (const hunk of diffData.hunks) {
-      for (const line of hunk.lines) {
-        if (line.text && line.text.toLowerCase().includes(lower)) count++;
-      }
-    }
-    return count;
-  }, [searchTerm, diffData]);
-
-  const reviewedCount = useMemo(() => files.filter(f => f.reviewed).length, [files]);
-  const commentStats = useMemo(() => {
-    let total = 0, open = 0;
-    for (const arr of Object.values(comments || {})) {
-      total += arr.length;
-      open += arr.filter(c => (c.status || 'open') !== 'resolved').length;
-    }
-    return { total, open };
-  }, [comments]);
-  showCompletionRef.current = showCompletion;
-  dialogOpenRef.current = showSettings || showSearch || showFileFilter || showShortcuts || showCommandPalette;
-  const prevReviewedRef = useRef(null);
-  useEffect(() => {
-    if (prevReviewedRef.current !== null && files.length > 0
-        && reviewedCount === files.length
-        && prevReviewedRef.current < files.length) {
-      setShowCompletion(true);
-    }
-    prevReviewedRef.current = reviewedCount;
-  }, [reviewedCount, files.length]);
+  }, [keybindings]);
 
   const paletteCommands = useMemo(() => [
-    { id: 'comment-line', label: 'Comment on hovered line', keys: 'c', category: 'Actions' },
-    { id: 'toggle-review', label: 'Toggle reviewed', keys: 'r', category: 'Actions' },
-    { id: 'toggle-show-reviewed', label: 'Show/hide reviewed files', keys: 'a', category: 'Actions' },
+    { id: 'comment-line', label: 'Comment on hovered line', keys: keybindings['comment-line'] || 'c', category: 'Actions' },
+    { id: 'toggle-review', label: 'Toggle reviewed', keys: keybindings['toggle-review'] || 'r', category: 'Actions' },
+    { id: 'toggle-show-reviewed', label: 'Show/hide reviewed files', keys: keybindings['toggle-show-reviewed'] || 'a', category: 'Actions' },
     { id: 'prev-file', label: 'Previous file', keys: '←', category: 'Navigation' },
     { id: 'next-file', label: 'Next file', keys: '→', category: 'Navigation' },
     { id: 'prev-hunk', label: 'Previous hunk', keys: 'k', category: 'Navigation' },
     { id: 'next-hunk', label: 'Next hunk', keys: 'j', category: 'Navigation' },
-    { id: 'copy-path', label: 'Copy file path', keys: 'y', category: 'Actions' },
+    { id: 'go-to-line', label: 'Go to line', keys: 'Ctrl+G', category: 'Navigation' },
+    { id: 'copy-path', label: 'Copy file path', keys: keybindings['copy-path'] || 'y', category: 'Actions' },
     { id: 'copy-gitlab-link', label: 'Copy GitLab link', keys: 'Y', category: 'Actions' },
-    { id: 'toggle-file-tree', label: 'Toggle file tree', keys: 'b', category: 'Actions' },
+    { id: 'toggle-file-tree', label: 'Toggle file tree', keys: keybindings['toggle-file-tree'] || 'b', category: 'Actions' },
     { id: 'search', label: 'Search in diff', keys: 'Ctrl+F', category: 'Actions' },
     { id: 'shortcuts', label: 'Show keyboard shortcuts', keys: '?', category: 'Help' },
     { id: 'settings', label: 'Open settings', category: 'Settings' },
@@ -696,11 +816,19 @@ function App() {
     { id: 'mode-file', label: 'Switch to full file view', category: 'Settings' },
     { id: 'expand-context', label: 'Expand diff context', category: 'Actions' },
     { id: 'collapse-context', label: 'Collapse diff context', category: 'Actions' },
-    { id: 'export-summary', label: 'Copy review summary', keys: 'S', category: 'Actions' },
-    { id: 'sort-risk', label: 'Toggle sort by risk', keys: 's', category: 'Actions' },
+    { id: 'expand-all-hunks', label: 'Expand all hunks', category: 'Actions' },
+    { id: 'collapse-all-hunks', label: 'Collapse all hunks', category: 'Actions' },
+    { id: 'toggle-whitespace', label: 'Toggle ignore whitespace', keys: 'w', category: 'Actions' },
+    { id: 'toggle-word-wrap', label: 'Toggle word wrap', category: 'Settings' },
+    { id: 'font-size-up', label: 'Increase font size', category: 'Settings' },
+    { id: 'font-size-down', label: 'Decrease font size', category: 'Settings' },
+    { id: 'export-summary', label: 'Copy review summary', keys: keybindings['export-summary'] || 'S', category: 'Actions' },
+    { id: 'sort-risk', label: 'Toggle sort by risk', keys: keybindings['sort-risk'] || 's', category: 'Actions' },
+    { id: 'bulk-resolve', label: 'Resolve all comments in file', category: 'Actions' },
+    { id: 'bulk-resolve-all', label: 'Resolve all open comments', category: 'Actions' },
     { id: 'send-to-agent', label: 'Send comments to agent', category: 'Agent' },
     { id: 'explain', label: 'Explain changes (generate HTML)', category: 'Agent' },
-  ], []);
+  ], [keybindings]);
 
   const handleCommand = useCallback((id) => {
     const vf = visibleFilesRef.current;
@@ -723,14 +851,23 @@ function App() {
       case 'mode-file': setDiffMode('file'); break;
       case 'expand-context': handleExpandContext('expand'); break;
       case 'collapse-context': handleExpandContext('collapse'); break;
+      case 'expand-all-hunks': handleCollapseAll('expand'); break;
+      case 'collapse-all-hunks': handleCollapseAll('collapse'); break;
+      case 'toggle-whitespace': handleToggleWhitespace(); break;
+      case 'toggle-word-wrap': { const nw = !wordWrap; setWordWrap(nw); handleSettingsChange({ word_wrap: nw }); break; }
+      case 'font-size-up': { const ns = Math.min(fontSize + 1, 24); setFontSize(ns); handleSettingsChange({ font_size: ns }); break; }
+      case 'font-size-down': { const ns = Math.max(fontSize - 1, 8); setFontSize(ns); handleSettingsChange({ font_size: ns }); break; }
+      case 'go-to-line': setShowGoToLine(v => !v); break;
       case 'export-summary': handleExportSummary(); break;
       case 'sort-risk': handleSortByRisk(); break;
+      case 'bulk-resolve': handleBulkResolve(af); break;
+      case 'bulk-resolve-all': handleBulkResolve(null); break;
       case 'send-to-agent': handleSendToAgent(); break;
       case 'explain': handleExplain(); break;
       case 'prev-hunk': scrollToHunk('prev'); break;
       case 'next-hunk': scrollToHunk('next'); break;
     }
-  }, [handleToggleReview, handleFileSelect, handleCopyPath, handleCopyGitLabLink, handleExpandContext]);
+  }, [handleToggleReview, handleFileSelect, handleCopyPath, handleCopyGitLabLink, handleExpandContext, handleCollapseAll, handleToggleWhitespace, handleExportSummary, handleSortByRisk, handleBulkResolve, handleSendToAgent, handleExplain, scrollToHunk, handleSettingsChange, wordWrap, fontSize]);
 
   return html`
     <${TopBar}
@@ -763,6 +900,9 @@ function App() {
       onSendToAgent=${handleSendToAgent}
       explainRunning=${explainRunning}
       onExplain=${handleExplain}
+      wsConnected=${wsConnected}
+      ignoreWhitespace=${ignoreWhitespace}
+      onToggleWhitespace=${handleToggleWhitespace}
     />
     ${taskStatus && html`
       <${AgentStatusBar}
@@ -774,8 +914,11 @@ function App() {
       <${SearchBar}
         value=${searchTerm}
         onChange=${setSearchTerm}
-        onClose=${() => { setShowSearch(false); setSearchTerm(''); }}
+        onClose=${() => { setShowSearch(false); setSearchTerm(''); setSearchMatchIndex(0); }}
         matchCount=${searchMatchCount}
+        matchIndex=${searchMatchIndex}
+        onNext=${() => navigateSearchMatch('next')}
+        onPrev=${() => navigateSearchMatch('prev')}
       />
     `}
     ${showFileFilter && html`
@@ -805,6 +948,7 @@ function App() {
           comments=${comments}
           onSelect=${handleCommentSelect}
           onClose=${() => setShowCommentsPanel(false)}
+          onBulkResolve=${handleBulkResolve}
         />
       `}
       ${loading
@@ -860,6 +1004,8 @@ function App() {
                     contextLines=${contextLines}
                     onLineHover=${(num) => { hoveredLineRef.current = num; }}
                     reviewed=${activeFileReviewed}
+                    collapseAll=${collapseAll}
+                    onBulkResolve=${() => handleBulkResolve(activeFile)}
                   />`
                 : html`<div class="loading">Loading...</div>`
       }
@@ -871,10 +1017,19 @@ function App() {
       <${SettingsPanel}
         onChange=${handleSettingsChange}
         onClose=${() => setShowSettings(false)}
+        fontSize=${fontSize}
+        wordWrap=${wordWrap}
+        keybindings=${keybindings}
       />
     `}
     ${showShortcuts && html`
-      <${ShortcutOverlay} onClose=${() => setShowShortcuts(false)} />
+      <${ShortcutOverlay} onClose=${() => setShowShortcuts(false)} keybindings=${keybindings} />
+    `}
+    ${showGoToLine && html`
+      <${GoToLineDialog}
+        onSubmit=${handleGoToLine}
+        onClose=${() => setShowGoToLine(false)}
+      />
     `}
     <div class="legend">
       <div class="legend-items">
@@ -889,7 +1044,9 @@ function App() {
         <span><kbd>y</kbd> copy path</span>
       </div>
       <div class="legend-fixed">
-        <span class="risk-dot risk-medium"></span> medium risk
+        <span class=${'connection-dot' + (wsConnected ? ' connected' : '')}></span>
+        ${wsConnected ? 'Live' : 'Offline'}
+        <span class="risk-dot risk-medium" style="margin-left: 8px"></span> medium risk
         <span class="risk-dot risk-high" style="margin-left: 8px"></span> high risk
       </div>
     </div>

@@ -282,7 +282,7 @@ class TestServerRoutes:
         try:
             cid = _server_app.get("/api/comments").json()["_test_apply1_.py"][0]["id"]
             r = _server_app.post(f"/api/comments/_test_apply1_.py/{cid}/apply")
-            assert r.json()["ok"] is False
+            assert r.status_code == 400
         finally:
             for c in _server_app.get("/api/comments").json().get("_test_apply1_.py", []):
                 _server_app.delete(f"/api/comments/_test_apply1_.py/{c['id']}")
@@ -300,15 +300,15 @@ class TestServerRoutes:
         try:
             cid = _server_app.get("/api/comments").json()["_test_apply2_.py"][0]["id"]
             r = _server_app.post(f"/api/comments/_test_apply2_.py/{cid}/apply")
-            assert r.json()["ok"] is False
-            assert "line number" in r.json()["error"].lower()
+            assert r.status_code == 400
+            assert "line number" in r.json()["detail"].lower()
         finally:
             for c in _server_app.get("/api/comments").json().get("_test_apply2_.py", []):
                 _server_app.delete(f"/api/comments/_test_apply2_.py/{c['id']}")
 
     def test_apply_suggestion_missing_comment(self, _server_app):
         r = _server_app.post("/api/comments/_test_apply3_.py/nonexistent-id/apply")
-        assert r.json()["ok"] is False
+        assert r.status_code == 400
 
     def test_blame_returns_list(self, _server_app):
         r = _server_app.get("/api/blame/diffui/__init__.py")
@@ -430,6 +430,99 @@ class TestServerRoutes:
             assert _server_app.get("/api/settings").json()["agent_cli"] == "codex"
         finally:
             _server_app.put("/api/settings", json={"agent_cli": original["agent_cli"]})
+
+    def test_settings_font_size(self, _server_app):
+        original = _server_app.get("/api/settings").json()
+        try:
+            r = _server_app.put("/api/settings", json={"font_size": 16})
+            assert r.status_code == 200
+            assert _server_app.get("/api/settings").json()["font_size"] == 16
+        finally:
+            _server_app.put("/api/settings", json={"font_size": original.get("font_size", 13)})
+
+    def test_settings_word_wrap(self, _server_app):
+        original = _server_app.get("/api/settings").json()
+        try:
+            r = _server_app.put("/api/settings", json={"word_wrap": True})
+            assert r.status_code == 200
+            assert _server_app.get("/api/settings").json()["word_wrap"] is True
+        finally:
+            _server_app.put("/api/settings", json={"word_wrap": original.get("word_wrap", False)})
+
+    def test_settings_keybindings(self, _server_app):
+        original = _server_app.get("/api/settings").json()
+        try:
+            bindings = {"toggle-review": "R", "sort-risk": "x"}
+            r = _server_app.put("/api/settings", json={"keybindings": bindings})
+            assert r.status_code == 200
+            assert _server_app.get("/api/settings").json()["keybindings"] == bindings
+        finally:
+            _server_app.put("/api/settings", json={"keybindings": original.get("keybindings", {})})
+
+    def test_bulk_resolve_comments(self, _server_app):
+        _server_app.post(
+            "/api/comments",
+            json={"file_path": "_test_bulk_.py", "line_index": 1, "comment": "bulk1"},
+        )
+        _server_app.post(
+            "/api/comments",
+            json={"file_path": "_test_bulk_.py", "line_index": 2, "comment": "bulk2"},
+        )
+        try:
+            r = _server_app.post(
+                "/api/comments/bulk-resolve", json={"file_path": "_test_bulk_.py", "action": "resolve"}
+            )
+            assert r.status_code == 200
+            data = r.json()
+            assert data["ok"] is True
+            assert data["count"] == 2
+            comments = _server_app.get("/api/comments").json().get("_test_bulk_.py", [])
+            assert all(c["status"] == "resolved" for c in comments)
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_bulk_.py", []):
+                _server_app.delete(f"/api/comments/_test_bulk_.py/{c['id']}")
+
+    def test_bulk_resolve_all_comments(self, _server_app):
+        _server_app.post(
+            "/api/comments",
+            json={"file_path": "_test_bulkall1_.py", "line_index": 1, "comment": "ba1"},
+        )
+        _server_app.post(
+            "/api/comments",
+            json={"file_path": "_test_bulkall2_.py", "line_index": 1, "comment": "ba2"},
+        )
+        try:
+            r = _server_app.post("/api/comments/bulk-resolve", json={"action": "resolve"})
+            assert r.status_code == 200
+            assert r.json()["count"] >= 2
+        finally:
+            for fp in ("_test_bulkall1_.py", "_test_bulkall2_.py"):
+                for c in _server_app.get("/api/comments").json().get(fp, []):
+                    _server_app.delete(f"/api/comments/{fp}/{c['id']}")
+
+    def test_diff_ignore_whitespace(self, _server_app):
+        files = _server_app.get("/api/files?view=all").json()
+        if not files:
+            pytest.skip("No changed files")
+        path = files[0]["path"]
+        r = _server_app.get(f"/api/diff/{path}?view=all&ignore_whitespace=true")
+        assert r.status_code == 200
+        assert "file_path" in r.json()
+
+    def test_files_include_ignored_field(self, _server_app):
+        r = _server_app.get("/api/files?view=all")
+        assert r.status_code == 200
+        data = r.json()
+        if data:
+            assert "ignored" in data[0]
+
+    def test_pydantic_validation_rejects_bad_comment(self, _server_app):
+        r = _server_app.post("/api/comments", json={"bad_field": "nope"})
+        assert r.status_code == 422
+
+    def test_repo_switch_invalid_index(self, _server_app):
+        r = _server_app.post("/api/repo/switch", json={"index": 999})
+        assert r.status_code == 400
 
 
 class TestRiskScoring:

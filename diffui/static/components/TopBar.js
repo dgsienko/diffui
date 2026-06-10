@@ -5,7 +5,7 @@ import { isPreviewable } from './PreviewViewer.js';
 
 const html = htm.bind(h);
 
-export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, openCommentCount, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, onToggleFileTree, onToggleFileFilter, showFileTree, showFileFilter, showCommentsPanel, agentRunning, onSendToAgent, explainRunning, onExplain }) {
+export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, openCommentCount, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, onToggleFileTree, onToggleFileFilter, showFileTree, showFileFilter, showCommentsPanel, agentRunning, onSendToAgent, explainRunning, onExplain, wsConnected, ignoreWhitespace, onToggleWhitespace }) {
   const activeRepo = repos.find(r => r.active);
   const showRepoSelect = repos.length > 1;
 
@@ -58,6 +58,9 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
           `}
           <button class="toolbar-btn" onClick=${onToggleReviewed}>
             ${showReviewed ? 'Hide reviewed' : 'Show all'}
+          </button>
+          <button class=${'toolbar-btn' + (ignoreWhitespace ? ' panel-active' : '')} onClick=${onToggleWhitespace} title="Toggle ignore whitespace (w)">
+            Whitespace
           </button>
         </div>
         <div class="toolbar-center">

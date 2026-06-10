@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+import time as _time
+
+from fastapi import APIRouter, HTTPException
 
 from diffui.git_utils import (
     current_branch,
@@ -9,12 +11,10 @@ from diffui.git_utils import (
     repo_has_changes,
     set_active_repo,
 )
+from diffui.server.models import RepoSwitch
 from diffui.server.state import app_state
 
 router = APIRouter(prefix="/api")
-
-
-import time as _time
 
 _repo_changes_cache: dict[str, tuple[bool, float]] = {}
 _REPO_CACHE_TTL = 15
@@ -46,12 +46,11 @@ def list_repos():
 
 
 @router.post("/repo/switch")
-async def switch_repo(body: dict):
-    index = body.get("index", 0)
-    if index < 0 or index >= len(app_state.repos):
-        return {"error": "Invalid index"}
-    app_state.active_repo_index = index
-    set_active_repo(app_state.repos[index])
+def switch_repo(body: RepoSwitch):
+    if body.index < 0 or body.index >= len(app_state.repos):
+        raise HTTPException(status_code=400, detail="Invalid repo index")
+    app_state.active_repo_index = body.index
+    set_active_repo(app_state.repos[body.index])
     app_state.reload_repo_state()
     from diffui.server.routes_diff import clear_diff_cache
 

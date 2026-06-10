@@ -33,6 +33,7 @@ diffui/
 │   ├── routes_review.py    # Review toggle, summary export, agent/explain
 │   │                       #   orchestration (thread-safe process management)
 │   ├── routes_settings.py  # Settings, editor open, session persistence
+│   ├── models.py       # Pydantic request models for all endpoints
 │   ├── state.py        # AppState singleton — shared server state
 │   └── theme_css.py    # generate_css_vars(theme) — CSS custom properties
 ├── static/             # Preact frontend (no build step, ESM imports via importmap)
@@ -47,7 +48,8 @@ diffui/
 │   │                   #   FileFilterBar, LineActions, SettingsPanel,
 │   │                   #   Minimap, ShortcutOverlay, Toast,
 │   │                   #   CommandPalette, CompletionScreen, PreviewViewer,
-│   │                   #   AgentStatusBar, AgentConfirmDialog
+│   │                   #   AgentStatusBar, AgentConfirmDialog,
+│   │                   #   GoToLineDialog
 │   ├── index.html      # Shell page with importmap for preact/htm CDN
 │   └── style.css       # All styles via CSS custom properties (themed)
 └── themes/
@@ -116,6 +118,32 @@ diffui/
   to generate a self-contained HTML walkthrough. `/api/explain/status`
   polls. `/api/explain/view` serves the result as a localhost page
   (path-traversal guarded to tempdir). Toolbar button + status bar link.
+- **Ignore whitespace** — `ignore_whitespace` query param on diff
+  endpoints passes `-w` to `git diff`. Frontend toggle (`w` key).
+- **Ignore patterns** — `.diffuiignore` file in repo root, fnmatch
+  syntax. Files marked `ignored: true` in `/api/files`, hidden by
+  default in UI but always included in agent context.
+- **Bulk resolve** — `/api/comments/bulk-resolve` with optional
+  `file_path` filter and `action` (resolve/reopen). Used by command
+  palette, comments panel header, and diff file header.
+- **Go to line** — `Ctrl+G` opens a dialog, scrolls to the line in
+  the current diff with a flash highlight.
+- **Expand/collapse all hunks** — `collapseAll` prop propagated from
+  app to Hunk components via useEffect.
+- **Hunk statistics** — `hunkStats()` in DiffViewer counts adds/dels
+  per hunk, shown in hunk headers.
+- **Inline suggestion preview** — when a comment has both `line_text`
+  and `suggestion`, CommentDisplay renders a before/after diff instead
+  of a plain code block.
+- **Font size / word wrap** — `font_size` and `word_wrap` persisted in
+  settings. Font size sets `--code-font-size` CSS variable. Word wrap
+  adds `.word-wrap-enabled` class to `<html>`, uses `pre-wrap` on
+  `.diff-code` with flex-shrink-0 gutter to preserve line numbers.
+- **Custom keybindings** — `keybindings` dict in settings maps action
+  IDs to key strings. SettingsPanel has a collapsible rebinding UI with
+  key capture. ShortcutOverlay and CommandPalette reflect overrides.
+- **Connection status** — `wsConnected` state tracks WebSocket/SSE
+  connection. Shown as a colored dot in the footer legend.
 - **Blame gutter** — toggleable per-file. Fetches `git blame --porcelain`
   via `/api/blame/{path}`. Results cached client-side in a `Map`.
 - **Preview mode** — toggleable for `.md` and image files. Backend uses
@@ -185,7 +213,7 @@ diffui                               # Start server (from any git repo)
 diffui --open                        # Start + open in browser
 diffui --comments                    # Dump comments to stdout
 diffui --json                        # Export review session as JSON
-pytest                               # Run tests (177 tests)
+pytest                               # Run tests (186 tests)
 ruff check diffui/ tests/           # Lint
 ```
 
@@ -207,13 +235,14 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
 - `tests/test_highlight.py` — 18 tests: highlight_line_html escaping and
   coloring, _apply_word_highlights with spans/entities/malformed HTML,
   parse_diff_to_json structure, highlight_file_to_json
-- `tests/test_server.py` — 50 tests: CSS vars generation, all API routes
+- `tests/test_server.py` — 59 tests: CSS vars generation, all API routes
   (repos, branch, commits, files, diff, themes, settings, comments CRUD,
   comment resolution toggle, review toggle, static files, JSON export),
   comment categories, code suggestions, blame, preview, review summary,
   session persistence, WebSocket connect and ping/pong, risk scoring
   (migration, config, deletion, test removal, churn patterns), agent
-  and explain status endpoints
+  and explain status endpoints, bulk resolve, ignore whitespace,
+  pydantic validation, font/wrap/keybinding settings
 - `tests/test_themes.py` — 8 tests: all themes have valid hex colors,
   unique names, syntax maps; theme state get/set
 
@@ -228,7 +257,7 @@ All in `~/.config/diffui/`:
 
 | File | Scope | Format |
 | --- | --- | --- |
-| `settings.json` | Global | `{theme, editor, view_mode, user_name, agent_cli}` |
+| `settings.json` | Global | `{theme, editor, view_mode, user_name, agent_cli, font_size, word_wrap, keybindings}` |
 | `{repo}/{branch}/reviewed.json` | Per-branch | `{"path": mtime}` |
 | `{repo}/{branch}/comments.json` | Per-branch | `{"path": [{...}]}` |
 | `{repo}/{branch}/session.json` | Per-branch | `{activeFile, diffMode, ...}` |

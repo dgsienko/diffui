@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import atexit
+import os
 import subprocess
+import tempfile
 import threading
 
 from fastapi import APIRouter
@@ -12,8 +15,39 @@ _agent_process: subprocess.Popen | None = None
 _explain_process: subprocess.Popen | None = None
 _explain_output_path: str | None = None
 _process_lock = threading.Lock()
+_temp_files: list[str] = []
 
 router = APIRouter(prefix="/api")
+
+
+def _cleanup_processes() -> None:
+    for proc in (_agent_process, _explain_process):
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+
+def _cleanup_temp_files() -> None:
+    for path in _temp_files:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    _temp_files.clear()
+
+
+atexit.register(_cleanup_processes)
+atexit.register(_cleanup_temp_files)
+
+
+def register_shutdown(app) -> None:
+    @app.on_event("shutdown")
+    async def shutdown():
+        _cleanup_processes()
+        _cleanup_temp_files()
 
 
 @router.get("/reviewed")
@@ -102,8 +136,6 @@ _AGENT_CMDS = {
 
 
 def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, int]:
-    import tempfile
-
     from diffui.git_utils import (
         _comments_path,
         current_branch,
@@ -125,7 +157,6 @@ def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, 
     repo_root = str(get_repo_root())
     branch_name = current_branch()
 
-    # Build rich context file
     ctx_lines = [
         f"# diffui Agent Context — {branch_name}",
         "",
@@ -141,7 +172,6 @@ def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, 
         "",
     ]
 
-    # Group comments by file with diffs
     commented_files: dict[str, list[dict]] = {}
     for c in open_comments:
         commented_files.setdefault(c["_file"], []).append(c)
@@ -153,7 +183,6 @@ def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, 
         ctx_lines.append(f"### {file_path}")
         ctx_lines.append("")
 
-        # Include the diff for context
         try:
             diff = get_full_diff(app_state.merge_base, file_path)
             if diff:
@@ -178,12 +207,11 @@ def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, 
                 ctx_lines.append(f"  ↳ {r.get('author', 'agent')}: {r.get('text', '')}")
             ctx_lines.append("")
 
-    # Write context file
     context_path = f"{tempfile.gettempdir()}/diffui-agent-context-{branch_name.replace('/', '-')}.md"
     with open(context_path, "w") as f:
         f.write("\n".join(ctx_lines))
+    _temp_files.append(context_path)
 
-    # Build the prompt — explicit about conversation behavior
     comment_summary = []
     for c in open_comments:
         line_num = c.get("file_line_num", c.get("line_index", "?"))
@@ -261,8 +289,6 @@ def explain_changes():
         if _explain_process and _explain_process.poll() is None:
             return {"ok": False, "error": "Explanation already generating"}
 
-        import tempfile
-
         from diffui.git_utils import current_branch, get_repo_root
 
         repo_root = str(get_repo_root())
@@ -303,6 +329,7 @@ def explain_changes():
             stderr=subprocess.DEVNULL,
         )
         _explain_output_path = output_path
+        _temp_files.append(output_path)
     return {"ok": True, "output_path": output_path}
 
 
@@ -313,7 +340,6 @@ def explain_status():
 
 @router.get("/explain/view")
 def view_explanation():
-    import tempfile
     from pathlib import Path
 
     from fastapi.responses import HTMLResponse

@@ -59,6 +59,8 @@ diffui --open        # Web UI: also open the URL in a browser
   editor appear on hover over any diff line
 - **Command palette** — `ctrl+k` to search and execute any command
 - **Search** — `ctrl+f` to search across the current diff with match count
+  and Enter/Shift+Enter to cycle through matches
+- **Go to line** — `ctrl+g` to jump to a specific line number
 - **File search** — `ctrl+shift+f` to filter the file list by path
 - **Open in editor** — `ctrl+click` or hover action to open the line in
   VS Code, Cursor, Vim, or Neovim (configurable in settings)
@@ -84,6 +86,19 @@ diffui --open        # Web UI: also open the URL in a browser
   files and inline display for images
 - **Review summary export** — `Shift+S` copies a formatted markdown
   summary to clipboard with stats and open comments by category
+- **Ignore whitespace** — toggle to hide whitespace-only changes (`w` key)
+- **Ignore patterns** — `.diffuiignore` file to hide files from review
+  (still visible to agents)
+- **Bulk resolve** — resolve all open comments in a file or globally
+  from the command palette or comments panel
+- **Expand/collapse all hunks** — via command palette
+- **Hunk statistics** — each hunk header shows its own +/- counts
+- **Inline suggestion preview** — before/after diff for code suggestions
+- **Font size control** — adjustable in settings or via command palette
+- **Word wrap** — toggleable, dynamic with window width, preserves line
+  numbers
+- **Custom keybindings** — rebind action shortcuts in settings
+- **Connection status** — live/offline indicator in the footer
 - **Untracked files** — new files not yet added to git are shown
 - **Explorer sidebar** — file tree with grouping modes (directory, type,
   status) and resizable via drag handle; open by default
@@ -125,7 +140,9 @@ diffui --open        # Web UI: also open the URL in a browser
 | `S` | Copy review summary to clipboard |
 | `]` | Jump to next unreviewed file |
 | `b` | Toggle explorer sidebar |
+| `w` | Toggle ignore whitespace |
 | `ctrl+f` | Search in diff |
+| `ctrl+g` | Go to line |
 | `ctrl+shift+f` | Search files |
 | `escape` | Close any open panel or dialog |
 | `ctrl+click` | Open line in editor |
@@ -182,7 +199,7 @@ directories.
 # Install with dev deps
 pipx inject diffui pytest ruff
 
-# Run tests (177 tests)
+# Run tests (186 tests)
 cd ~/code/diffui && pytest
 
 # Lint
@@ -200,6 +217,7 @@ diffui/
 │   ├── app.py          # FastAPI app factory
 │   ├── events.py       # WebSocket + SSE endpoints, watchfiles watcher
 │   ├── highlight.py    # Pygments-to-HTML adapter
+│   ├── models.py       # Pydantic request models
 │   ├── routes_*.py     # API routes (repos, diffs, blame, preview,
 │   │                   #   comments, review, settings, session)
 │   ├── state.py        # Shared app state
@@ -216,7 +234,7 @@ diffui/
 │   │                   #   Minimap, ShortcutOverlay, Toast,
 │   │                   #   CommandPalette, CompletionScreen,
 │   │                   #   PreviewViewer, AgentStatusBar,
-│   │                   #   AgentConfirmDialog
+│   │                   #   AgentConfirmDialog, GoToLineDialog
 │   ├── index.html      # Shell page with importmap
 │   └── style.css       # Styles using CSS custom properties
 ├── themes/
@@ -228,6 +246,7 @@ diffui/
     ├── test_git_utils.py   # Blame, session, utility tests (31 tests)
     ├── test_highlight.py   # HTML highlight adapter tests (18 tests)
     ├── test_server.py      # API routes, WebSocket, risk scoring,
-    │                       #   agent/explain endpoints, settings, export (50 tests)
+    │                       #   agent/explain endpoints, settings, export,
+    │                       #   bulk resolve, pydantic validation (59 tests)
     └── test_themes.py      # Theme definitions and state tests (8 tests)
 ```

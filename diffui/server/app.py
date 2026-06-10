@@ -12,6 +12,7 @@ from diffui.server.events import start_poller
 from diffui.server.routes_comments import router as comments_router
 from diffui.server.routes_diff import router as diff_router
 from diffui.server.routes_repo import router as repo_router
+from diffui.server.routes_review import register_shutdown
 from diffui.server.routes_review import router as review_router
 from diffui.server.routes_settings import router as settings_router
 from diffui.server.state import app_state
@@ -32,6 +33,7 @@ def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:
     app.include_router(review_router)
     app.include_router(settings_router)
     app.include_router(events_router)
+    register_shutdown(app)
 
     @app.on_event("startup")
     async def startup():

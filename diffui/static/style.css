@@ -1938,3 +1938,314 @@ mark {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- Font size variable --- */
+
+html, body {
+  --code-font-size: 13px;
+}
+
+.diff-code, .diff-gutter, .blame-cell, .comment-suggestion-code,
+.suggestion-diff, .split-code, .split-gutter, .full-file-line {
+  font-size: var(--code-font-size);
+}
+
+/* --- Word wrap --- */
+
+html.word-wrap-enabled .diff-code {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+html.word-wrap-enabled .diff-line {
+  white-space: normal;
+}
+
+html.word-wrap-enabled .diff-gutter {
+  flex-shrink: 0;
+}
+
+/* --- Search navigation --- */
+
+.search-input.no-results {
+  border-color: var(--remove-fg);
+}
+
+.search-nav-btn {
+  background: var(--bg);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.search-nav-btn:hover {
+  color: var(--fg);
+  background: var(--hover-bg);
+}
+
+/* --- Connection status --- */
+
+.connection-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--remove-fg);
+  margin-right: 4px;
+}
+
+.connection-dot.connected {
+  background: var(--add-fg);
+}
+
+/* --- Go to line --- */
+
+.goto-line-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+}
+
+.goto-line-dialog {
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  box-shadow: var(--shadow-high);
+  width: 300px;
+}
+
+.goto-line-input {
+  width: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.goto-line-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Hide number input spinners */
+.goto-line-input::-webkit-inner-spin-button,
+.goto-line-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.goto-line-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* --- Hunk stats --- */
+
+.hunk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hunk-stats {
+  display: flex;
+  gap: 8px;
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.hunk-stat-add {
+  color: var(--add-fg);
+}
+
+.hunk-stat-del {
+  color: var(--remove-fg);
+}
+
+/* --- Suggestion diff preview --- */
+
+.suggestion-diff {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  font-family: inherit;
+}
+
+.suggestion-diff-line {
+  display: flex;
+  padding: 2px 8px;
+  font-size: var(--code-font-size);
+  line-height: 20px;
+  white-space: pre;
+}
+
+.suggestion-diff-line.suggestion-remove {
+  background: var(--remove-bg);
+  color: var(--remove-fg);
+}
+
+.suggestion-diff-line.suggestion-add {
+  background: var(--add-bg);
+  color: var(--add-fg);
+}
+
+.suggestion-diff-prefix {
+  width: 16px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+/* --- Settings panel enhancements --- */
+
+.settings-panel {
+  animation: slide-in-right 0.15s ease;
+}
+
+.settings-overlay.closing .settings-panel {
+  animation: slide-out-right 0.15s ease forwards;
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slide-out-right {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+.settings-divider {
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-btn-sm {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-btn-sm:hover {
+  background: var(--hover-bg);
+}
+
+.settings-value {
+  color: var(--fg);
+  font-size: 13px;
+  min-width: 40px;
+  text-align: center;
+}
+
+.settings-toggle {
+  background: var(--bg);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.settings-toggle.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+/* --- Keybindings --- */
+
+.settings-keybind-toggle {
+  background: none;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 0;
+  text-align: left;
+  width: 100%;
+}
+
+.settings-keybind-toggle:hover {
+  color: var(--accent);
+}
+
+.keybindings-list {
+  margin-top: 8px;
+}
+
+.keybinding-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.keybinding-label {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.keybinding-key {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  min-width: 32px;
+  text-align: center;
+}
+
+.keybinding-key:hover {
+  border-color: var(--accent);
+}
+
+.keybinding-key.capturing {
+  border-color: var(--accent);
+  background: var(--hunk-bg);
+  color: var(--accent);
+}
+
+.keybinding-hint {
+  color: var(--fg-muted);
+  font-size: 11px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}

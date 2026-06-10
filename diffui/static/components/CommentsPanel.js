@@ -5,7 +5,7 @@ import { shortName } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
-export function CommentsPanel({ comments, onSelect, onClose }) {
+export function CommentsPanel({ comments, onSelect, onClose, onBulkResolve }) {
   const allComments = useMemo(() => {
     const result = [];
     for (const [filePath, fileComments] of Object.entries(comments || {})) {
@@ -31,7 +31,12 @@ export function CommentsPanel({ comments, onSelect, onClose }) {
     <div class="comments-panel">
       <div class="comments-panel-header">
         <span class="comments-panel-title">${allComments.length} open comment${allComments.length === 1 ? '' : 's'}</span>
-        <button class="file-tree-close" onClick=${onClose}>✕</button>
+        <div style="display:flex;gap:4px;align-items:center">
+          ${onBulkResolve && allComments.length > 0 && html`
+            <button class="expand-ctx-btn" onClick=${() => onBulkResolve(null)} title="Resolve all open comments">Resolve all</button>
+          `}
+          <button class="file-tree-close" onClick=${onClose}>✕</button>
+        </div>
       </div>
       <div class="comments-panel-content">
         ${Object.entries(byFile).map(([filePath, fileComments]) => html`
