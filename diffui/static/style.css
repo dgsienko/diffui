@@ -1948,9 +1948,14 @@ html, body {
   --code-font-size: 13px;
 }
 
-.diff-code, .diff-gutter, .blame-cell, .comment-suggestion-code,
-.suggestion-diff, .split-code, .split-gutter, .full-file-line {
+.diff-container, .split-diff-container, .full-file-container {
   font-size: var(--code-font-size);
+  line-height: calc(var(--code-font-size) + 7px);
+}
+
+.diff-line, .split-line {
+  min-height: calc(var(--code-font-size) + 7px);
+  line-height: calc(var(--code-font-size) + 7px);
 }
 
 /* --- Word wrap --- */

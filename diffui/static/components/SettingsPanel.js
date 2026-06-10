@@ -35,6 +35,7 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
   const [showKeybindings, setShowKeybindings] = useState(false);
   const [localBindings, setLocalBindings] = useState(keybindings || {});
   const [capturingKey, setCapturingKey] = useState(null);
+  const captureBtnRef = useRef(null);
   const panelRef = useRef(null);
 
   useEffect(() => {
@@ -45,6 +46,10 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
   useEffect(() => {
     setLocalBindings(keybindings || {});
   }, [keybindings]);
+
+  useEffect(() => {
+    if (capturingKey && captureBtnRef.current) captureBtnRef.current.focus();
+  }, [capturingKey]);
 
   useEffect(() => {
     const panel = panelRef.current;
@@ -172,9 +177,10 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
               <div class="keybinding-row">
                 <span class="keybinding-label">${k.label}</span>
                 <button
+                  ref=${capturingKey === k.id ? captureBtnRef : undefined}
                   class=${'keybinding-key' + (capturingKey === k.id ? ' capturing' : '')}
                   onClick=${() => setCapturingKey(capturingKey === k.id ? null : k.id)}
-                  onKeyDown=${capturingKey === k.id ? (e) => handleKeyCapture(e, k.id) : undefined}
+                  onKeyDown=${(e) => { if (capturingKey === k.id) handleKeyCapture(e, k.id); }}
                 >
                   ${capturingKey === k.id ? 'Press key...' : html`<kbd>${localBindings[k.id] || k.default}</kbd>`}
                 </button>
