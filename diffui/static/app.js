@@ -779,10 +779,10 @@ function App() {
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
       } else if (e.key === 'w') {
         handleToggleWhitespace();
-      } else if (e.ctrlKey && !e.metaKey && e.shiftKey && e.key === 'f') {
+      } else if (e.ctrlKey && !e.metaKey && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
         setShowFileFilter(v => { if (v) setFileFilter(''); return !v; });
-      } else if (e.ctrlKey && !e.metaKey && e.key === 'f') {
+      } else if (e.ctrlKey && !e.metaKey && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
         setShowSearch(v => !v);
       } else if (e.key === '?') {
