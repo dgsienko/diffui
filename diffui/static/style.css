@@ -773,6 +773,14 @@ mark {
   resize: vertical;
 }
 
+.comment-suggestion-input {
+  min-height: 40px;
+  background: var(--bg-dark);
+  border-color: var(--add-fg);
+  tab-size: 2;
+  white-space: pre;
+}
+
 .comment-input:focus, .comment-reply-input:focus {
   outline: none;
   border-color: var(--accent);

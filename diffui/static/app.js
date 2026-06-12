@@ -331,7 +331,7 @@ function App() {
     }
   }, [fetchFiles, handleFileSelect]);
 
-  const handleAddComment = useCallback(async (filePath, lineIndex, lineText, fileLineNum, commentText, category) => {
+  const handleAddComment = useCallback(async (filePath, lineIndex, lineText, fileLineNum, commentText, category, suggestion) => {
     await fetch('/api/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -342,6 +342,7 @@ function App() {
         file_line_num: fileLineNum,
         comment: commentText,
         category: category || '',
+        suggestion: suggestion || '',
       }),
     });
     showToast(`Comment added to ${shortName(filePath)}`, 'success');

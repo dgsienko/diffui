@@ -167,9 +167,10 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInE
             `)}
             ${commentingLine === line.index && html`
               <${CommentBox}
-                onSubmit=${(text, category) => {
+                lineText=${line.text}
+                onSubmit=${(text, category, suggestion) => {
                   const lineNum = parseInt(line.new_num) || parseInt(line.old_num) || null;
-                  onAddComment(filePath, line.index, line.text, lineNum, text, category);
+                  onAddComment(filePath, line.index, line.text, lineNum, text, category, suggestion);
                   setCommentingLine(null);
                 }}
                 onCancel=${() => setCommentingLine(null)}

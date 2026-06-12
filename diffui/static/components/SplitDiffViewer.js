@@ -115,9 +115,10 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
                 `)}
                 ${commentingLine === line?.index && line?.type === 'remove' && html`
                   <${CommentBox}
-                    onSubmit=${(text, category) => {
+                    lineText=${line.text}
+                    onSubmit=${(text, category, suggestion) => {
                       const lineNum = parseInt(line.old_num) || null;
-                      onAddComment(data.file_path, line.index, line.text, lineNum, text, category);
+                      onAddComment(data.file_path, line.index, line.text, lineNum, text, category, suggestion);
                       setCommentingLine(null);
                     }}
                     onCancel=${() => setCommentingLine(null)}
@@ -149,9 +150,10 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
                   `)}
                   ${commentingLine === line?.index && line?.type !== 'remove' && html`
                     <${CommentBox}
-                      onSubmit=${(text, category) => {
+                      lineText=${line.text}
+                      onSubmit=${(text, category, suggestion) => {
                         const lineNum = parseInt(line.new_num) || parseInt(line.old_num) || null;
-                        onAddComment(data.file_path, line.index, line.text, lineNum, text, category);
+                        onAddComment(data.file_path, line.index, line.text, lineNum, text, category, suggestion);
                         setCommentingLine(null);
                       }}
                       onCancel=${() => setCommentingLine(null)}
