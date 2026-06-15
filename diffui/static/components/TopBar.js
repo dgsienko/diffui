@@ -1,7 +1,7 @@
 import { h } from 'preact';
 import { useMemo } from 'preact/hooks';
 import htm from 'htm';
-import { isPreviewable } from './PreviewViewer.js';
+import { isPreviewable, previewLabel } from './PreviewViewer.js';
 
 const html = htm.bind(h);
 
@@ -54,7 +54,7 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
           </div>
           ${activeFile && isPreviewable(activeFile) && html`
             <button class=${'toolbar-btn' + (showPreview ? ' preview-active' : '')} onClick=${onTogglePreview} title="Toggle rendered preview">
-              ${showPreview ? 'Raw' : 'Preview'}
+              ${showPreview ? 'Raw' : previewLabel(activeFile)}
             </button>
           `}
           <button class="toolbar-btn" onClick=${onToggleReviewed} title=${`${showReviewed ? 'Hide' : 'Show'} reviewed files (${kb('toggle-show-reviewed', 'a')})`}>

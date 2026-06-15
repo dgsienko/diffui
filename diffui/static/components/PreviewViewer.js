@@ -1,7 +1,7 @@
 import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
-import { renderMd } from '../lib/markdown.js';
+import { renderMd, renderDiagrams } from '../lib/markdown.js';
 import { mergeRef } from '../lib/utils.js';
 
 const html = htm.bind(h);
@@ -20,6 +20,10 @@ export function isPreviewable(path) {
   return MD_EXTS.has(ext) || IMG_EXTS.has(ext);
 }
 
+export function previewLabel(path) {
+  return IMG_EXTS.has(getExt(path)) ? 'Preview Image' : 'Preview Markdown';
+}
+
 export function PreviewViewer({ filePath, onToggleReview, reviewed, containerRef }) {
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -30,6 +34,10 @@ export function PreviewViewer({ filePath, onToggleReview, reviewed, containerRef
       .then(r => r.json())
       .then(d => { setPreview(d); setLoading(false); });
   }, [filePath]);
+
+  useEffect(() => {
+    if (preview?.content) renderDiagrams();
+  }, [preview?.content]);
 
   if (loading) return html`<div class="loading">Loading preview...</div>`;
 
