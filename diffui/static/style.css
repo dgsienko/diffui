@@ -1801,6 +1801,27 @@ mark {
   border-radius: var(--radius-sm);
 }
 
+.diagram-container {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.diagram-img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.diagram-loading {
+  color: var(--fg-muted);
+  padding: 16px;
+}
+
+.diagram-error {
+  color: var(--remove-fg);
+  padding: 16px;
+}
+
 .agent-btn { color: var(--purple); }
 .agent-btn:hover { color: var(--purple); border-color: var(--purple-border); background: var(--purple-bg); }
 .agent-running { color: var(--purple); border-color: var(--purple); background: var(--purple-bg); animation: pulse 1.5s ease-in-out infinite; }
