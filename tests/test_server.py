@@ -347,16 +347,16 @@ class TestServerRoutes:
         assert isinstance(r.json(), dict)
 
     def test_session_put_and_get_roundtrip(self, _server_app):
-        _server_app.put("/api/session", json={"test_key": "test_val"})
+        _server_app.put("/api/session", json={"activeFile": "test.py"})
         r = _server_app.get("/api/session")
-        assert r.json().get("test_key") == "test_val"
+        assert r.json().get("activeFile") == "test.py"
 
     def test_session_put_is_additive(self, _server_app):
-        _server_app.put("/api/session", json={"key_a": 1})
-        _server_app.put("/api/session", json={"key_b": 2})
+        _server_app.put("/api/session", json={"activeFile": "a.py"})
+        _server_app.put("/api/session", json={"diffMode": "split"})
         session = _server_app.get("/api/session").json()
-        assert session.get("key_a") == 1
-        assert session.get("key_b") == 2
+        assert session.get("activeFile") == "a.py"
+        assert session.get("diffMode") == "split"
 
     def test_websocket_connected_event(self, _server_app):
         import json
