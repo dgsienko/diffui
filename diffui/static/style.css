@@ -1536,6 +1536,23 @@ mark {
   padding-left: 8px;
   color: var(--fg-muted);
 }
+.comment-md table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: auto;
+}
+.comment-md th, .comment-md td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: left;
+}
+.comment-md th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+}
+.comment-md tr:nth-child(even) {
+  background: var(--bg-secondary);
+}
 
 /* --- Minimap --- */
 

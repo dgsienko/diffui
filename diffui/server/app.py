@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -37,7 +36,7 @@ def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:
 
     @app.on_event("startup")
     async def startup():
-        start_poller(asyncio.get_event_loop())
+        start_poller()
 
     @app.get("/api/themes")
     def list_themes():

@@ -11,6 +11,7 @@ from diffui.git_utils import (
     repo_has_changes,
     set_active_repo,
 )
+from diffui.server.events import restart_watcher
 from diffui.server.models import RepoSwitch
 from diffui.server.state import app_state
 
@@ -55,6 +56,7 @@ def switch_repo(body: RepoSwitch):
     from diffui.server.routes_diff import clear_diff_cache
 
     clear_diff_cache()
+    restart_watcher()
     return {"ok": True, "branch": current_branch()}
 
 
