@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api")
 _sse_clients: set[asyncio.Queue] = set()
 _ws_clients: set[WebSocket] = set()
 _bg_tasks: set[asyncio.Task] = set()
+_watch_cancel: asyncio.Event | None = None
 
 DEBOUNCE_MS = 400
 
@@ -66,6 +67,10 @@ def _apply_state_updates(events: list[str]) -> list[str]:
         clear_diff_cache()
         if "files_changed" not in events:
             events = [*events, "files_changed"]
+    elif "files_changed" in events:
+        from diffui.git_utils import get_diff_numstat
+
+        app_state.numstat = get_diff_numstat(app_state.merge_base)
 
     if "comments_changed" in events:
         app_state.comments = load_comments()
@@ -85,7 +90,7 @@ def make_watch_filter(git_dir_str: str):
     return _watch_filter
 
 
-async def _watch_loop() -> None:
+async def _watch_loop(cancel: asyncio.Event) -> None:
     repo_root = get_repo_root()
     git_dir = get_git_dir()
     comments_file = _comments_path()
@@ -107,6 +112,7 @@ async def _watch_loop() -> None:
         step=100,
         watch_filter=watch_filter,
         recursive=True,
+        stop_event=cancel,
     ):
         try:
             events = _classify_changes(changes, git_dir_str, comments_path_str)
@@ -176,5 +182,13 @@ async def websocket_endpoint(ws: WebSocket):
         _ws_clients.discard(ws)
 
 
-def start_poller(loop: asyncio.AbstractEventLoop) -> None:
-    loop.create_task(_watch_loop())
+def restart_watcher() -> None:
+    global _watch_cancel
+    if _watch_cancel is not None:
+        _watch_cancel.set()
+    _watch_cancel = asyncio.Event()
+    asyncio.get_event_loop().create_task(_watch_loop(_watch_cancel))
+
+
+def start_poller() -> None:
+    restart_watcher()
