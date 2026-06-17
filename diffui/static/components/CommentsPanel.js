@@ -1,11 +1,13 @@
 import { h } from 'preact';
 import { useMemo } from 'preact/hooks';
 import htm from 'htm';
-import { shortName } from '../lib/utils.js';
+import { shortName, useResize } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
 export function CommentsPanel({ comments, onSelect, onClose, onBulkResolve }) {
+  const { ref: panelRef, width, onResizeStart } = useResize(300, 240, 400);
+
   const allComments = useMemo(() => {
     const result = [];
     for (const [filePath, fileComments] of Object.entries(comments || {})) {
@@ -28,7 +30,7 @@ export function CommentsPanel({ comments, onSelect, onClose, onBulkResolve }) {
   }, [allComments]);
 
   return html`
-    <div class="comments-panel">
+    <div class="comments-panel" ref=${panelRef} style="width: ${width}px">
       <div class="comments-panel-header">
         <span class="comments-panel-title">${allComments.length} open comment${allComments.length === 1 ? '' : 's'}</span>
         <div style="display:flex;gap:4px;align-items:center">
@@ -62,6 +64,7 @@ export function CommentsPanel({ comments, onSelect, onClose, onBulkResolve }) {
           <div class="comments-panel-empty">No open comments</div>
         `}
       </div>
+      <div class="comments-panel-resize" onMouseDown=${onResizeStart}></div>
     </div>
   `;
 }

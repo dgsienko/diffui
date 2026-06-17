@@ -1,6 +1,7 @@
 import { h } from 'preact';
-import { useState, useRef, useCallback, useEffect } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import htm from 'htm';
+import { useResize } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -44,7 +45,7 @@ const GROUP_MODES = [
 
 const GROUPERS = { dir: groupByDir, type: groupByType, status: groupByStatus };
 
-function TreeDir({ name, files, activeFile, onSelect }) {
+function TreeDir({ name, files, activeFile, onSelect, commentsPulse }) {
   const [collapsed, setCollapsed] = useState(false);
   const commentCount = files.reduce((s, f) => s + (f.comment_count || 0), 0);
   const unreviewed = files.filter(f => !f.reviewed).length;
@@ -60,9 +61,12 @@ function TreeDir({ name, files, activeFile, onSelect }) {
       </div>
       ${!collapsed && html`
         <div class="tree-dir-files">
-          ${files.map(f => html`
+          ${files.map(f => {
+            const hasComments = (f.comment_count || 0) > 0;
+            const pulse = commentsPulse && hasComments && f.path !== activeFile;
+            return html`
             <div
-              class=${'tree-file' + (f.path === activeFile ? ' tree-active' : '') + (f.reviewed ? ' tree-reviewed' : '')}
+              class=${'tree-file' + (f.path === activeFile ? ' tree-active' : '') + (f.reviewed ? ' tree-reviewed' : '') + (pulse ? ' pulse-notify' : '')}
               role="treeitem"
               tabindex="0"
               onClick=${() => onSelect(f.path)}
@@ -71,49 +75,22 @@ function TreeDir({ name, files, activeFile, onSelect }) {
             >
               ${f.risk_level && f.risk_level !== 'low' && html`<span class=${'risk-dot risk-' + f.risk_level}></span>`}
               ${f.reviewed ? '✓ ' : ''}${f.short_name}
-              ${(f.comment_count || 0) > 0 && html`<span class="tree-comment-count">${f.comment_count}</span>`}
+              ${hasComments && html`<span class="tree-comment-count">${f.comment_count}</span>`}
             </div>
-          `)}
+          `;
+          })}
         </div>
       `}
     </div>
   `;
 }
 
-export function FileTree({ files, activeFile, onSelect, onClose }) {
+export function FileTree({ files, activeFile, onSelect, onClose, commentsPulse }) {
   const [groupMode, setGroupMode] = useState('dir');
-  const [width, setWidth] = useState(260);
-  const treeRef = useRef(null);
-  const dragListeners = useRef(null);
+  const { ref: treeRef, width, onResizeStart } = useResize(260, 180, 500);
   const grouper = GROUPERS[groupMode] || groupByDir;
   const groups = grouper(files);
   const groupNames = Object.keys(groups).sort();
-
-  useEffect(() => () => {
-    if (dragListeners.current) {
-      document.removeEventListener('mousemove', dragListeners.current.onMove);
-      document.removeEventListener('mouseup', dragListeners.current.onUp);
-    }
-  }, []);
-
-  const onResizeStart = useCallback((e) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = treeRef.current?.offsetWidth || 260;
-    const onMove = (e) => {
-      const newWidth = Math.max(180, Math.min(500, startWidth + e.clientX - startX));
-      if (treeRef.current) treeRef.current.style.width = newWidth + 'px';
-    };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      dragListeners.current = null;
-      if (treeRef.current) setWidth(treeRef.current.offsetWidth);
-    };
-    dragListeners.current = { onMove, onUp };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, []);
 
   return html`
     <div class="file-tree" ref=${treeRef} style="width: ${width}px">
@@ -138,6 +115,7 @@ export function FileTree({ files, activeFile, onSelect, onClose }) {
             files=${groups[name]}
             activeFile=${activeFile}
             onSelect=${onSelect}
+            commentsPulse=${commentsPulse}
           />
         `)}
       </div>
