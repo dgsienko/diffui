@@ -10,7 +10,6 @@ from diffui.git_utils import (
     get_file_mtime,
     get_full_diff,
     get_repo_root,
-    get_working_changed_files,
     get_working_diff,
     short_name,
 )
@@ -105,10 +104,9 @@ def _is_ignored(path: str) -> bool:
 @router.get("/files")
 def list_files(view: str = "all"):
     if view == "all":
-        working = get_working_changed_files()
-        files = sorted(set(app_state.all_files) | set(working))
+        files = sorted(set(app_state.all_files) | set(app_state.working_files))
     elif view == "working":
-        files = get_working_changed_files()
+        files = list(app_state.working_files)
     else:
         commit = next((c for c in app_state.commits if c.sha == view), None)
         files = commit.files if commit else []

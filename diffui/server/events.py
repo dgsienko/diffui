@@ -69,9 +69,10 @@ def _apply_state_updates(events: list[str]) -> list[str]:
         if "files_changed" not in events:
             events = [*events, "files_changed"]
     elif "files_changed" in events:
-        from diffui.git_utils import get_diff_numstat
+        from diffui.git_utils import get_diff_numstat, get_working_changed_files
 
         app_state.numstat = get_diff_numstat(app_state.merge_base)
+        app_state.working_files = get_working_changed_files()
 
     if "comments_changed" in events:
         app_state.comments = load_comments()
