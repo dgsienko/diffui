@@ -30,4 +30,8 @@ class Theme:
     warn_bg: str
     warn_hover: str
     warn_fg: str
+    highlight_bg: str = "rgba(250, 180, 40, 0.3)"
+    highlight_border: str = "rgba(250, 180, 40, 0.5)"
+    overlay_bg: str = "rgba(0, 0, 0, 0.45)"
+    minimap_viewport: str = "rgba(255, 255, 255, 0.08)"
     syntax: dict = field(default_factory=dict)

@@ -800,6 +800,7 @@ CATPPUCCIN_LATTE = Theme(
     warn_bg="#ece6d4",
     warn_hover="#e0dabf",
     warn_fg="#df8e1d",
+    minimap_viewport="rgba(0, 0, 0, 0.08)",
     syntax={
         Token.Keyword: "#8839ef",
         Token.Keyword.Constant: "#8839ef",

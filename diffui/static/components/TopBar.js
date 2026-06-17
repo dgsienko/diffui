@@ -5,7 +5,7 @@ import { isPreviewable, previewLabel } from './PreviewViewer.js';
 
 const html = htm.bind(h);
 
-export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, openCommentCount, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, onToggleFileTree, onToggleFileFilter, showFileTree, showFileFilter, showCommentsPanel, agentRunning, onSendToAgent, explainRunning, onExplain, wsConnected, ignoreWhitespace, onToggleWhitespace, keybindings }) {
+export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, showReviewed, diffMode, openCommentCount, showPreview, onTogglePreview, activeFile, onViewChange, onDiffModeChange, onRepoSwitch, onToggleReviewed, onOpenSettings, onToggleCommentsPanel, onToggleFileTree, onToggleFileFilter, showFileTree, showFileFilter, showCommentsPanel, agentRunning, onSendToAgent, explainRunning, onExplain, wsConnected, ignoreWhitespace, onToggleWhitespace, keybindings, commentsPulse }) {
   const activeRepo = repos.find(r => r.active);
   const showRepoSelect = repos.length > 1;
   const kb = (id, fallback) => keybindings?.[id] || fallback;
@@ -78,7 +78,7 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
           <button class=${'toolbar-btn' + (showFileFilter ? ' panel-active' : '')} onClick=${onToggleFileFilter} title="Search files (Ctrl+Shift+F)">
             Search files
           </button>
-          <button class=${'toolbar-btn' + (showCommentsPanel ? ' panel-active' : '')} onClick=${onToggleCommentsPanel} title="Toggle comments panel">
+          <button class=${'toolbar-btn' + (showCommentsPanel ? ' panel-active' : '') + (commentsPulse && !showCommentsPanel ? ' pulse-notify' : '')} onClick=${onToggleCommentsPanel} title="Toggle comments panel">
             ${openCommentCount > 0 ? `${openCommentCount} comment${openCommentCount === 1 ? '' : 's'}` : 'Comments'}
           </button>
           ${onSendToAgent && html`

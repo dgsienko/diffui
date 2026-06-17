@@ -25,6 +25,28 @@ import { shortName, mod } from './lib/utils.js';
 
 const html = htm.bind(h);
 
+const SKELETON_WIDTHS = ['60%', '80%', '45%', '90%', '70%', '55%', '85%', '40%'];
+
+function DiffSkeleton() {
+  return html`
+    <div class="skeleton-lines" aria-label="Loading diff" aria-busy="true">
+      ${SKELETON_WIDTHS.map((w, i) => html`<div class="skeleton-line" key=${i} style=${`width: ${w}`}></div>`)}
+    </div>
+  `;
+}
+
+function EmptyState({ files, visibleFiles, fileFilter, showReviewed }) {
+  if (files.length === 0) {
+    return html`<div class="empty-state"><span class="empty-state-title">No changes on this branch</span><span class="empty-state-hint">This branch has no diff against the merge base</span></div>`;
+  }
+  if (visibleFiles.length === 0) {
+    if (fileFilter) return html`<div class="empty-state"><span class="empty-state-title">No files match your filter</span><span class="empty-state-hint">No files match "${fileFilter}"</span></div>`;
+    if (!showReviewed) return html`<div class="empty-state"><span class="empty-state-title">All files reviewed</span><span class="empty-state-hint">Press <kbd>a</kbd> to show reviewed files</span></div>`;
+    return html`<div class="empty-state"><span class="empty-state-title">No files to show</span><span class="empty-state-hint">No files match the current view</span></div>`;
+  }
+  return html`<div class="empty-state"><span class="empty-state-title">Select a file</span><span class="empty-state-hint">Choose a file from the tabs or explorer</span></div>`;
+}
+
 async function safeFetch(url, opts) {
   try {
     const res = await fetch(url, opts);
@@ -72,6 +94,7 @@ function App() {
   const [fontSize, setFontSize] = useState(13);
   const [wordWrap, setWordWrap] = useState(false);
   const [keybindings, setKeybindings] = useState({});
+  const [commentsPulse, setCommentsPulse] = useState(false);
   const diffRef = useRef(null);
   const diffCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
@@ -225,6 +248,7 @@ function App() {
     document.documentElement.classList.toggle('word-wrap-enabled', wordWrap);
   }, [wordWrap]);
 
+  const commentsPulseTimer = useRef(null);
   useEffect(() => {
     let cleanup = () => {};
 
@@ -239,6 +263,10 @@ function App() {
       }
       if (events.includes('comments_changed')) {
         cb.fetchComments();
+        cb.fetchFiles();
+        setCommentsPulse(true);
+        clearTimeout(commentsPulseTimer.current);
+        commentsPulseTimer.current = setTimeout(() => setCommentsPulse(false), 2000);
       }
     };
 
@@ -271,7 +299,7 @@ function App() {
     }
 
     const repoInterval = setInterval(() => latestCallbacks.current.fetchRepos(), 30000);
-    return () => { cleanup(); clearInterval(repoInterval); };
+    return () => { cleanup(); clearInterval(repoInterval); clearTimeout(commentsPulseTimer.current); };
   }, []);
 
   const handleViewChange = useCallback(async (newView) => {
@@ -900,6 +928,7 @@ function App() {
       ignoreWhitespace=${ignoreWhitespace}
       onToggleWhitespace=${handleToggleWhitespace}
       keybindings=${keybindings}
+      commentsPulse=${commentsPulse}
     />
     ${taskStatus && html`
       <${AgentStatusBar}
@@ -938,6 +967,7 @@ function App() {
           activeFile=${activeFile}
           onSelect=${handleFileSelect}
           onClose=${() => setShowFileTree(false)}
+          commentsPulse=${commentsPulse}
         />
       `}
       ${showCommentsPanel && html`
@@ -949,11 +979,9 @@ function App() {
         />
       `}
       ${loading
-        ? html`<div class="loading">Loading...</div>`
+        ? html`<${DiffSkeleton} />`
         : !activeFile
-          ? files.length === 0
-            ? html`<div class="empty-state"><span class="empty-state-title">No changed files</span><span class="empty-state-hint">This branch has no diff against the merge base</span></div>`
-            : html`<div class="empty-state"><span class="empty-state-title">Select a file</span><span class="empty-state-hint">Choose a file from the tabs or explorer</span></div>`
+          ? html`<${EmptyState} files=${files} visibleFiles=${visibleFiles} fileFilter=${fileFilter} showReviewed=${showReviewed} />`
           : showPreview && isPreviewable(activeFile)
             ? html`<${PreviewViewer}
                 containerRef=${diffRef}
@@ -1004,7 +1032,7 @@ function App() {
                     collapseAll=${collapseAll}
                     onBulkResolve=${() => handleBulkResolve(activeFile)}
                   />`
-                : html`<div class="loading">Loading...</div>`
+                : html`<${DiffSkeleton} />`
       }
       ${diffMode === 'unified' && diffData && html`
         <${Minimap} diffData=${diffData} comments=${comments} containerRef=${diffRef} />
