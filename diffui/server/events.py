@@ -21,6 +21,7 @@ _sse_clients: set[asyncio.Queue] = set()
 _ws_clients: set[WebSocket] = set()
 _bg_tasks: set[asyncio.Task] = set()
 _watch_cancel: asyncio.Event | None = None
+_loop: asyncio.AbstractEventLoop | None = None
 
 DEBOUNCE_MS = 400
 
@@ -182,7 +183,7 @@ async def websocket_endpoint(ws: WebSocket):
         _ws_clients.discard(ws)
 
 
-def restart_watcher() -> None:
+def _do_restart() -> None:
     global _watch_cancel
     if _watch_cancel is not None:
         _watch_cancel.set()
@@ -190,5 +191,13 @@ def restart_watcher() -> None:
     asyncio.get_event_loop().create_task(_watch_loop(_watch_cancel))
 
 
+def restart_watcher() -> None:
+    if _loop is None:
+        return
+    _loop.call_soon_threadsafe(_do_restart)
+
+
 def start_poller() -> None:
-    restart_watcher()
+    global _loop
+    _loop = asyncio.get_event_loop()
+    _do_restart()
