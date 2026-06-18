@@ -345,7 +345,7 @@ def view_explanation():
     if not _explain_output_path:
         return HTMLResponse(_placeholder)
     resolved = Path(_explain_output_path).resolve()
-    if not str(resolved).startswith(tempfile.gettempdir()):
+    if not str(resolved).startswith(str(Path(tempfile.gettempdir()).resolve())):
         return HTMLResponse(_placeholder, status_code=400)
     if not resolved.exists():
         return HTMLResponse(_placeholder)

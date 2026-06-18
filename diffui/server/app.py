@@ -32,6 +32,10 @@ def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:
     app.include_router(review_router)
     app.include_router(settings_router)
     app.include_router(events_router)
+
+    from diffui.server.routes_agent_terminal import router as agent_terminal_router
+
+    app.include_router(agent_terminal_router)
     register_shutdown(app)
 
     @app.on_event("startup")

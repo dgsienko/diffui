@@ -2074,6 +2074,113 @@ mark {
 
 .agent-status-dismiss:hover { color: var(--fg); }
 
+/* --- Agent Terminal Panel --- */
+
+.agent-terminal-panel {
+  background: var(--bg-dark);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
+  animation: slide-up 0.15s ease-out;
+}
+
+.agent-terminal-panel.status-done {
+  border-top-color: var(--add-hover);
+}
+
+.agent-terminal-panel.status-failed {
+  border-top-color: var(--remove-hover);
+}
+
+.agent-terminal-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 10;
+}
+
+.agent-terminal-resize:hover {
+  background: var(--accent);
+  opacity: 0.3;
+}
+
+.agent-terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: var(--purple-bg);
+  border-bottom: 1px solid var(--purple-border);
+  color: var(--purple);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.status-done .agent-terminal-header {
+  background: var(--add-bg);
+  border-bottom-color: var(--add-hover);
+  color: var(--add-fg);
+}
+
+.status-failed .agent-terminal-header {
+  background: var(--remove-bg);
+  border-bottom-color: var(--remove-hover);
+  color: var(--remove-fg);
+}
+
+.agent-terminal-header-left,
+.agent-terminal-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-terminal-title {
+  font-weight: 600;
+}
+
+.agent-terminal-elapsed {
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.agent-terminal-btn {
+  background: none;
+  border: 1px solid currentColor;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.agent-terminal-btn:hover {
+  opacity: 1;
+}
+
+.agent-terminal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 4px;
+}
+
+.agent-terminal-body .xterm {
+  height: 100%;
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .top-bar-btn.preview-active {
   background: var(--accent);
   color: var(--bg);

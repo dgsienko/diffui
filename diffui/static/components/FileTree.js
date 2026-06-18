@@ -87,7 +87,7 @@ function TreeDir({ name, files, activeFile, onSelect, commentsPulse }) {
 
 export function FileTree({ files, activeFile, onSelect, onClose, commentsPulse }) {
   const [groupMode, setGroupMode] = useState('dir');
-  const { ref: treeRef, width, onResizeStart } = useResize(260, 180, 500);
+  const { ref: treeRef, size: width, onResizeStart } = useResize(260, 180, 500);
   const grouper = GROUPERS[groupMode] || groupByDir;
   const groups = grouper(files);
   const groupNames = Object.keys(groups).sort();

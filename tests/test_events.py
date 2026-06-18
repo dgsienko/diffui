@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from watchfiles import Change
+
+from diffui.server.events import _apply_state_updates, _broadcast, _ws_clients
+from diffui.server.state import app_state
 
 
 @pytest.fixture()
@@ -116,7 +120,6 @@ class TestMakeWatchFilter:
 
 class TestBroadcast:
     def test_broadcast_to_clients(self):
-        from diffui.server.events import _broadcast
         from diffui.server.events import _sse_clients as _clients
 
         q = asyncio.Queue(maxsize=8)
@@ -131,7 +134,6 @@ class TestBroadcast:
             _clients.discard(q)
 
     def test_broadcast_empty_events_is_noop(self):
-        from diffui.server.events import _broadcast
         from diffui.server.events import _sse_clients as _clients
 
         q = asyncio.Queue(maxsize=8)
@@ -143,14 +145,12 @@ class TestBroadcast:
             _clients.discard(q)
 
     def test_broadcast_no_clients_is_noop(self):
-        from diffui.server.events import _broadcast
         from diffui.server.events import _sse_clients as _clients
 
         _clients.clear()
         _broadcast(["files_changed"])
 
     def test_broadcast_full_queue_skipped(self):
-        from diffui.server.events import _broadcast
         from diffui.server.events import _sse_clients as _clients
 
         q = asyncio.Queue(maxsize=1)
@@ -165,9 +165,6 @@ class TestBroadcast:
 
 class TestWsBroadcast:
     def test_broadcast_delivers_to_ws_clients(self):
-        from unittest.mock import AsyncMock
-
-        from diffui.server.events import _broadcast, _ws_clients
 
         ws = AsyncMock()
         _ws_clients.add(ws)
@@ -182,9 +179,7 @@ class TestWsBroadcast:
             _ws_clients.discard(ws)
 
     def test_broadcast_sends_to_both_sse_and_ws(self):
-        from unittest.mock import AsyncMock
 
-        from diffui.server.events import _broadcast, _ws_clients
         from diffui.server.events import _sse_clients as _clients
 
         q = asyncio.Queue(maxsize=8)
@@ -198,3 +193,223 @@ class TestWsBroadcast:
         finally:
             _clients.discard(q)
             _ws_clients.discard(ws)
+
+
+class TestApplyStateUpdates:
+    def test_git_changed_reloads_and_clears_cache(self):
+
+        with (
+            patch("diffui.server.state.app_state.reload_repo_state") as reload,
+            patch("diffui.server.routes_diff.clear_diff_cache") as clear_cache,
+        ):
+            result = _apply_state_updates(["git_changed"])
+
+        reload.assert_called_once()
+        clear_cache.assert_called_once()
+        assert "files_changed" in result
+
+    def test_git_changed_does_not_duplicate_files_changed(self):
+
+        with (
+            patch("diffui.server.state.app_state.reload_repo_state"),
+            patch("diffui.server.routes_diff.clear_diff_cache"),
+        ):
+            result = _apply_state_updates(["git_changed", "files_changed"])
+
+        assert result.count("files_changed") == 1
+
+    def test_files_changed_refreshes_numstat_and_working_files(self):
+
+        prev_numstat = app_state.numstat
+        prev_working = app_state.working_files
+        try:
+            with (
+                patch("diffui.git_utils.get_diff_numstat", return_value={"a.py": (1, 2)}) as numstat,
+                patch("diffui.git_utils.get_working_changed_files", return_value=["a.py"]) as working,
+            ):
+                result = _apply_state_updates(["files_changed"])
+
+            numstat.assert_called_once_with(app_state.merge_base)
+            working.assert_called_once()
+            assert app_state.numstat == {"a.py": (1, 2)}
+            assert app_state.working_files == ["a.py"]
+            assert result == ["files_changed"]
+        finally:
+            app_state.numstat = prev_numstat
+            app_state.working_files = prev_working
+
+    def test_files_changed_skipped_when_git_changed_present(self):
+
+        with (
+            patch("diffui.server.state.app_state.reload_repo_state"),
+            patch("diffui.server.routes_diff.clear_diff_cache"),
+            patch("diffui.git_utils.get_diff_numstat") as numstat,
+            patch("diffui.git_utils.get_working_changed_files") as working,
+        ):
+            _apply_state_updates(["git_changed"])
+
+        numstat.assert_not_called()
+        working.assert_not_called()
+
+    def test_comments_changed_reloads_comments(self):
+
+        prev_comments = app_state.comments
+        try:
+            with patch("diffui.server.events.load_comments", return_value={"a.py": [{"id": "1"}]}) as load:
+                result = _apply_state_updates(["comments_changed"])
+
+            load.assert_called_once()
+            assert app_state.comments == {"a.py": [{"id": "1"}]}
+            assert result == ["comments_changed"]
+        finally:
+            app_state.comments = prev_comments
+
+    def test_git_and_comments_changed_runs_both_paths(self):
+
+        with (
+            patch("diffui.server.state.app_state.reload_repo_state") as reload,
+            patch("diffui.server.routes_diff.clear_diff_cache") as clear_cache,
+            patch("diffui.server.events.load_comments", return_value={"b.py": []}) as load,
+        ):
+            result = _apply_state_updates(["git_changed", "comments_changed"])
+
+        reload.assert_called_once()
+        clear_cache.assert_called_once()
+        load.assert_called_once()
+        assert "files_changed" in result
+        assert "comments_changed" in result
+
+
+class TestAutoUnreview:
+    def test_files_changed_unreviews_modified_files(self):
+        prev_reviewed = app_state.reviewed.copy()
+        prev_numstat = app_state.numstat
+        prev_working = app_state.working_files
+        try:
+            app_state.reviewed = {"changed.py": 1000.0, "untouched.py": 2000.0}
+            with (
+                patch("diffui.git_utils.get_diff_numstat", return_value={}),
+                patch("diffui.git_utils.get_working_changed_files", return_value=[]),
+                patch("diffui.git_utils.get_file_mtime", side_effect=lambda p: 1500.0 if p == "changed.py" else 2000.0),
+            ):
+                _apply_state_updates(["files_changed"])
+
+            assert "changed.py" not in app_state.reviewed
+            assert "untouched.py" in app_state.reviewed
+        finally:
+            app_state.reviewed = prev_reviewed
+            app_state.numstat = prev_numstat
+            app_state.working_files = prev_working
+
+    def test_git_changed_also_unreviews_modified_files(self):
+        prev_reviewed = app_state.reviewed.copy()
+        try:
+            app_state.reviewed = {"changed.py": 1000.0}
+            with (
+                patch("diffui.server.state.app_state.reload_repo_state"),
+                patch("diffui.server.routes_diff.clear_diff_cache"),
+                patch("diffui.git_utils.get_file_mtime", return_value=2000.0),
+                patch("diffui.git_utils.save_reviewed"),
+            ):
+                _apply_state_updates(["git_changed"])
+
+            assert "changed.py" not in app_state.reviewed
+        finally:
+            app_state.reviewed = prev_reviewed
+
+    def test_files_changed_keeps_reviewed_when_mtime_matches(self):
+        prev_reviewed = app_state.reviewed.copy()
+        prev_numstat = app_state.numstat
+        prev_working = app_state.working_files
+        try:
+            app_state.reviewed = {"stable.py": 3000.0}
+            with (
+                patch("diffui.git_utils.get_diff_numstat", return_value={}),
+                patch("diffui.git_utils.get_working_changed_files", return_value=[]),
+                patch("diffui.git_utils.get_file_mtime", return_value=3000.0),
+            ):
+                _apply_state_updates(["files_changed"])
+
+            assert "stable.py" in app_state.reviewed
+        finally:
+            app_state.reviewed = prev_reviewed
+            app_state.numstat = prev_numstat
+            app_state.working_files = prev_working
+
+
+class TestWatcherLifecycle:
+    def test_do_restart_sets_cancel_event(self):
+
+        import diffui.server.events as events
+
+        prev_cancel = events._watch_cancel
+        old_event = MagicMock()
+        events._watch_cancel = old_event
+        try:
+            with (
+                patch.object(events.asyncio, "get_event_loop") as get_loop,
+                patch.object(events, "_watch_loop", return_value=MagicMock()),
+            ):
+                events._do_restart()
+
+            old_event.set.assert_called_once()
+            assert events._watch_cancel is not old_event
+            assert isinstance(events._watch_cancel, asyncio.Event)
+            get_loop.return_value.create_task.assert_called_once()
+        finally:
+            events._watch_cancel = prev_cancel
+
+    def test_do_restart_handles_no_prior_cancel(self):
+
+        import diffui.server.events as events
+
+        prev_cancel = events._watch_cancel
+        events._watch_cancel = None
+        try:
+            with (
+                patch.object(events.asyncio, "get_event_loop") as get_loop,
+                patch.object(events, "_watch_loop", return_value=MagicMock()),
+            ):
+                events._do_restart()
+
+            assert isinstance(events._watch_cancel, asyncio.Event)
+            get_loop.return_value.create_task.assert_called_once()
+        finally:
+            events._watch_cancel = prev_cancel
+
+    def test_restart_watcher_noop_without_loop(self):
+
+        import diffui.server.events as events
+
+        with patch.object(events, "_loop", None), patch.object(events, "_do_restart") as do_restart:
+            events.restart_watcher()
+
+        do_restart.assert_not_called()
+
+    def test_restart_watcher_schedules_threadsafe(self):
+
+        import diffui.server.events as events
+
+        loop = MagicMock()
+        with patch.object(events, "_loop", loop):
+            events.restart_watcher()
+
+        loop.call_soon_threadsafe.assert_called_once_with(events._do_restart)
+
+    def test_start_poller_sets_loop_and_restarts(self):
+
+        import diffui.server.events as events
+
+        prev_loop = events._loop
+        loop = MagicMock()
+        try:
+            with (
+                patch.object(events.asyncio, "get_event_loop", return_value=loop),
+                patch.object(events, "_do_restart") as do_restart,
+            ):
+                events.start_poller()
+
+            assert events._loop is loop
+            do_restart.assert_called_once()
+        finally:
+            events._loop = prev_loop

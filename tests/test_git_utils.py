@@ -200,6 +200,80 @@ class TestSessionPersistence:
         assert _load_json(p, {}) == {"b": 2}
 
 
+class TestDiscoverSiblingRepos:
+    def test_no_git_dirs_returns_empty(self, tmp_path: Path):
+        from diffui.git_utils import discover_sibling_repos
+
+        (tmp_path / "parent").mkdir()
+        child = tmp_path / "parent" / "child"
+        child.mkdir()
+        assert discover_sibling_repos(child) == []
+
+    def test_finds_sibling_git_repos(self, tmp_path: Path):
+        from diffui.git_utils import discover_sibling_repos
+
+        parent = tmp_path / "workspace"
+        parent.mkdir()
+        for name in ("repo_a", "repo_b"):
+            repo = parent / name
+            repo.mkdir()
+            (repo / ".git").mkdir()
+        plain = parent / "not_a_repo"
+        plain.mkdir()
+
+        current = parent / "repo_a"
+        result = discover_sibling_repos(current)
+        assert sorted(p.name for p in result) == ["repo_a", "repo_b"]
+
+
+class TestRepoHasChanges:
+    def test_test_repo_has_changes(self):
+        from diffui.git_utils import repo_has_changes
+
+        root = Path(__file__).parent.parent
+        assert repo_has_changes(root) is True
+
+
+class TestGetFileMtime:
+    def test_missing_file_returns_zero(self):
+        from diffui.git_utils import get_file_mtime, set_active_repo
+
+        root = Path(__file__).parent.parent
+        set_active_repo(root)
+        assert get_file_mtime("_definitely_missing_file_.xyz") == 0.0
+
+    def test_existing_file_returns_positive(self):
+        from diffui.git_utils import get_file_mtime, set_active_repo
+
+        root = Path(__file__).parent.parent
+        set_active_repo(root)
+        assert get_file_mtime("diffui/__init__.py") > 0.0
+
+
+class TestGetFileContent:
+    def test_missing_file_returns_empty(self):
+        from diffui.git_utils import get_file_content, set_active_repo
+
+        root = Path(__file__).parent.parent
+        set_active_repo(root)
+        assert get_file_content("_definitely_missing_file_.xyz") == ""
+
+    def test_binary_file_returns_empty(self, tmp_path: Path):
+        from diffui.git_utils import get_file_content, set_active_repo
+
+        set_active_repo(tmp_path)
+        binary = tmp_path / "data.bin"
+        binary.write_bytes(b"\xff\xfe\x00\x01\x80")
+        assert get_file_content("data.bin") == ""
+
+    def test_text_file_returns_content(self, tmp_path: Path):
+        from diffui.git_utils import get_file_content, set_active_repo
+
+        set_active_repo(tmp_path)
+        (tmp_path / "hello.txt").write_text("hi there\n")
+        assert get_file_content("hello.txt") == "hi there\n"
+
+
 class TestGetDiffNumstat:
     def test_returns_dict(self):
         from diffui.git_utils import get_diff_numstat, get_merge_base, set_active_repo

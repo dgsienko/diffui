@@ -60,12 +60,23 @@ def _classify_changes(changes: set[tuple], git_dir: str, comments_path: str) -> 
     return list(events)
 
 
+def _invalidate_stale_reviews() -> None:
+    from diffui.git_utils import get_file_mtime, save_reviewed
+
+    stale = [p for p, t in app_state.reviewed.items() if get_file_mtime(p) != t]
+    if stale:
+        for p in stale:
+            del app_state.reviewed[p]
+        save_reviewed(app_state.reviewed)
+
+
 def _apply_state_updates(events: list[str]) -> list[str]:
     if "git_changed" in events:
         app_state.reload_repo_state()
         from diffui.server.routes_diff import clear_diff_cache
 
         clear_diff_cache()
+        _invalidate_stale_reviews()
         if "files_changed" not in events:
             events = [*events, "files_changed"]
     elif "files_changed" in events:
@@ -73,6 +84,7 @@ def _apply_state_updates(events: list[str]) -> list[str]:
 
         app_state.numstat = get_diff_numstat(app_state.merge_base)
         app_state.working_files = get_working_changed_files()
+        _invalidate_stale_reviews()
 
     if "comments_changed" in events:
         app_state.comments = load_comments()
