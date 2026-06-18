@@ -579,6 +579,322 @@ class TestServerRoutes:
         assert isinstance(data["agent_cli"], str)
         assert len(data["agent_cli"]) > 0
 
+    def test_review_summary_with_comments(self, _server_app):
+        _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_summary_.py",
+                "line_index": 1,
+                "file_line_num": 10,
+                "comment": "fix this bug",
+                "category": "bug",
+            },
+        )
+        try:
+            r = _server_app.get("/api/review-summary")
+            assert r.status_code == 200
+            md = r.json()["markdown"]
+            assert "## Open Comments" in md
+            assert "fix this bug" in md
+            assert "_test_summary_.py:10" in md
+            assert "1 total, 1 open, 0 resolved" in md
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_summary_.py", []):
+                _server_app.delete(f"/api/comments/_test_summary_.py/{c['id']}")
+
+    def test_review_summary_categorizes_open_comments(self, _server_app):
+        _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_summary_cat_.py",
+                "line_index": 1,
+                "comment": "a bug",
+                "category": "bug",
+            },
+        )
+        _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_summary_cat_.py",
+                "line_index": 2,
+                "comment": "a nit",
+                "category": "nit",
+            },
+        )
+        try:
+            md = _server_app.get("/api/review-summary").json()["markdown"]
+            assert "### Bug" in md
+            assert "### Nit" in md
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_summary_cat_.py", []):
+                _server_app.delete(f"/api/comments/_test_summary_cat_.py/{c['id']}")
+
+    def test_agent_prompt_with_comments(self, _server_app):
+        _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_prompt_.py",
+                "line_index": 1,
+                "file_line_num": 5,
+                "comment": "rename this variable",
+                "category": "suggestion",
+            },
+        )
+        try:
+            r = _server_app.post("/api/agent/prompt")
+            assert r.status_code == 200
+            data = r.json()
+            assert data["ok"] is True
+            assert "rename this variable" in data["prompt"]
+            assert data["comment_count"] == 1
+            assert "context_path" in data
+            assert "agent_cli" in data
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_prompt_.py", []):
+                _server_app.delete(f"/api/comments/_test_prompt_.py/{c['id']}")
+
+    def test_editor_open(self, _server_app):
+        from unittest.mock import patch
+
+        with patch("diffui.server.routes_settings.subprocess.Popen") as mock_popen:
+            r = _server_app.post(
+                "/api/editor/open",
+                json={"file_path": "diffui/__init__.py", "line_num": 3},
+            )
+            assert r.status_code == 200
+            assert r.json()["ok"] is True
+            assert mock_popen.called
+
+    def test_files_view_working(self, _server_app):
+        r = _server_app.get("/api/files?view=working")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_files_view_commit_sha(self, _server_app):
+        commits = _server_app.get("/api/commits").json()
+        if not commits:
+            pytest.skip("No commits")
+        sha = commits[0]["sha"]
+        r = _server_app.get(f"/api/files?view={sha}")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_files_view_unknown_commit(self, _server_app):
+        r = _server_app.get("/api/files?view=deadbeefdeadbeef")
+        assert r.status_code == 200
+        assert r.json() == []
+
+    def test_diff_expanded_context(self, _server_app):
+        files = _server_app.get("/api/files?view=all").json()
+        if not files:
+            pytest.skip("No changed files")
+        path = files[0]["path"]
+        r = _server_app.get(f"/api/diff/{path}?view=all&context=10")
+        assert r.status_code == 200
+        assert "file_path" in r.json()
+
+    def test_diff_cache_hit_returns_same(self, _server_app):
+        files = _server_app.get("/api/files?view=all").json()
+        if not files:
+            pytest.skip("No changed files")
+        path = files[0]["path"]
+        first = _server_app.get(f"/api/diff/{path}?view=all").json()
+        second = _server_app.get(f"/api/diff/{path}?view=all").json()
+        assert first == second
+
+    def test_clear_diff_cache_empties_cache(self, _server_app):
+        from diffui.server.routes_diff import _diff_cache, clear_diff_cache
+
+        files = _server_app.get("/api/files?view=all").json()
+        if not files:
+            pytest.skip("No changed files")
+        path = files[0]["path"]
+        _server_app.get(f"/api/diff/{path}?view=all")
+        assert len(_diff_cache) >= 1
+        clear_diff_cache()
+        assert len(_diff_cache) == 0
+
+    def test_repo_switch_valid_index(self, _server_app):
+        original = _server_app.get("/api/repos").json()
+        active = next((r["index"] for r in original if r["active"]), 0)
+        try:
+            r = _server_app.post("/api/repo/switch", json={"index": 0})
+            assert r.status_code == 200
+            data = r.json()
+            assert data["ok"] is True
+            assert "branch" in data
+        finally:
+            _server_app.post("/api/repo/switch", json={"index": active})
+
+    def test_repos_caching_repeated_calls(self, _server_app):
+        first = _server_app.get("/api/repos")
+        second = _server_app.get("/api/repos")
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json() == second.json()
+
+    def test_branch_includes_head_sha_and_remote(self, _server_app):
+        r = _server_app.get("/api/branch")
+        assert r.status_code == 200
+        data = r.json()
+        assert "head_sha" in data
+        assert "remote_url" in data
+        assert "merge_base" in data
+        assert "repo_name" in data
+
+
+class TestReviewModule:
+    def test_build_agent_context_no_comments(self):
+        from unittest.mock import patch
+
+        from diffui.server import routes_review
+
+        with patch.object(routes_review.app_state, "comments", {}):
+            result = routes_review._build_agent_context()
+        assert result[0] is None
+        assert result[1] == "No open comments"
+
+    def test_build_agent_context_with_comments(self):
+        from unittest.mock import patch
+
+        from diffui.server import routes_review
+
+        comments = {
+            "src/auth.py": [
+                {
+                    "id": "abc",
+                    "comment": "this is wrong",
+                    "category": "bug",
+                    "file_line_num": 12,
+                    "line_text": "x = bad()",
+                    "suggestion": "x = good()",
+                    "status": "open",
+                    "replies": [{"author": "claude", "text": "looking into it"}],
+                }
+            ],
+            "src/resolved.py": [{"id": "def", "comment": "old", "status": "resolved", "replies": []}],
+        }
+        with patch.object(routes_review.app_state, "comments", comments):
+            prompt, repo_root, context_path, count = routes_review._build_agent_context()
+
+        assert prompt is not None
+        assert count == 1
+        assert "this is wrong" in prompt
+        assert repo_root
+        assert context_path
+
+        from pathlib import Path
+
+        ctx = Path(context_path).read_text()
+        assert "### src/auth.py" in ctx
+        assert "this is wrong" in ctx
+        assert "x = good()" in ctx
+        assert "claude: looking into it" in ctx
+        assert "src/resolved.py" not in ctx
+
+    def test_process_status_none(self):
+        from diffui.server.routes_review import _process_status
+
+        assert _process_status(None) == {"running": False}
+
+    def test_process_status_running(self):
+        from unittest.mock import MagicMock
+
+        from diffui.server.routes_review import _process_status
+
+        proc = MagicMock()
+        proc.poll.return_value = None
+        proc.pid = 4242
+        assert _process_status(proc) == {"running": True, "pid": 4242}
+
+    def test_process_status_finished(self):
+        from unittest.mock import MagicMock
+
+        from diffui.server.routes_review import _process_status
+
+        proc = MagicMock()
+        proc.poll.return_value = 0
+        assert _process_status(proc) == {"running": False, "exit_code": 0}
+
+    def test_explain_already_running(self, _server_app):
+        from unittest.mock import MagicMock, patch
+
+        from diffui.server import routes_review
+
+        running = MagicMock()
+        running.poll.return_value = None
+        with patch.object(routes_review, "_explain_process", running):
+            r = _server_app.post("/api/explain")
+            assert r.status_code == 200
+            data = r.json()
+            assert data["ok"] is False
+            assert "already generating" in data["error"]
+
+    def test_explain_unknown_agent(self, _server_app):
+        from unittest.mock import patch
+
+        from diffui.server import routes_review
+
+        with (
+            patch.object(routes_review, "_explain_process", None),
+            patch.object(routes_review.app_state, "agent_cli", "bogus-cli"),
+        ):
+            r = _server_app.post("/api/explain")
+            assert r.status_code == 200
+            data = r.json()
+            assert data["ok"] is False
+            assert "Unknown agent CLI" in data["error"]
+
+    def test_view_explanation_with_temp_file(self, _server_app):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from diffui.server import routes_review
+
+        # Resolve gettempdir so the module's startswith() guard matches the
+        # symlink-resolved path (macOS /var -> /private/var).
+        tmp_dir = Path(tempfile.gettempdir()).resolve()
+        tmp = tmp_dir / "diffui-explain-test-view.html"
+        tmp.write_text("<html><body>generated walkthrough</body></html>")
+        try:
+            with (
+                patch.object(routes_review, "_explain_output_path", str(tmp)),
+                patch.object(routes_review.tempfile, "gettempdir", return_value=str(tmp_dir)),
+            ):
+                r = _server_app.get("/api/explain/view")
+                assert r.status_code == 200
+                assert "generated walkthrough" in r.text
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    def test_view_explanation_path_traversal_guard(self, _server_app):
+        from unittest.mock import patch
+
+        from diffui.server import routes_review
+
+        with patch.object(routes_review, "_explain_output_path", "/etc/passwd"):
+            r = _server_app.get("/api/explain/view")
+            assert r.status_code == 400
+            assert "No explanation generated yet" in r.text
+
+    def test_view_explanation_missing_file(self, _server_app):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from diffui.server import routes_review
+
+        tmp_dir = Path(tempfile.gettempdir()).resolve()
+        missing = str(tmp_dir / "diffui-explain-does-not-exist.html")
+        with (
+            patch.object(routes_review, "_explain_output_path", missing),
+            patch.object(routes_review.tempfile, "gettempdir", return_value=str(tmp_dir)),
+        ):
+            r = _server_app.get("/api/explain/view")
+            assert r.status_code == 200
+            assert "No explanation generated yet" in r.text
+
 
 class TestRiskScoring:
     def test_migration_file_high_risk(self):
@@ -620,6 +936,27 @@ class TestRiskScoring:
         _score, _level, reasons = _score_risk("src/big_refactor.py", 150, 100)
         assert "high churn" in reasons
 
+    def test_moderate_deletion_adds_score_without_reason(self):
+        from diffui.server.routes_diff import _score_risk
+
+        score, _level, reasons = _score_risk("src/module.py", 0, 30)
+        assert score == 1
+        assert "large deletion" not in reasons
+
+    def test_moderate_churn_adds_score_without_reason(self):
+        from diffui.server.routes_diff import _score_risk
+
+        score, _level, reasons = _score_risk("src/module.py", 40, 20)
+        assert score >= 1
+        assert "high churn" not in reasons
+
+    def test_no_extension_path(self):
+        from diffui.server.routes_diff import _score_risk
+
+        _score, level, reasons = _score_risk("Makefile", 5, 5)
+        assert level == "low"
+        assert reasons == []
+
 
 class TestExportJson:
     def test_output_structure(self):
@@ -660,3 +997,16 @@ class TestExportJson:
             assert "reviewed" in f
             assert "comments" in f
             assert "open_comment_count" in f
+
+    def test_agent_start_no_comments(self, _server_app):
+        r = _server_app.post("/api/agent/start")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is False
+        assert "No open comments" in data["error"]
+
+    def test_agent_ws_no_process(self, _server_app):
+        with _server_app.websocket_connect("/api/agent/ws") as ws:
+            msg = ws.receive_json()
+            assert msg["type"] == "error"
+            assert "No agent running" in msg["message"]

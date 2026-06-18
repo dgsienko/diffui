@@ -6,7 +6,7 @@ import { shortName, useResize } from '../lib/utils.js';
 const html = htm.bind(h);
 
 export function CommentsPanel({ comments, onSelect, onClose, onBulkResolve }) {
-  const { ref: panelRef, width, onResizeStart } = useResize(300, 240, 400);
+  const { ref: panelRef, size: width, onResizeStart } = useResize(300, 240, 400);
 
   const allComments = useMemo(() => {
     const result = [];

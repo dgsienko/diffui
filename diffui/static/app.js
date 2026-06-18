@@ -18,6 +18,7 @@ import { CommandPalette } from './components/CommandPalette.js';
 import { PreviewViewer, isPreviewable } from './components/PreviewViewer.js';
 import { AgentStatusBar } from './components/AgentStatusBar.js';
 import { AgentConfirmDialog } from './components/AgentConfirmDialog.js';
+import { AgentTerminal } from './components/AgentTerminal.js';
 import { CommentsPanel } from './components/CommentsPanel.js';
 import { FileFilterBar } from './components/FileFilterBar.js';
 import { GoToLineDialog } from './components/GoToLineDialog.js';
@@ -496,6 +497,8 @@ function App() {
 
   const [agentRunning, setAgentRunning] = useState(false);
   const [showAgentConfirm, setShowAgentConfirm] = useState(null);
+  const [showAgentTerminal, setShowAgentTerminal] = useState(false);
+  const [agentCliName, setAgentCliName] = useState('agent');
 
   const handleSendToAgent = useCallback(async () => {
     const hasOpen = Object.values(latestCallbacks.current.comments || {}).some(
@@ -508,13 +511,20 @@ function App() {
     setShowAgentConfirm(data);
   }, []);
 
-  const handleConfirmAgent = useCallback(() => {
+  const handleConfirmAgent = useCallback(async () => {
     setShowAgentConfirm(null);
-    runAsyncTask(
-      '/api/agent/run', '/api/agent/status', setAgentRunning,
-      { label: 'Addressing comments', doneMsg: 'Comments addressed', failMsg: 'Agent failed' },
-    );
-  }, [runAsyncTask]);
+    const r = await safeFetch('/api/agent/start', { method: 'POST' });
+    const data = await r.json();
+    if (!data.ok) { showToast(data.error || 'Failed to start agent', 'error'); return; }
+    setAgentCliName(data.agent || 'agent');
+    setAgentRunning(true);
+    setShowAgentTerminal(true);
+  }, []);
+
+  const handleCloseTerminal = useCallback(() => {
+    setShowAgentTerminal(false);
+    setAgentRunning(false);
+  }, []);
 
   const handleSortByRisk = useCallback(() => {
     setSortByRisk(v => { showToast(v ? 'Default file order' : 'Sorted by risk'); return !v; });
@@ -1054,6 +1064,12 @@ function App() {
       <${GoToLineDialog}
         onSubmit=${handleGoToLine}
         onClose=${() => setShowGoToLine(false)}
+      />
+    `}
+    ${showAgentTerminal && html`
+      <${AgentTerminal}
+        onClose=${handleCloseTerminal}
+        agentCli=${agentCliName}
       />
     `}
     <div class="legend">

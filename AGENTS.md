@@ -10,7 +10,9 @@ no build step required.
 - **Preact + HTM** (frontend, no build step)
 - **Pygments** for syntax highlighting
 - **watchfiles** for real-time filesystem watching (Rust-backed FSEvents/inotify)
+- **xterm.js** for interactive agent terminal (loaded via ESM importmap)
 - Git operations via `subprocess` (no gitpython dependency)
+- PTY-based agent process management (`pty` + `select` stdlib)
 - Installed globally via `pipx install -e .`
 
 ## Architecture
@@ -32,6 +34,8 @@ diffui/
 │   ├── routes_repo.py      # Repo listing and switching
 │   ├── routes_review.py    # Review toggle, summary export, agent/explain
 │   │                       #   orchestration (thread-safe process management)
+│   ├── routes_agent_terminal.py # PTY-based interactive agent terminal,
+│   │                       #   WebSocket streaming, idle detection
 │   ├── routes_settings.py  # Settings, editor open, session persistence
 │   ├── models.py       # Pydantic request models for all endpoints
 │   ├── state.py        # AppState singleton — shared server state
@@ -41,7 +45,7 @@ diffui/
 │   │                   #   WebSocket client, session restore
 │   ├── lib/            # Shared utilities
 │   │   ├── markdown.js #   marked.js wrapper with GFM config
-│   │   └── utils.js    #   shortName(), mergeRef() helpers
+│   │   └── utils.js    #   shortName(), mergeRef(), useResize() helpers
 │   ├── components/     # TopBar, FileTabs, DiffViewer, SplitDiffViewer,
 │   │                   #   FullFileViewer, FileTree, CommentBox,
 │   │                   #   CommentDisplay, CommentsPanel, SearchBar,
@@ -49,7 +53,7 @@ diffui/
 │   │                   #   Minimap, ShortcutOverlay, Toast,
 │   │                   #   CommandPalette, CompletionScreen, PreviewViewer,
 │   │                   #   AgentStatusBar, AgentConfirmDialog,
-│   │                   #   GoToLineDialog
+│   │                   #   AgentTerminal, GoToLineDialog
 │   ├── index.html      # Shell page with importmap for preact/htm CDN
 │   └── style.css       # All styles via CSS custom properties (themed)
 └── themes/
@@ -107,13 +111,18 @@ diffui/
   dots on file tabs and tree items. Sort-by-risk toggle via command
   palette.
 - **Agent orchestration** — confirmation dialog shows agent name, comment
-  count, and behavior summary. `/api/agent/run` spawns the configured
-  agent CLI with a rich context file (`_build_agent_context`) containing
-  full diffs, review state, and thread history. `/api/agent/status` polls.
-  Agent CLI is configurable in settings (Claude Code, Codex, OpenCode,
-  Cursor Agent). Process management uses `_process_lock` for thread
-  safety and `_process_status` for reaping. `AgentStatusBar` shows live
-  elapsed timer during execution.
+  count, and behavior summary. `/api/agent/start` spawns the configured
+  agent CLI in interactive mode via PTY (`pty.openpty()`). The agent's
+  full TUI streams to a slide-up terminal panel (`AgentTerminal`) via
+  a dedicated WebSocket (`/api/agent/ws`). Users can answer permission
+  prompts, navigate multi-choice menus, and interact directly. Output
+  is buffered (64KB ring buffer) for reconnect replay. Idle detection
+  (3s of no output after activity) updates status to "Done — waiting
+  for input". Stop/Close buttons in terminal header. Context built by
+  `_build_agent_context` with full diffs, review state, and thread
+  history. Agent CLI configurable in settings (Claude Code, Codex,
+  OpenCode, Cursor Agent). Legacy polling endpoints (`/api/agent/run`,
+  `/api/agent/status`) still available for non-terminal use.
 - **Explain changes** — `/api/explain` spawns the configured agent CLI
   to generate a self-contained HTML walkthrough. `/api/explain/status`
   polls. `/api/explain/view` serves the result as a localhost page
@@ -156,7 +165,19 @@ diffui/
   frontend ships as plain `.js`/`.css`/`.html` in the Python package.
 - **Shared utilities** — `lib/markdown.js` provides `renderMd()` used by
   both `CommentDisplay` and `PreviewViewer`. `lib/utils.js` provides
-  `shortName()` and `mergeRef()`.
+  `shortName()`, `mergeRef()`, and `useResize(initial, min, max, axis)`
+  hook used by FileTree, CommentsPanel, and AgentTerminal.
+- **Auto-unreview** — files modified after being marked reviewed are
+  automatically unreviewed. `_invalidate_stale_reviews()` in `events.py`
+  compares stored mtime against current on both `files_changed` and
+  `git_changed` events.
+- **Comment notification pulse** — when `comments_changed` fires, the
+  Comments button and file tree items with comments briefly pulse to
+  draw attention.
+- **Skeleton loading** — diff content shows placeholder lines during
+  load instead of a spinner.
+- **Contextual empty states** — empty state messages vary based on
+  context (no changes, all reviewed, no filter matches, select a file).
 - **Two-row header** — row 1 has repo/view selects and branch pill;
   row 2 (toolbar) has mode toggle, review controls, panel toggles
   (Explorer, Search files, Comments), agent button, and diff stats.
@@ -169,12 +190,21 @@ diffui/
 - **Explorer sidebar** — `FileTree` with grouping modes (directory, type,
   status), resizable via drag handle, open by default.
 - **Review progress** — visual progress bar + count in toolbar.
-- **CSS design system** — `--radius-sm/md/lg`, `--shadow-low/high` CSS
-  variables. All spacing on 4/8pt grid. No hardcoded colors.
+- **CSS design system** — `--radius-sm/md/lg`, `--shadow-low/high`,
+  `--highlight-bg/border`, `--overlay-bg`, `--minimap-viewport` CSS
+  variables. All spacing on 4/8pt grid. No hardcoded colors — zero
+  hex/rgba values outside `:root`.
 - **Error handling** — `safeFetch` wrapper shows toast on failed requests.
 - **Accessibility** — ARIA labels on selects, `role="tab"` and keyboard
   activation on file tabs, `role="treeitem"` on file tree items, focus
-  trapping in settings dialog.
+  trapping in settings dialog, `:focus-visible` outlines on all buttons,
+  bold color-coded `+`/`-` diff prefixes for color-blind users.
+- **Tab scroll indicators** — gradient fades on tab bar edges when
+  more tabs exist offscreen.
+- **Resizable panels** — FileTree, CommentsPanel, and AgentTerminal
+  all have drag-to-resize handles via shared `useResize` hook.
+- **File tab tooltips** — hover shows full path, +/- counts, and
+  risk level.
 
 ### Design System
 
@@ -213,7 +243,7 @@ diffui                               # Start server (from any git repo)
 diffui --open                        # Start + open in browser
 diffui --comments                    # Dump comments to stdout
 diffui --json                        # Export review session as JSON
-pytest                               # Run tests (187 tests)
+pytest                               # Run tests (263 tests, 86% coverage)
 ruff check diffui/ tests/           # Lint
 ```
 
@@ -225,24 +255,35 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
 - `tests/test_diff.py` — 46 tests: line classification, number parsing,
   hunk splitting, prefix stripping, lexer selection, token color,
   word diff ranges, pair diff lines
-- `tests/test_events.py` — 24 tests: change classification (source files,
+- `tests/test_events.py` — 37 tests: change classification (source files,
   git paths, comments, mixed, empty, dedup), watch filter (accept/reject
   for source, pyc, git paths, unrelated dirs), SSE broadcast, WebSocket
-  broadcast delivery
-- `tests/test_git_utils.py` — 29 tests: short_name, _safe_name, JSON
+  broadcast delivery, `_apply_state_updates` (git/files/comments changed
+  paths, numstat refresh, auto-unreview on mtime mismatch), watcher
+  lifecycle (restart, start_poller)
+- `tests/test_git_utils.py` — 37 tests: short_name, _safe_name, JSON
   load/save roundtrips, diff_stat counting, resolve_repos,
-  get_diff_numstat, get_blame, session persistence
+  get_diff_numstat, get_blame, session persistence, get_file_mtime,
+  repo_has_changes, get_file_content error handling
+- `tests/test_agent_terminal.py` — 18 tests: PTY helpers (_flush_buffer,
+  _read_pty, _write_pty, _resize_pty, _kill_agent, _is_running),
+  /api/agent/start endpoint (already running, no comments, unknown CLI,
+  spawn success, slave fd cleanup), /api/agent/ws WebSocket (no process,
+  buffer replay, output streaming, kill message)
 - `tests/test_highlight.py` — 18 tests: highlight_line_html escaping and
   coloring, _apply_word_highlights with spans/entities/malformed HTML,
   parse_diff_to_json structure, highlight_file_to_json
-- `tests/test_server.py` — 62 tests: CSS vars generation, all API routes
+- `tests/test_server.py` — 103 tests: CSS vars generation, all API routes
   (repos, branch, commits, files, diff, themes, settings, comments CRUD,
   comment resolution toggle, review toggle, static files, JSON export),
-  comment categories, code suggestions, blame, preview, review summary,
-  session persistence, WebSocket connect and ping/pong, risk scoring
-  (migration, config, deletion, test removal, churn patterns), agent
-  and explain status endpoints, bulk resolve, ignore whitespace,
-  pydantic validation, font/wrap/keybinding settings
+  comment categories, code suggestions, blame, preview, review summary
+  with comments, session persistence, WebSocket connect and ping/pong,
+  risk scoring (migration, config, deletion, test removal, churn),
+  agent/explain status and start endpoints, bulk resolve, ignore
+  whitespace, pydantic validation, font/wrap/keybinding settings,
+  _build_agent_context, _process_status, explain view with temp files,
+  repo switch, working files view, diff context/whitespace params,
+  editor open endpoint
 - `tests/test_themes.py` — 8 tests: all themes have valid hex colors,
   unique names, syntax maps; theme state get/set
 

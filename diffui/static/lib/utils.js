@@ -11,10 +11,13 @@ export function mergeRef(containerRef) {
 export const isMac = navigator.platform.includes('Mac');
 export const mod = isMac ? '⌘' : 'Ctrl';
 
-export function useResize(initial, min, max) {
-  const [width, setWidth] = useState(initial);
+export function useResize(initial, min, max, axis = 'x') {
+  const [size, setSize] = useState(initial);
   const ref = useRef(null);
   const listeners = useRef(null);
+  const isY = axis === 'y';
+  const prop = isY ? 'height' : 'width';
+  const offsetProp = isY ? 'offsetHeight' : 'offsetWidth';
 
   useEffect(() => () => {
     if (listeners.current) {
@@ -25,22 +28,25 @@ export function useResize(initial, min, max) {
 
   const onResizeStart = useCallback((e) => {
     e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = ref.current?.offsetWidth || initial;
+    const startPos = isY ? e.clientY : e.clientX;
+    const startSize = ref.current?.[offsetProp] || initial;
+    const resolvedMax = typeof max === 'function' ? max() : max;
     const onMove = (e) => {
-      const w = Math.max(min, Math.min(max, startWidth + e.clientX - startX));
-      if (ref.current) ref.current.style.width = w + 'px';
+      const pos = isY ? e.clientY : e.clientX;
+      const delta = isY ? startPos - pos : pos - startPos;
+      const s = Math.max(min, Math.min(resolvedMax, startSize + delta));
+      if (ref.current) ref.current.style[prop] = s + 'px';
     };
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       listeners.current = null;
-      if (ref.current) setWidth(ref.current.offsetWidth);
+      if (ref.current) setSize(ref.current[offsetProp]);
     };
     listeners.current = { onMove, onUp };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-  }, [initial, min, max]);
+  }, [initial, min, max, isY, prop, offsetProp]);
 
-  return { ref, width, onResizeStart };
+  return { ref, size, onResizeStart };
 }
