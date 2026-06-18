@@ -75,7 +75,7 @@ Right-click a line or press `c` to leave a comment. Comments support:
 
 Comments are stored at `~/.config/diffui/{repo}/{branch}/comments.json` as structured JSON (file path, line number, diff context, comment text, author, category, code suggestion, and resolution status). AI agents can read and reply to this file directly.
 
-**Send to agent** — click the button in the toolbar to spawn your configured agent CLI (Claude Code, Codex, OpenCode, or Cursor Agent) with a context file containing full diffs, review state, and existing comment threads. A status bar shows elapsed time while the agent works. diffui auto-refreshes as the agent makes changes.
+**Send to agent** — click the button in the toolbar to spawn your configured agent CLI (Claude Code, Codex, OpenCode, or Cursor Agent) with a context file containing full diffs, review state, and existing comment threads. An interactive terminal panel slides up from the bottom, streaming the agent's full TUI output in real time. You can answer permission prompts, navigate multi-choice menus, and interact directly — no more black-box agent runs. The terminal shows elapsed time and detects when the agent goes idle. diffui auto-refreshes as the agent makes changes.
 
 **Explain changes** — click the button in the toolbar to generate a self-contained HTML walkthrough of the branch (TL;DR, file-by-file analysis, architecture notes, risk flags).
 
