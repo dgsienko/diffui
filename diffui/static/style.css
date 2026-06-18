@@ -2169,11 +2169,77 @@ mark {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  padding: 4px;
+  user-select: none;
 }
 
 .agent-terminal-body .xterm {
   height: 100%;
+}
+
+.agent-terminal-body .xterm-viewport {
+  min-height: 100%;
+  background-color: var(--bg-dark) !important;
+}
+
+.agent-terminal-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.agent-terminal-input {
+  flex: 1;
+  background: var(--bg-dark);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.agent-terminal-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.agent-terminal-arrow-btn {
+  background: var(--bg-dark);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agent-terminal-arrow-btn:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+
+.agent-terminal-send-btn {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agent-terminal-send-btn:hover {
+  opacity: 0.9;
 }
 
 @keyframes slide-up {

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from starlette.staticfiles import StaticFiles
 
 from diffui.server.events import router as events_router
 from diffui.server.events import start_poller
@@ -16,6 +16,15 @@ from diffui.server.routes_review import router as review_router
 from diffui.server.routes_settings import router as settings_router
 from diffui.server.state import app_state
 from diffui.themes import ALL_THEMES
+
+
+class _NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if path.endswith((".js", ".css")):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
 
 _STATIC_DIR = Path(__file__).parent.parent / "static"
 
@@ -58,5 +67,5 @@ def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:
     def index():
         return HTMLResponse(_index_html)
 
-    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+    app.mount("/static", _NoCacheStaticFiles(directory=str(_STATIC_DIR)), name="static")
     return app

@@ -758,6 +758,7 @@ function App() {
     const handler = (e) => {
       if (showCompletionRef.current) { setShowCompletion(false); return; }
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      if (e.target.closest('.agent-terminal-panel')) return;
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
