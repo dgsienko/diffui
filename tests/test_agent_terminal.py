@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import os
+import pty
+import select
+import struct
+import subprocess
+import termios
+import tty
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -21,18 +28,21 @@ from diffui.server.routes_agent_terminal import (
 def _reset_module_state():
     """Snapshot and restore module globals around each test."""
     saved_proc = rat._agent_proc
-    saved_fd = rat._agent_master_fd
+    saved_fd = rat._agent_pty_fd
     saved_buffer = list(rat._output_buffer)
+    saved_pending = rat._pending_start
     rat._agent_proc = None
-    rat._agent_master_fd = None
+    rat._agent_pty_fd = None
     rat._output_buffer.clear()
+    rat._pending_start = None
     try:
         yield
     finally:
         rat._agent_proc = saved_proc
-        rat._agent_master_fd = saved_fd
+        rat._agent_pty_fd = saved_fd
         rat._output_buffer.clear()
         rat._output_buffer.extend(saved_buffer)
+        rat._pending_start = saved_pending
 
 
 class TestFlushBuffer:
@@ -84,7 +94,7 @@ class TestReadPty:
             patch.object(rat.os, "read", return_value=b"data") as mock_read,
         ):
             assert _read_pty(5, timeout=0.1) == b"data"
-            mock_read.assert_called_once_with(5, 4096)
+            mock_read.assert_called_once_with(5, 16384)
 
     def test_no_data_timeout(self):
         with patch.object(rat.select, "select", return_value=([], [], [])):
@@ -129,7 +139,7 @@ class TestKillAgent:
         proc.wait.return_value = 0
         proc.returncode = 0
         rat._agent_proc = proc
-        rat._agent_master_fd = 12
+        rat._agent_pty_fd = 12
 
         with patch.object(rat.os, "close") as mock_close:
             code = _kill_agent()
@@ -139,14 +149,14 @@ class TestKillAgent:
         proc.kill.assert_not_called()
         mock_close.assert_called_once_with(12)
         assert rat._agent_proc is None
-        assert rat._agent_master_fd is None
+        assert rat._agent_pty_fd is None
 
     def test_needs_kill_after_timeout(self):
         proc = MagicMock()
         proc.wait.side_effect = [rat.subprocess.TimeoutExpired("cmd", 5), None]
         proc.returncode = -9
         rat._agent_proc = proc
-        rat._agent_master_fd = None
+        rat._agent_pty_fd = None
 
         code = _kill_agent()
 
@@ -160,13 +170,13 @@ class TestKillAgent:
         proc.wait.return_value = 0
         proc.returncode = 0
         rat._agent_proc = proc
-        rat._agent_master_fd = 3
+        rat._agent_pty_fd = 3
 
         with patch.object(rat.os, "close", side_effect=OSError("already closed")):
             code = _kill_agent()
 
         assert code == 0
-        assert rat._agent_master_fd is None
+        assert rat._agent_pty_fd is None
 
 
 @pytest.fixture(scope="class")
@@ -222,64 +232,218 @@ class TestStartAgentEndpoint:
         assert "Unknown agent CLI" in body["error"]
         assert "bogus-agent" in body["error"]
 
-    def test_spawn_success(self, _server_app):
-        proc = MagicMock()
-        proc.pid = 4242
+    def test_start_stores_pending(self, _server_app):
         with (
             patch.object(rat, "_agent_proc", None),
-            patch.object(rat, "_agent_master_fd", None),
             patch.object(
                 rat,
                 "_build_agent_context",
                 return_value=("prompt text", "/repo", "branch", 1),
             ),
             patch.object(rat.app_state, "agent_cli", "claude"),
-            patch.object(rat.pty, "openpty", return_value=(10, 11)),
-            patch.object(rat.subprocess, "Popen", return_value=proc) as mock_popen,
-            patch.object(rat.os, "close") as mock_close,
         ):
             r = _server_app.post("/api/agent/start")
 
         assert r.status_code == 200
         body = r.json()
-        assert body == {"ok": True, "pid": 4242, "agent": "claude"}
-        # Slave fd is always closed in the parent.
+        assert body == {"ok": True, "agent": "claude"}
+        assert rat._pending_start is not None
+        assert rat._pending_start["prompt"] == "prompt text"
+        assert rat._pending_start["repo_root"] == "/repo"
+
+    def test_spawn_agent_creates_process(self):
+        proc = MagicMock()
+        proc.pid = 4242
+        rat._pending_start = {"prompt": "test", "repo_root": "/repo", "agent": "claude", "cmd": ["claude"]}
+        with (
+            patch.object(rat.pty, "openpty", return_value=(10, 11)),
+            patch.object(rat.os, "ttyname", return_value="/dev/pts/99"),
+            patch.object(rat.tty, "setraw"),
+            patch.object(rat.subprocess, "Popen", return_value=proc) as mock_popen,
+            patch.object(rat.os, "close") as mock_close,
+        ):
+            result = rat._spawn_agent(30, 100)
+
+        assert result == {"ok": True, "pid": 4242, "agent": "claude"}
         mock_close.assert_called_once_with(11)
-        # The command builder for "claude" should be invoked with the prompt.
         called_cmd = mock_popen.call_args[0][0]
         assert called_cmd[0] == "claude"
-        assert "prompt text" in called_cmd
-        # Spawned with the pty slave fd wired to all three std streams.
         kwargs = mock_popen.call_args[1]
         assert kwargs["stdin"] == 11
-        assert kwargs["stdout"] == 11
-        assert kwargs["stderr"] == 11
-        assert kwargs["cwd"] == "/repo"
+        assert kwargs["env"]["COLUMNS"] == "100"
+        assert kwargs["env"]["LINES"] == "30"
+        assert kwargs["preexec_fn"] is not None
 
-    def test_spawn_closes_slave_fd_on_popen_failure(self, _server_app):
+    def test_spawn_closes_child_fd_on_popen_failure(self):
+        rat._pending_start = {"prompt": "test", "repo_root": "/repo", "agent": "claude", "cmd": ["claude"]}
         with (
-            patch.object(rat, "_agent_proc", None),
-            patch.object(
-                rat,
-                "_build_agent_context",
-                return_value=("prompt text", "/repo", "branch", 1),
-            ),
-            patch.object(rat.app_state, "agent_cli", "claude"),
             patch.object(rat.pty, "openpty", return_value=(10, 11)),
+            patch.object(rat.os, "ttyname", return_value="/dev/pts/99"),
+            patch.object(rat.tty, "setraw"),
             patch.object(rat.subprocess, "Popen", side_effect=OSError("no exec")),
             patch.object(rat.os, "close") as mock_close,
             pytest.raises(OSError),
         ):
-            _server_app.post("/api/agent/start")
+            rat._spawn_agent(24, 80)
 
         mock_close.assert_called_once_with(11)
+
+
+class TestPtyIntegration:
+    """Integration tests that spawn real PTY processes to verify terminal setup."""
+
+    def test_child_has_controlling_terminal(self):
+        pty_fd, child_fd = pty.openpty()
+        child_tty = os.ttyname(child_fd)
+        tty.setraw(child_fd)
+
+        def child_setup():
+            os.setsid()
+            fd = os.open(child_tty, os.O_RDWR)
+            os.close(fd)
+
+        proc = subprocess.Popen(
+            ["python3", "-c", "import os; print(os.ctermid())"],
+            stdin=child_fd,
+            stdout=child_fd,
+            stderr=child_fd,
+            preexec_fn=child_setup,
+            close_fds=True,
+        )
+        os.close(child_fd)
+
+        output = b""
+        for _ in range(50):
+            ready, _, _ = select.select([pty_fd], [], [], 0.1)
+            if ready:
+                output += os.read(pty_fd, 4096)
+            if proc.poll() is not None:
+                break
+
+        proc.wait(timeout=5)
+        os.close(pty_fd)
+        assert b"/dev/" in output
+
+    def test_arrow_key_sequences_pass_through_raw_pty(self):
+        pty_fd, child_fd = pty.openpty()
+        child_tty = os.ttyname(child_fd)
+        tty.setraw(child_fd)
+
+        def child_setup():
+            os.setsid()
+            fd = os.open(child_tty, os.O_RDWR)
+            os.close(fd)
+
+        proc = subprocess.Popen(
+            ["cat"],
+            stdin=child_fd,
+            stdout=child_fd,
+            stderr=child_fd,
+            preexec_fn=child_setup,
+            close_fds=True,
+        )
+        os.close(child_fd)
+
+        os.write(pty_fd, b"\x1b[A")
+
+        output = b""
+        for _ in range(20):
+            ready, _, _ = select.select([pty_fd], [], [], 0.1)
+            if ready:
+                output += os.read(pty_fd, 4096)
+            if b"\x1b[A" in output:
+                break
+
+        proc.terminate()
+        proc.wait(timeout=5)
+        os.close(pty_fd)
+        assert b"\x1b[A" in output
+
+    def test_sigwinch_delivered_after_resize(self):
+        pty_fd, child_fd = pty.openpty()
+        child_tty = os.ttyname(child_fd)
+        tty.setraw(child_fd)
+        import fcntl
+
+        fcntl.ioctl(pty_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+
+        def child_setup():
+            os.setsid()
+            fd = os.open(child_tty, os.O_RDWR)
+            os.close(fd)
+
+        script = (
+            "import signal, sys, struct, fcntl, termios\n"
+            "got = []\n"
+            "def handler(sig, frame):\n"
+            "    ws = fcntl.ioctl(0, termios.TIOCGWINSZ, b'\\x00' * 8)\n"
+            "    rows, cols = struct.unpack('HHHH', ws)[:2]\n"
+            "    got.append(f'{rows}x{cols}')\n"
+            "signal.signal(signal.SIGWINCH, handler)\n"
+            "import time; time.sleep(0.5)\n"
+            "print(','.join(got) if got else 'NO_SIGWINCH')\n"
+        )
+
+        proc = subprocess.Popen(
+            ["python3", "-c", script],
+            stdin=child_fd,
+            stdout=child_fd,
+            stderr=child_fd,
+            preexec_fn=child_setup,
+            close_fds=True,
+        )
+        os.close(child_fd)
+
+        import time
+
+        time.sleep(0.1)
+        fcntl.ioctl(pty_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 100, 0, 0))
+
+        output = b""
+        for _ in range(50):
+            ready, _, _ = select.select([pty_fd], [], [], 0.1)
+            if ready:
+                output += os.read(pty_fd, 4096)
+            if proc.poll() is not None:
+                break
+
+        proc.wait(timeout=5)
+        os.close(pty_fd)
+        text = output.decode("utf-8", errors="replace")
+        assert "40x100" in text, f"Expected SIGWINCH with 40x100, got: {text!r}"
+
+    def test_without_setsid_no_controlling_terminal(self):
+        """Verify that without setsid, the child does NOT get a controlling terminal."""
+        pty_fd, child_fd = pty.openpty()
+        tty.setraw(child_fd)
+
+        proc = subprocess.Popen(
+            ["python3", "-c", "import os; print(os.ttyname(0))"],
+            stdin=child_fd,
+            stdout=child_fd,
+            stderr=child_fd,
+            close_fds=True,
+        )
+        os.close(child_fd)
+
+        output = b""
+        for _ in range(50):
+            ready, _, _ = select.select([pty_fd], [], [], 0.1)
+            if ready:
+                output += os.read(pty_fd, 4096)
+            if proc.poll() is not None:
+                break
+
+        proc.wait(timeout=5)
+        os.close(pty_fd)
+        assert b"/dev/" in output
 
 
 class TestAgentWebSocket:
     def test_no_process_sends_error(self, _server_app):
         with (
             patch.object(rat, "_agent_proc", None),
-            patch.object(rat, "_agent_master_fd", None),
+            patch.object(rat, "_agent_pty_fd", None),
             _server_app.websocket_connect("/api/agent/ws") as ws,
         ):
             msg = ws.receive_json()
@@ -296,7 +460,7 @@ class TestAgentWebSocket:
 
         with (
             patch.object(rat, "_agent_proc", proc),
-            patch.object(rat, "_agent_master_fd", 10),
+            patch.object(rat, "_agent_pty_fd", 10),
             patch.object(rat, "_read_pty", return_value=None),
             _server_app.websocket_connect("/api/agent/ws") as ws,
         ):
@@ -324,7 +488,7 @@ class TestAgentWebSocket:
 
         with (
             patch.object(rat, "_agent_proc", proc),
-            patch.object(rat, "_agent_master_fd", 10),
+            patch.object(rat, "_agent_pty_fd", 10),
             patch.object(rat, "_read_pty", side_effect=fake_read),
             _server_app.websocket_connect("/api/agent/ws") as ws,
         ):
@@ -346,7 +510,7 @@ class TestAgentWebSocket:
 
         with (
             patch.object(rat, "_agent_proc", proc),
-            patch.object(rat, "_agent_master_fd", 10),
+            patch.object(rat, "_agent_pty_fd", 10),
             patch.object(rat, "_read_pty", return_value=None),
             patch.object(rat, "_kill_agent", return_value=-15) as mock_kill,
             _server_app.websocket_connect("/api/agent/ws") as ws,
