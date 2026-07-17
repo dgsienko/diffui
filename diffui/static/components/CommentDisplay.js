@@ -81,6 +81,9 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
           <button class="comment-action-btn delete" onClick=${() => { if (confirm('Delete this comment?')) onDelete(); }} title="Delete">✕</button>
         </div>
       </div>
+      ${comment.selected_text && html`
+        <div class="comment-quote" title="Referenced text"><code>${comment.selected_text}</code></div>
+      `}
       ${editing ? html`
         <div class="comment-edit-box">
           <textarea

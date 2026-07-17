@@ -193,7 +193,9 @@ def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, 
             cat = c.get("category", "")
             cat_label = f" [{cat}]" if cat else ""
             ctx_lines.append(f"**Line {line_num}**{cat_label}: {c.get('comment', '')}")
-            if c.get("line_text"):
+            if c.get("selected_text"):
+                ctx_lines.append(f"> Referencing: `{c['selected_text'].strip()}`")
+            elif c.get("line_text"):
                 ctx_lines.append(f"> `{c['line_text'].strip()}`")
             if c.get("suggestion"):
                 ctx_lines.append(f"Suggested replacement: `{c['suggestion'].strip()}`")

@@ -257,6 +257,9 @@ function App() {
       const cb = latestCallbacks.current;
       if (events.includes('git_changed') || events.includes('files_changed')) {
         diffCache.current.clear();
+        if (cb.activeFile && diffRef.current) {
+          scrollPositions.current.set(cb.activeFile, diffRef.current.scrollTop);
+        }
         cb.fetchFiles();
         cb.fetchCommits();
         cb.fetchRepos();
@@ -360,7 +363,7 @@ function App() {
     }
   }, [fetchFiles, handleFileSelect]);
 
-  const handleAddComment = useCallback(async (filePath, lineIndex, lineText, fileLineNum, commentText, category, suggestion) => {
+  const handleAddComment = useCallback(async (filePath, lineIndex, lineText, fileLineNum, commentText, category, suggestion, selection) => {
     await fetch('/api/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -372,6 +375,9 @@ function App() {
         comment: commentText,
         category: category || '',
         suggestion: suggestion || '',
+        selected_text: selection?.selectedText || '',
+        sel_start: selection?.selStart ?? null,
+        sel_end: selection?.selEnd ?? null,
       }),
     });
     showToast(`Comment added to ${shortName(filePath)}`, 'success');
@@ -783,6 +789,20 @@ function App() {
         return;
       }
 
+      if (e.ctrlKey && !e.metaKey && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        setShowFileFilter(v => { if (v) setFileFilter(''); return !v; });
+        return;
+      }
+      if (e.ctrlKey && !e.metaKey && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        setShowSearch(v => !v);
+        return;
+      }
+
+      // Don't hijack browser/OS shortcuts (copy, select-all, save, etc.)
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         const vf = visibleFilesRef.current;
         const af = activeFileRef.current;
@@ -817,12 +837,6 @@ function App() {
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
       } else if (e.key === 'w') {
         handleToggleWhitespace();
-      } else if (e.ctrlKey && !e.metaKey && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
-        e.preventDefault();
-        setShowFileFilter(v => { if (v) setFileFilter(''); return !v; });
-      } else if (e.ctrlKey && !e.metaKey && (e.key === 'f' || e.key === 'F')) {
-        e.preventDefault();
-        setShowSearch(v => !v);
       } else if (e.key === '?') {
         setShowShortcuts(v => !v);
       }
