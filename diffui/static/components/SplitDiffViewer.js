@@ -3,7 +3,7 @@ import { useState, useRef, useMemo } from 'preact/hooks';
 import htm from 'htm';
 import { CommentBox } from './CommentBox.js';
 import { CommentDisplay } from './CommentDisplay.js';
-import { mergeRef } from '../lib/utils.js';
+import { mergeRef, highlightRanges, commentRangesFor, useRangeSelection } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -41,16 +41,17 @@ function splitHunkLines(lines) {
 
 // All HTML content is server-generated from Pygments output — source code is
 // html.escape'd server-side in highlight.py before being wrapped in <span> tags.
-function SplitLine({ line, side, onRightClick }) {
+function SplitLine({ line, side, onRightClick, commentRanges }) {
   if (!line) return html`<div class="split-line empty"></div>`;
 
   const typeClass = line.type === 'add' ? 'add' : line.type === 'remove' ? 'remove' : '';
   const num = side === 'left' ? line.old_num : line.new_num;
+  const lineHtml = commentRanges && commentRanges.length ? highlightRanges(line.html, commentRanges) : line.html;
 
   return html`
-    <div class=${'split-line ' + typeClass} onContextMenu=${(e) => { e.preventDefault(); onRightClick(line); }}>
+    <div class=${'split-line ' + typeClass} data-line-index=${line.index} onContextMenu=${(e) => { if (window.getSelection && window.getSelection().toString()) return; e.preventDefault(); onRightClick(line); }}>
       <span class="split-gutter">${num || ''}</span>
-      <span class="split-code" dangerouslySetInnerHTML=${{ __html: line.html }}></span>
+      <span class="split-code" dangerouslySetInnerHTML=${{ __html: lineHtml }}></span>
     </div>
   `;
 }
@@ -60,6 +61,8 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
   const leftRef = useRef(null);
   const rightRef = useRef(null);
   const syncing = useRef(false);
+  const localContainerRef = useRef(null);
+  const { selMenu, pendingSelection, setPendingSelection, commentFromSelection } = useRangeSelection('.split-code', localContainerRef);
 
   const syncScroll = (source, target) => {
     if (syncing.current) return;
@@ -70,7 +73,9 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
     });
   };
 
-  const handleRightClick = (line) => setCommentingLine(line.index);
+  const handleRightClick = (line) => { setPendingSelection(null); setCommentingLine(line.index); };
+  const handleCommentSelection = () => commentFromSelection(setCommentingLine);
+  const selectionFor = (line) => (pendingSelection && line && pendingSelection.lineIndex === line.index ? pendingSelection : null);
 
   const splitData = useMemo(() => {
     if (!data?.hunks) return null;
@@ -83,7 +88,15 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
   if (!splitData) return html`<div class="empty-state">No diff data</div>`;
 
   return html`
-    <div class="split-container" ref=${mergeRef(containerRef)}>
+    <div class="split-container" ref=${mergeRef(containerRef, localContainerRef)}>
+      ${selMenu && html`
+        <button
+          class="selection-comment-btn"
+          style=${{ left: selMenu.x + 'px', top: selMenu.y + 'px' }}
+          onMouseDown=${(e) => e.preventDefault()}
+          onClick=${handleCommentSelection}
+        >💬 Comment</button>
+      `}
       <div class="diff-file-header">
         <div>
           <span class="diff-file-path">${data.file_path}</span>
@@ -101,7 +114,7 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
             ${s.left.map(line => {
               const lineComments = line && line.type === 'remove' ? (comments[data.file_path] || []).filter(c => c.line_index === line.index) : [];
               return html`
-                <${SplitLine} line=${line} side="left" onRightClick=${handleRightClick} />
+                <${SplitLine} line=${line} side="left" onRightClick=${handleRightClick} commentRanges=${commentRangesFor(lineComments)} />
                 ${lineComments.map(c => html`
                   <${CommentDisplay}
                     key=${c.id || c.line_index}
@@ -116,9 +129,10 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
                 ${commentingLine === line?.index && line?.type === 'remove' && html`
                   <${CommentBox}
                     lineText=${line.text}
+                    selectedText=${selectionFor(line)?.selectedText || ''}
                     onSubmit=${(text, category, suggestion) => {
                       const lineNum = parseInt(line.old_num) || null;
-                      onAddComment(data.file_path, line.index, line.text, lineNum, text, category, suggestion);
+                      onAddComment(data.file_path, line.index, line.text, lineNum, text, category, suggestion, selectionFor(line));
                       setCommentingLine(null);
                     }}
                     onCancel=${() => setCommentingLine(null)}
@@ -136,7 +150,7 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
               ${right.map((line, i) => {
                 const lineComments = line ? (comments[data.file_path] || []).filter(c => c.line_index === line.index) : [];
                 return html`
-                  <${SplitLine} line=${line} side="right" onRightClick=${handleRightClick} />
+                  <${SplitLine} line=${line} side="right" onRightClick=${handleRightClick} commentRanges=${commentRangesFor(lineComments)} />
                   ${lineComments.map(c => html`
                     <${CommentDisplay}
                       key=${c.id || c.line_index}
@@ -151,9 +165,10 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
                   ${commentingLine === line?.index && line?.type !== 'remove' && html`
                     <${CommentBox}
                       lineText=${line.text}
+                      selectedText=${selectionFor(line)?.selectedText || ''}
                       onSubmit=${(text, category, suggestion) => {
                         const lineNum = parseInt(line.new_num) || parseInt(line.old_num) || null;
-                        onAddComment(data.file_path, line.index, line.text, lineNum, text, category, suggestion);
+                        onAddComment(data.file_path, line.index, line.text, lineNum, text, category, suggestion, selectionFor(line));
                         setCommentingLine(null);
                       }}
                       onCancel=${() => setCommentingLine(null)}

@@ -4,7 +4,7 @@ import htm from 'htm';
 import { CommentBox } from './CommentBox.js';
 import { CommentDisplay } from './CommentDisplay.js';
 import { LineActions } from './LineActions.js';
-import { mergeRef } from '../lib/utils.js';
+import { mergeRef, highlightRanges, commentRangesFor, useRangeSelection } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -59,7 +59,7 @@ function BlameCell({ blame }) {
   return html`<span class="blame-cell" title=${blame.author + ' · ' + blame.sha}><span class="blame-name">${name}</span><span class="blame-age">${label}</span></span>`;
 }
 
-function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, blame }) {
+function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, blame, commentRanges }) {
   const typeClass = {
     add: 'add',
     remove: 'remove',
@@ -69,7 +69,8 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor,
   }[line.type] || '';
 
   const isMatch = searchTerm && line.text && line.text.toLowerCase().includes(searchTerm.toLowerCase());
-  const lineHtml = isMatch ? highlightSearch(line.html, searchTerm) : line.html;
+  let lineHtml = isMatch ? highlightSearch(line.html, searchTerm) : line.html;
+  if (commentRanges && commentRanges.length) lineHtml = highlightRanges(lineHtml, commentRanges);
 
   const handleClick = (e) => {
     if ((e.ctrlKey || e.metaKey) && line.new_num) {
@@ -79,6 +80,8 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor,
   };
 
   const handleContext = (e) => {
+    // Let the native menu (Copy, etc.) show when text is selected.
+    if (window.getSelection && window.getSelection().toString()) return;
     e.preventDefault();
     onRightClick(line);
   };
@@ -87,6 +90,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor,
     <div
       class=${'diff-line ' + typeClass + (isMatch ? ' search-match' : '')}
       data-line-new=${line.new_num || undefined}
+      data-line-index=${line.index}
       onClick=${handleClick}
       onContextMenu=${handleContext}
       onMouseEnter=${() => onLineHover && onLineHover(line)}
@@ -119,7 +123,7 @@ function hunkStats(lines) {
   return { adds, dels };
 }
 
-function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, filePath, blameData, collapseAll }) {
+function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, commentingSelection, filePath, blameData, collapseAll }) {
   const [collapsed, setCollapsed] = useState(false);
   const stats = useMemo(() => hunkStats(hunk.lines), [hunk.lines]);
   const lastCollapseVersion = useRef(0);
@@ -143,6 +147,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInE
       <div class=${'hunk-lines' + (collapsed ? ' collapsed' : '')}>
         ${hunk.lines.map(line => {
           const lineComments = (comments[filePath] || []).filter(c => c.line_index === line.index);
+          const commentRanges = commentRangesFor(lineComments);
           return html`
             <${DiffLine}
               key=${line.index}
@@ -153,6 +158,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInE
               onOpenInEditor=${onOpenInEditor}
               onLineHover=${onLineHover}
               blame=${blameData && line.new_num ? blameData[parseInt(line.new_num) - 1] : null}
+              commentRanges=${commentRanges}
             />
             ${lineComments.map(c => html`
               <${CommentDisplay}
@@ -168,9 +174,11 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInE
             ${commentingLine === line.index && html`
               <${CommentBox}
                 lineText=${line.text}
+                selectedText=${commentingSelection && commentingSelection.lineIndex === line.index ? commentingSelection.selectedText : ''}
                 onSubmit=${(text, category, suggestion) => {
                   const lineNum = parseInt(line.new_num) || parseInt(line.old_num) || null;
-                  onAddComment(filePath, line.index, line.text, lineNum, text, category, suggestion);
+                  const sel = commentingSelection && commentingSelection.lineIndex === line.index ? commentingSelection : null;
+                  onAddComment(filePath, line.index, line.text, lineNum, text, category, suggestion, sel);
                   setCommentingLine(null);
                 }}
                 onCancel=${() => setCommentingLine(null)}
@@ -189,6 +197,8 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
   const [blameData, setBlameData] = useState(null);
   const blameCache = useRef(new Map());
   const hoveredLineRef = useRef(null);
+  const localContainerRef = useRef(null);
+  const { selMenu, pendingSelection: commentingSelection, setPendingSelection, commentFromSelection } = useRangeSelection('.diff-code', localContainerRef);
 
   const fetchBlame = useCallback(async (filePath) => {
     const cached = blameCache.current.get(filePath);
@@ -208,8 +218,11 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
   }, [showBlame, data?.file_path, fetchBlame]);
 
   const handleRightClick = (line) => {
+    setPendingSelection(null);
     setCommentingLine(line.index);
   };
+
+  const handleCommentSelection = () => commentFromSelection(setCommentingLine);
 
   const handleLineHover = (line) => {
     hoveredLineRef.current = line;
@@ -219,7 +232,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
   useEffect(() => {
     const handler = () => {
       const line = hoveredLineRef.current;
-      if (line) setCommentingLine(line.index);
+      if (line) { setPendingSelection(null); setCommentingLine(line.index); }
     };
     document.addEventListener('diffui:comment-on-hovered', handler);
     return () => document.removeEventListener('diffui:comment-on-hovered', handler);
@@ -236,7 +249,15 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
   const fileCommentCount = (comments[data.file_path] || []).filter(c => (c.status || 'open') !== 'resolved').length;
 
   return html`
-    <div class="diff-container" ref=${mergeRef(containerRef)}>
+    <div class="diff-container" ref=${mergeRef(containerRef, localContainerRef)}>
+      ${selMenu && html`
+        <button
+          class="selection-comment-btn"
+          style=${{ left: selMenu.x + 'px', top: selMenu.y + 'px' }}
+          onMouseDown=${(e) => e.preventDefault()}
+          onClick=${handleCommentSelection}
+        >💬 Comment</button>
+      `}
       <div class="diff-file-header">
         <div>
           <span class="diff-file-path">${data.file_path}</span>
@@ -276,6 +297,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           filePath=${data.file_path}
           commentingLine=${commentingLine}
           setCommentingLine=${setCommentingLine}
+          commentingSelection=${commentingSelection}
           onRightClick=${handleRightClick}
           onCtrlClick=${handleCtrlClick}
           onOpenInEditor=${onOpenInEditor ? handleCtrlClick : null}

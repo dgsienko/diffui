@@ -270,6 +270,47 @@ class TestServerRoutes:
             for c in _server_app.get("/api/comments").json().get("_test_sug_.py", []):
                 _server_app.delete(f"/api/comments/_test_sug_.py/{c['id']}")
 
+    def test_comment_selection_stored(self, _server_app):
+        r = _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_sel_.py",
+                "line_index": 1,
+                "comment": "this call is redundant",
+                "selected_text": "bar.baz",
+                "sel_start": 12,
+                "sel_end": 19,
+            },
+        )
+        assert r.status_code == 200
+        try:
+            c = _server_app.get("/api/comments").json()["_test_sel_.py"][0]
+            assert c["selected_text"] == "bar.baz"
+            assert c["sel_start"] == 12
+            assert c["sel_end"] == 19
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_sel_.py", []):
+                _server_app.delete(f"/api/comments/_test_sel_.py/{c['id']}")
+
+    def test_comment_selection_defaults_empty(self, _server_app):
+        r = _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_sel2_.py",
+                "line_index": 1,
+                "comment": "whole line",
+            },
+        )
+        assert r.status_code == 200
+        try:
+            c = _server_app.get("/api/comments").json()["_test_sel2_.py"][0]
+            assert c["selected_text"] == ""
+            assert c["sel_start"] is None
+            assert c["sel_end"] is None
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_sel2_.py", []):
+                _server_app.delete(f"/api/comments/_test_sel2_.py/{c['id']}")
+
     def test_apply_suggestion_no_suggestion(self, _server_app):
         _server_app.post(
             "/api/comments",

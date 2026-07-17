@@ -62,6 +62,7 @@ diffui --json        # Export review session as structured JSON
 
 Right-click a line or press `c` to leave a comment. Comments support:
 
+- **Text selection** — highlight text within a line and click the floating "Comment" button to leave a comment that references that exact substring; the referenced text stays highlighted in the diff (works in unified and split views)
 - **Categories** — tag as bug, suggestion, nit, or question (colored badges)
 - **Code suggestions** — attach a proposed code change with inline before/after preview and an Apply button that patches the file
 - **Threads** — reply to comments; named authors (user vs agent) with color-coded identities
@@ -117,7 +118,8 @@ Configure your preferred agent CLI in Settings (gear icon).
 | `ctrl+g` | Go to line |
 | `ctrl+shift+f` | Search files |
 | `ctrl+click` | Open in editor |
-| `right-click` | Comment on line |
+| `right-click` | Comment on line (shows the native menu when text is selected, so you can copy) |
+| select text | Floating "Comment" button to comment on the exact substring |
 | `escape` | Close panel or dialog |
 
 All shortcuts can be rebound in Settings.

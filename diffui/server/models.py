@@ -14,6 +14,9 @@ class CommentCreate(BaseModel):
     status: str = "open"
     category: str = ""
     suggestion: str = ""
+    selected_text: str = ""
+    sel_start: int | None = None
+    sel_end: int | None = None
 
 
 class CommentEdit(BaseModel):

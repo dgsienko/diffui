@@ -12,7 +12,7 @@ const CATEGORIES = [
   { value: 'question', label: 'Question' },
 ];
 
-export function CommentBox({ onSubmit, onCancel, lineText }) {
+export function CommentBox({ onSubmit, onCancel, lineText, selectedText }) {
   const ref = useRef(null);
   const suggestionRef = useRef(null);
   const [category, setCategory] = useState('');
@@ -58,6 +58,12 @@ export function CommentBox({ onSubmit, onCancel, lineText }) {
 
   return html`
     <div class="comment-box">
+      ${selectedText && html`
+        <div class="comment-box-selection" title="Commenting on selected text">
+          <span class="comment-box-selection-label">On:</span>
+          <code>${selectedText}</code>
+        </div>
+      `}
       <textarea
         ref=${ref}
         class="comment-input"
