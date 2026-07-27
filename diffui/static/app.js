@@ -378,6 +378,7 @@ function App() {
         selected_text: selection?.selectedText || '',
         sel_start: selection?.selStart ?? null,
         sel_end: selection?.selEnd ?? null,
+        sel_end_index: selection?.endLineIndex ?? null,
       }),
     });
     showToast(`Comment added to ${shortName(filePath)}`, 'success');

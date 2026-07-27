@@ -866,13 +866,18 @@ mark {
   color: var(--fg-muted);
 }
 .comment-box-selection-label { flex-shrink: 0; }
-.comment-box-selection code {
+/* A range comment can span lines, so keep the newlines and clamp the height */
+.comment-box-selection code, .comment-quote code {
   color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 7.5em;
+  overflow-y: auto;
+}
+.comment-box-selection code {
   background: var(--bg-dark);
   border-radius: var(--radius-sm);
   padding: 1px 5px;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 /* Referenced-text snippet shown on a saved range comment */
@@ -884,10 +889,8 @@ mark {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 .comment-quote code {
+  display: block;
   font-size: 12px;
-  color: var(--fg);
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .comment-input, .comment-reply-input {

@@ -62,7 +62,7 @@ diffui --json        # Export review session as structured JSON
 
 Right-click a line or press `c` to leave a comment. Comments support:
 
-- **Text selection** — highlight text within a line and click the floating "Comment" button to leave a comment that references that exact substring; the referenced text stays highlighted in the diff (works in unified and split views)
+- **Text selection** — highlight text, within a line or across several, and click the floating "Comment" button to leave a comment that references that exact span; the referenced text stays highlighted in the diff (works in unified and split views)
 - **Categories** — tag as bug, suggestion, nit, or question (colored badges)
 - **Code suggestions** — attach a proposed code change with inline before/after preview and an Apply button that patches the file
 - **Threads** — reply to comments; named authors (user vs agent) with color-coded identities
