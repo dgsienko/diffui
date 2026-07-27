@@ -264,20 +264,81 @@ class TestApplyStateUpdates:
         finally:
             app_state.comments = prev_comments
 
-    def test_git_and_comments_changed_runs_both_paths(self):
+    def test_git_and_comments_changed_reload_comments_once(self):
 
         with (
             patch("diffui.server.state.app_state.reload_repo_state") as reload,
             patch("diffui.server.routes_diff.clear_diff_cache") as clear_cache,
-            patch("diffui.server.events.load_comments", return_value={"b.py": []}) as load,
+            patch("diffui.server.events.load_comments") as load,
         ):
             result = _apply_state_updates(["git_changed", "comments_changed"])
 
         reload.assert_called_once()
         clear_cache.assert_called_once()
-        load.assert_called_once()
+        # reload_repo_state() already re-read them — no second trip to disk.
+        load.assert_not_called()
         assert "files_changed" in result
         assert "comments_changed" in result
+
+    def test_git_changed_announces_reloaded_comments(self):
+        prev_comments = app_state.comments
+        reloaded = {"a.py": [{"id": "1", "comment": "from the new branch"}]}
+        try:
+            app_state.comments = {}
+            with (
+                patch(
+                    "diffui.server.state.app_state.reload_repo_state",
+                    side_effect=lambda: setattr(app_state, "comments", reloaded),
+                ),
+                patch("diffui.server.routes_diff.clear_diff_cache"),
+                patch("diffui.server.events._invalidate_stale_reviews"),
+                patch("diffui.server.events.load_comments", return_value=reloaded),
+            ):
+                result = _apply_state_updates(["git_changed"])
+
+            assert "comments_changed" in result
+        finally:
+            app_state.comments = prev_comments
+
+    def test_git_changed_stays_quiet_when_comments_unchanged(self):
+        with (
+            patch("diffui.server.state.app_state.reload_repo_state"),
+            patch("diffui.server.routes_diff.clear_diff_cache"),
+            patch("diffui.server.events._invalidate_stale_reviews"),
+        ):
+            result = _apply_state_updates(["git_changed"])
+
+        assert "comments_changed" not in result
+
+    def test_branch_switch_restarts_watcher(self):
+        prev_branch = app_state.branch_name
+        try:
+            app_state.branch_name = "old-branch"
+            with (
+                patch(
+                    "diffui.server.state.app_state.reload_repo_state",
+                    side_effect=lambda: setattr(app_state, "branch_name", "new-branch"),
+                ),
+                patch("diffui.server.routes_diff.clear_diff_cache"),
+                patch("diffui.server.events._invalidate_stale_reviews"),
+                patch("diffui.server.events.restart_watcher") as restart,
+            ):
+                _apply_state_updates(["git_changed"])
+
+            restart.assert_called_once()
+        finally:
+            app_state.branch_name = prev_branch
+
+    def test_same_branch_leaves_watcher_alone(self):
+        with (
+            patch("diffui.server.state.app_state.reload_repo_state"),
+            patch("diffui.server.routes_diff.clear_diff_cache"),
+            patch("diffui.server.events._invalidate_stale_reviews"),
+            patch("diffui.server.events.restart_watcher") as restart,
+        ):
+            _apply_state_updates(["git_changed"])
+
+        restart.assert_not_called()
 
 
 class TestAutoUnreview:

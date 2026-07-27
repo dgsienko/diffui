@@ -3,7 +3,7 @@ import { useState, useRef, useMemo } from 'preact/hooks';
 import htm from 'htm';
 import { CommentBox } from './CommentBox.js';
 import { CommentDisplay } from './CommentDisplay.js';
-import { mergeRef, highlightRanges, commentRangesFor, useRangeSelection } from '../lib/utils.js';
+import { mergeRef, highlightRanges, commentsByLine, NO_COMMENTS, useRangeSelection } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -62,7 +62,7 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
   const rightRef = useRef(null);
   const syncing = useRef(false);
   const localContainerRef = useRef(null);
-  const { selMenu, pendingSelection, setPendingSelection, commentFromSelection } = useRangeSelection('.split-code', localContainerRef);
+  const { selMenu, pendingSelection, setPendingSelection, commentFromSelection } = useRangeSelection('.split-code', localContainerRef, '.split-pane');
 
   const syncScroll = (source, target) => {
     if (syncing.current) return;
@@ -76,6 +76,8 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
   const handleRightClick = (line) => { setPendingSelection(null); setCommentingLine(line.index); };
   const handleCommentSelection = () => commentFromSelection(setCommentingLine);
   const selectionFor = (line) => (pendingSelection && line && pendingSelection.lineIndex === line.index ? pendingSelection : null);
+  const byLine = useMemo(() => commentsByLine(comments[data?.file_path] || []), [comments, data?.file_path]);
+  const entryFor = (line) => (line && byLine.get(line.index)) || NO_COMMENTS;
 
   const splitData = useMemo(() => {
     if (!data?.hunks) return null;
@@ -112,9 +114,10 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
           ${splitData.map(s => html`
             <div class="split-hunk-header">${s.header}</div>
             ${s.left.map(line => {
-              const lineComments = line && line.type === 'remove' ? (comments[data.file_path] || []).filter(c => c.line_index === line.index) : [];
+              const entry = entryFor(line);
+              const lineComments = line && line.type === 'remove' ? entry.comments : [];
               return html`
-                <${SplitLine} line=${line} side="left" onRightClick=${handleRightClick} commentRanges=${commentRangesFor(lineComments)} />
+                <${SplitLine} line=${line} side="left" onRightClick=${handleRightClick} commentRanges=${entry.ranges} />
                 ${lineComments.map(c => html`
                   <${CommentDisplay}
                     key=${c.id || c.line_index}
@@ -148,10 +151,10 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
             return html`
               <div class="split-hunk-header">${s.header}</div>
               ${right.map((line, i) => {
-                const lineComments = line ? (comments[data.file_path] || []).filter(c => c.line_index === line.index) : [];
+                const entry = entryFor(line);
                 return html`
-                  <${SplitLine} line=${line} side="right" onRightClick=${handleRightClick} commentRanges=${commentRangesFor(lineComments)} />
-                  ${lineComments.map(c => html`
+                  <${SplitLine} line=${line} side="right" onRightClick=${handleRightClick} commentRanges=${entry.ranges} />
+                  ${entry.comments.map(c => html`
                     <${CommentDisplay}
                       key=${c.id || c.line_index}
                       comment=${c}

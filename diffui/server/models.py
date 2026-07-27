@@ -17,6 +17,7 @@ class CommentCreate(BaseModel):
     selected_text: str = ""
     sel_start: int | None = None
     sel_end: int | None = None
+    sel_end_index: int | None = None
 
 
 class CommentEdit(BaseModel):

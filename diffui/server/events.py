@@ -72,6 +72,8 @@ def _invalidate_stale_reviews() -> None:
 
 def _apply_state_updates(events: list[str]) -> list[str]:
     if "git_changed" in events:
+        prev_branch = app_state.branch_name
+        prev_comments = app_state.comments
         app_state.reload_repo_state()
         from diffui.server.routes_diff import clear_diff_cache
 
@@ -79,6 +81,13 @@ def _apply_state_updates(events: list[str]) -> list[str]:
         _invalidate_stale_reviews()
         if "files_changed" not in events:
             events = [*events, "files_changed"]
+        # reload_repo_state() re-read comments from the (possibly new) branch dir —
+        # tell clients so they don't sit on a stale thread.
+        if app_state.comments != prev_comments and "comments_changed" not in events:
+            events = [*events, "comments_changed"]
+        # Comments live in a per-branch dir, so the watcher's paths are now wrong.
+        if app_state.branch_name != prev_branch:
+            restart_watcher()
     elif "files_changed" in events:
         from diffui.git_utils import get_diff_numstat, get_working_changed_files
 
@@ -86,7 +95,8 @@ def _apply_state_updates(events: list[str]) -> list[str]:
         app_state.working_files = get_working_changed_files()
         _invalidate_stale_reviews()
 
-    if "comments_changed" in events:
+    # reload_repo_state() already re-read them, so only load on the standalone path.
+    if "comments_changed" in events and "git_changed" not in events:
         app_state.comments = load_comments()
 
     return events
@@ -201,7 +211,9 @@ def _do_restart() -> None:
     if _watch_cancel is not None:
         _watch_cancel.set()
     _watch_cancel = asyncio.Event()
-    asyncio.get_event_loop().create_task(_watch_loop(_watch_cancel))
+    task = asyncio.get_event_loop().create_task(_watch_loop(_watch_cancel))
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
 
 
 def restart_watcher() -> None:

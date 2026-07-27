@@ -46,6 +46,7 @@ def add_comment(body: CommentCreate):
             "selected_text": body.selected_text,
             "sel_start": body.sel_start,
             "sel_end": body.sel_end,
+            "sel_end_index": body.sel_end_index,
         }
     )
     save_comments(app_state.comments)

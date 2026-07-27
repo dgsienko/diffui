@@ -59,44 +59,84 @@ export function offsetInElement(el, node, nodeOffset) {
   return range.toString().length;
 }
 
-// Build the [{start, end}] ranges for a line from its range-scoped comments.
-export function commentRangesFor(lineComments) {
-  return lineComments
-    .filter(c => c.sel_start != null && c.sel_end != null && c.sel_end > c.sel_start)
-    .map(c => ({ start: c.sel_start, end: c.sel_end }));
+export const NO_COMMENTS = { comments: [], ranges: [] };
+
+// Index a file's comments by diff line in one pass: which comments anchor to a
+// line, and which [{start, end}] spans it highlights. A range comment may cover
+// several lines — it runs from sel_start on line_index to sel_end on
+// sel_end_index — so interior lines highlight whole and the edges partially.
+export function commentsByLine(fileComments) {
+  const byLine = new Map();
+  const at = (i) => {
+    let entry = byLine.get(i);
+    if (!entry) { entry = { comments: [], ranges: [] }; byLine.set(i, entry); }
+    return entry;
+  };
+  for (const c of fileComments) {
+    at(c.line_index).comments.push(c);
+    if (c.sel_start == null || c.sel_end == null) continue;
+    const last = c.sel_end_index ?? c.line_index;
+    if (last === c.line_index) {
+      if (c.sel_end > c.sel_start) at(c.line_index).ranges.push({ start: c.sel_start, end: c.sel_end });
+      continue;
+    }
+    at(c.line_index).ranges.push({ start: c.sel_start, end: Infinity });
+    for (let i = c.line_index + 1; i < last; i++) at(i).ranges.push({ start: 0, end: Infinity });
+    if (c.sel_end > 0) at(last).ranges.push({ start: 0, end: c.sel_end });
+  }
+  return byLine;
 }
 
-// Detect a text selection contained within a single code element (matched by
-// codeSelector, e.g. '.diff-code' / '.split-code') whose line carries a
-// data-line-index, and expose a floating-button anchor + pending-selection state.
-export function useRangeSelection(codeSelector, containerRef) {
+// Detect a text selection inside the code column (matched by codeSelector, e.g.
+// '.diff-code' / '.split-code') of one or more lines carrying a data-line-index,
+// and expose a floating-button anchor + pending-selection state. groupSelector,
+// when given, confines a selection to one column (split view's two panes
+// interleave line indices, so a cross-pane drag is not a range).
+export function useRangeSelection(codeSelector, containerRef, groupSelector) {
   const [selMenu, setSelMenu] = useState(null);
   const [pendingSelection, setPendingSelection] = useState(null);
 
   useEffect(() => {
-    const codeElOf = (node) => {
-      const el = node && node.nodeType === 3 ? node.parentElement : node;
-      return el && el.closest ? el.closest(codeSelector) : null;
+    const elOf = (node) => (node && node.nodeType === 3 ? node.parentElement : node);
+    const closestOf = (node, selector) => {
+      const el = elOf(node);
+      return el && el.closest ? el.closest(selector) : null;
     };
+    // The code element the point falls in, or that line's code column when the
+    // point landed elsewhere on the row (gutter, blame cell, line padding).
+    const codeFor = (node, lineEl) => closestOf(node, codeSelector) || lineEl.querySelector(codeSelector);
     const onMouseUp = () => {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || !sel.rangeCount) { setSelMenu(null); return; }
       const text = sel.toString();
       if (!text.trim()) { setSelMenu(null); return; }
       const range = sel.getRangeAt(0);
-      const startCode = codeElOf(range.startContainer);
-      const endCode = codeElOf(range.endContainer);
-      if (!startCode || startCode !== endCode) { setSelMenu(null); return; }
-      const lineEl = startCode.closest('[data-line-index]');
-      if (!lineEl) { setSelMenu(null); return; }
-      const selStart = offsetInElement(startCode, range.startContainer, range.startOffset);
-      const selEnd = offsetInElement(startCode, range.endContainer, range.endOffset);
-      if (selEnd <= selStart) { setSelMenu(null); return; }
-      const rect = range.getBoundingClientRect();
+      const startLine = closestOf(range.startContainer, '[data-line-index]');
+      const endLine = closestOf(range.endContainer, '[data-line-index]');
+      if (!startLine || !endLine) { setSelMenu(null); return; }
+      if (groupSelector && closestOf(startLine, groupSelector) !== closestOf(endLine, groupSelector)) {
+        setSelMenu(null);
+        return;
+      }
+      const startCode = codeFor(range.startContainer, startLine);
+      const endCode = codeFor(range.endContainer, endLine);
+      if (!startCode || !endCode) { setSelMenu(null); return; }
+      const lineIndex = parseInt(startLine.dataset.lineIndex);
+      const endLineIndex = parseInt(endLine.dataset.lineIndex);
+      if (isNaN(lineIndex) || isNaN(endLineIndex) || endLineIndex < lineIndex) { setSelMenu(null); return; }
+      const selStart = startCode.contains(range.startContainer)
+        ? offsetInElement(startCode, range.startContainer, range.startOffset) : 0;
+      const selEnd = endCode.contains(range.endContainer)
+        ? offsetInElement(endCode, range.endContainer, range.endOffset) : endCode.textContent.length;
+      if (endLineIndex === lineIndex && selEnd <= selStart) { setSelMenu(null); return; }
+      // Anchor to the end of the selection — that's where the cursor just was.
+      const rects = range.getClientRects();
+      const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
       setSelMenu({
         x: rect.left + rect.width / 2,
         y: rect.top,
-        lineIndex: parseInt(lineEl.dataset.lineIndex),
+        lineIndex,
+        endLineIndex,
         selStart,
         selEnd,
         selectedText: text,
@@ -104,7 +144,7 @@ export function useRangeSelection(codeSelector, containerRef) {
     };
     document.addEventListener('mouseup', onMouseUp);
     return () => document.removeEventListener('mouseup', onMouseUp);
-  }, [codeSelector]);
+  }, [codeSelector, groupSelector]);
 
   useEffect(() => {
     const el = containerRef?.current;
@@ -119,6 +159,7 @@ export function useRangeSelection(codeSelector, containerRef) {
     if (!selMenu) return;
     setPendingSelection({
       lineIndex: selMenu.lineIndex,
+      endLineIndex: selMenu.endLineIndex,
       selStart: selMenu.selStart,
       selEnd: selMenu.selEnd,
       selectedText: selMenu.selectedText,

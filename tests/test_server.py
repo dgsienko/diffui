@@ -288,9 +288,34 @@ class TestServerRoutes:
             assert c["selected_text"] == "bar.baz"
             assert c["sel_start"] == 12
             assert c["sel_end"] == 19
+            assert c["sel_end_index"] is None
         finally:
             for c in _server_app.get("/api/comments").json().get("_test_sel_.py", []):
                 _server_app.delete(f"/api/comments/_test_sel_.py/{c['id']}")
+
+    def test_comment_multiline_selection_stored(self, _server_app):
+        r = _server_app.post(
+            "/api/comments",
+            json={
+                "file_path": "_test_sel3_.py",
+                "line_index": 4,
+                "comment": "this block should be extracted",
+                "selected_text": "if x:\n    return y",
+                "sel_start": 4,
+                "sel_end": 12,
+                "sel_end_index": 6,
+            },
+        )
+        assert r.status_code == 200
+        try:
+            c = _server_app.get("/api/comments").json()["_test_sel3_.py"][0]
+            assert c["line_index"] == 4
+            assert c["sel_start"] == 4
+            assert c["sel_end"] == 12
+            assert c["sel_end_index"] == 6
+        finally:
+            for c in _server_app.get("/api/comments").json().get("_test_sel3_.py", []):
+                _server_app.delete(f"/api/comments/_test_sel3_.py/{c['id']}")
 
     def test_comment_selection_defaults_empty(self, _server_app):
         r = _server_app.post(

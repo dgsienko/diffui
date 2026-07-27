@@ -92,6 +92,12 @@ diffui/
   filesystem watching with 400ms debounce. Watches repo dir, `.git`
   dir, and comments file. Background tasks use `_bg_tasks` set to
   prevent garbage collection.
+- **Watcher follows the branch** — comments live in a per-branch dir, and
+  `_watch_loop` snapshots that path when it starts, so a branch switch
+  (`git_changed`) restarts the watcher. `reload_repo_state()` also re-reads
+  comments, so `_apply_state_updates` adds `comments_changed` to the broadcast
+  when they actually differ — otherwise the client would sit on a stale thread
+  while the server has the new one.
 - **Diff caching** — server-side `_diff_cache` keyed by
   `(repo, merge_base, path, view, mtime)`. Client-side `diffCache` Map
   for instant tab switching with stale-while-revalidate. Numstat is
@@ -255,11 +261,12 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
 - `tests/test_diff.py` — 46 tests: line classification, number parsing,
   hunk splitting, prefix stripping, lexer selection, token color,
   word diff ranges, pair diff lines
-- `tests/test_events.py` — 37 tests: change classification (source files,
+- `tests/test_events.py` — 42 tests: change classification (source files,
   git paths, comments, mixed, empty, dedup), watch filter (accept/reject
   for source, pyc, git paths, unrelated dirs), SSE broadcast, WebSocket
   broadcast delivery, `_apply_state_updates` (git/files/comments changed
-  paths, numstat refresh, auto-unreview on mtime mismatch), watcher
+  paths, numstat refresh, auto-unreview on mtime mismatch, comments
+  announced and watcher restarted on branch switch), watcher
   lifecycle (restart, start_poller)
 - `tests/test_git_utils.py` — 37 tests: short_name, _safe_name, JSON
   load/save roundtrips, diff_stat counting, resolve_repos,
@@ -273,7 +280,7 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
 - `tests/test_highlight.py` — 18 tests: highlight_line_html escaping and
   coloring, _apply_word_highlights with spans/entities/malformed HTML,
   parse_diff_to_json structure, highlight_file_to_json
-- `tests/test_server.py` — 103 tests: CSS vars generation, all API routes
+- `tests/test_server.py` — 93 tests: CSS vars generation, all API routes
   (repos, branch, commits, files, diff, themes, settings, comments CRUD,
   comment resolution toggle, review toggle, static files, JSON export),
   comment categories, code suggestions, blame, preview, review summary
@@ -306,7 +313,11 @@ All in `~/.config/diffui/`:
 Comment objects: `id` (UUID), `file_path`, `file_line_num`, `line_text`,
 `comment`, `author`, `author_type`, `timestamp`, `status` (open/resolved),
 `category` (bug/suggestion/nit/question), `suggestion` (proposed code),
-`replies[]`.
+`replies[]`. Range comments add `selected_text` plus `sel_start`/`sel_end`
+(character offsets into the code column) and `sel_end_index` — the diff line
+the range ends on, when it spans more than one line. `line_index` is always the
+line the range starts on, so a multi-line range covers `line_index` at
+`sel_start` through `sel_end_index` at `sel_end`.
 
 Reply objects: `text`, `author`, `author_type`.
 

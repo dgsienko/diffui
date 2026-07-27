@@ -4,7 +4,7 @@ import htm from 'htm';
 import { CommentBox } from './CommentBox.js';
 import { CommentDisplay } from './CommentDisplay.js';
 import { LineActions } from './LineActions.js';
-import { mergeRef, highlightRanges, commentRangesFor, useRangeSelection } from '../lib/utils.js';
+import { mergeRef, highlightRanges, commentsByLine, NO_COMMENTS, useRangeSelection } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -123,7 +123,7 @@ function hunkStats(lines) {
   return { adds, dels };
 }
 
-function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, commentingSelection, filePath, blameData, collapseAll }) {
+function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, commentingSelection, filePath, blameData, collapseAll }) {
   const [collapsed, setCollapsed] = useState(false);
   const stats = useMemo(() => hunkStats(hunk.lines), [hunk.lines]);
   const lastCollapseVersion = useRef(0);
@@ -146,8 +146,7 @@ function Hunk({ hunk, comments, searchTerm, onRightClick, onCtrlClick, onOpenInE
       </div>
       <div class=${'hunk-lines' + (collapsed ? ' collapsed' : '')}>
         ${hunk.lines.map(line => {
-          const lineComments = (comments[filePath] || []).filter(c => c.line_index === line.index);
-          const commentRanges = commentRangesFor(lineComments);
+          const { comments: lineComments, ranges: commentRanges } = byLine.get(line.index) || NO_COMMENTS;
           return html`
             <${DiffLine}
               key=${line.index}
@@ -199,6 +198,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
   const hoveredLineRef = useRef(null);
   const localContainerRef = useRef(null);
   const { selMenu, pendingSelection: commentingSelection, setPendingSelection, commentFromSelection } = useRangeSelection('.diff-code', localContainerRef);
+  const byLine = useMemo(() => commentsByLine(comments[data?.file_path] || []), [comments, data?.file_path]);
 
   const fetchBlame = useCallback(async (filePath) => {
     const cached = blameCache.current.get(filePath);
@@ -292,7 +292,7 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
         <${Hunk}
           key=${i}
           hunk=${hunk}
-          comments=${comments}
+          byLine=${byLine}
           searchTerm=${searchTerm}
           filePath=${data.file_path}
           commentingLine=${commentingLine}
