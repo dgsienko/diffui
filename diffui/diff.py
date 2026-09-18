@@ -9,7 +9,7 @@ from pygments.lexers.special import TextLexer
 _META_PREFIXES = ("diff ", "index ")
 _HUNK_RE = re.compile(r"^@@ -(\d+)")
 _HUNK_NEW_RE = re.compile(r"\+(\d+)")
-# A bare "---" is a removed line whose content is "--", not a file header.
+# In a hunk body "---" is a removed line whose own content is "--".
 _FILE_HEADER_RE = re.compile(r"^(?:---|\+\+\+) (?:a/|b/|/dev/null)")
 
 

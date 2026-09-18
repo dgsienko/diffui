@@ -529,4 +529,3 @@ class TestPendingStart:
     def test_abandoned_pending_goes_stale(self):
         rat._pending_start = {"created": time.monotonic() - rat._PENDING_TTL - 1}
         assert rat._pending_is_stale() is True
-

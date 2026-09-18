@@ -51,7 +51,7 @@ def _get_diff(path: str, view: str, context: int = 3, ignore_whitespace: bool = 
     elif (commit := _find_commit(view)) is not None:
         result = get_commit_diff(commit.sha, path, context, ignore_whitespace=ignore_whitespace)
     else:
-        # An unrecognised view reaches git as a revision, where a leading "--" is an option.
+        # An unknown view would reach git as a revision, where a leading "--" is an option.
         result = ""
 
     with _cache_lock:

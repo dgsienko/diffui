@@ -107,7 +107,7 @@ def _load_json(path: Path, default: Any = None) -> Any:
     try:
         return json.loads(path.read_text())
     except json.JSONDecodeError:
-        # Kept, not discarded: comments.json is the review record.
+        # comments.json is the review record, so a file we cannot parse is kept.
         path.replace(path.with_suffix(path.suffix + ".corrupt"))
         return fallback
 
@@ -270,13 +270,13 @@ def repo_path(path: str) -> Path:
 
 def repo_relative(path: str) -> str:
     repo_path(path)
-    # Returned unchanged: resolving would rewrite a symlinked path to its target.
+    # Resolving here would rewrite a symlinked path to its target.
     return path
 
 
 def get_file_mtime(path: str) -> float:
-    # Unchecked on purpose: both callers pass paths git gave them, and /api/files
-    # asks for every changed file, where resolving each one costs more than an mtime.
+    # Both callers pass paths git gave them, so repo_path() would only add a
+    # resolve() per changed file to every /api/files request.
     try:
         return (get_repo_root() / path).stat().st_mtime
     except FileNotFoundError:
@@ -347,7 +347,7 @@ def current_branch() -> str:
 
 
 def diff_stat(diff_text: str) -> tuple[int, int]:
-    # Local: diff.py pulls in pygments, which the --comments and --json paths never need.
+    # diff.py pulls in pygments, which the --comments and --json paths never load.
     from diffui.diff import is_meta_line
 
     adds = 0
