@@ -66,12 +66,14 @@ diffui/
 
 - Multi-repo discovery: `resolve_repos()` in `git_utils.py` scans
   the parent directory for sibling git repos.
-- Path containment: every path that arrives from a client goes through
-  `repo_relative()` first, which raises `PathOutsideRepo` for anything that
-  resolves outside the repo root, symlinks included. `app.py` maps that to a
-  400. Joining `get_repo_root()` with a request value directly reaches any
-  file on the machine, because pathlib returns an absolute right-hand operand
-  whole. A new route taking a path needs this call.
+- Path containment: `repo_path()` in `git_utils.py` joins a path onto the repo
+  root and raises `PathOutsideRepo` if the result resolves outside it, symlinks
+  included, and `app.py` maps that to a 400. Reading or writing a file from a
+  request goes through it, so the join and the check cannot come apart. Routes
+  that pass a path on to git instead call `repo_relative()`, which checks the
+  same way and hands back the original string. Joining `get_repo_root()` with a
+  request value by hand reaches any file on the machine, because pathlib returns
+  an absolute right-hand operand whole.
 - Revisions from a client: a `view` that is neither `all` nor `working` is
   looked up in `app_state.commits` before it reaches `git diff`. Git reads a
   leading `--` as an option, so an unchecked value can write files.

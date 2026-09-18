@@ -233,18 +233,13 @@ class TestRepoHasChanges:
         assert repo_has_changes(temp_repo) is True
 
     def test_untracked_file_alone_counts(self, tmp_path):
-        import subprocess
-
         from diffui.git_utils import repo_has_changes
+        from tests.conftest import _git
 
         repo = tmp_path / "untracked-only"
         repo.mkdir()
-        for args in (
-            ["init", "-q", "-b", "main"],
-            ["add", "-A"],
-            ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init", "--allow-empty"],
-        ):
-            subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+        _git(repo, "init", "-q", "-b", "main")
+        _git(repo, "commit", "-qm", "init", "--allow-empty")
         assert repo_has_changes(repo) is False
         (repo / "brand_new.py").write_text("x = 1\n")
         assert repo_has_changes(repo) is True

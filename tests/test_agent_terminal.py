@@ -56,17 +56,14 @@ class TestFlushBuffer:
         rat._output_buffer.append(b"world")
         assert _flush_buffer() == b"hello world"
 
-    def test_buffer_exceeding_max_is_truncated_to_tail(self):
+    def test_buffer_stays_under_max_as_output_arrives(self):
         rat._output_buffer.clear()
-        # Append more than _BUFFER_MAX_BYTES total.
         chunk = b"x" * 1000
-        total_len = 0
-        while total_len <= _BUFFER_MAX_BYTES:
-            rat._output_buffer.append(chunk)
-            total_len += len(chunk)
+        for _ in range(_BUFFER_MAX_BYTES // len(chunk) + 10):
+            rat._append_output(chunk)
         result = _flush_buffer()
-        assert len(result) == _BUFFER_MAX_BYTES
-        assert result == b"x" * _BUFFER_MAX_BYTES
+        assert len(result) <= _BUFFER_MAX_BYTES
+        assert result.endswith(chunk)
 
 
 class TestIsRunning:
@@ -533,11 +530,3 @@ class TestPendingStart:
         rat._pending_start = {"created": time.monotonic() - rat._PENDING_TTL - 1}
         assert rat._pending_is_stale() is True
 
-
-class TestOutputBufferBounds:
-    def test_append_keeps_the_buffer_under_the_cap(self):
-        rat._output_buffer.clear()
-        for _ in range(64):
-            rat._append_output(b"y" * 16384)
-        assert sum(len(c) for c in rat._output_buffer) <= _BUFFER_MAX_BYTES
-        assert _flush_buffer().endswith(b"y" * 100)

@@ -16,6 +16,7 @@ def set_active_repo(path: Path) -> None:
     global _active_repo_root
     _active_repo_root = path
     get_repo_root.cache_clear()
+    _resolved_repo_root.cache_clear()
     _cached_current_branch.cache_clear()
 
 
@@ -195,7 +196,7 @@ def get_working_diff(path: str, context: int = 3, *, ignore_whitespace: bool = F
 
 
 def _diff_untracked(path: str) -> str:
-    full_path = get_repo_root() / path
+    full_path = repo_path(path)
     if not full_path.exists():
         return ""
     try:
@@ -254,15 +255,28 @@ class PathOutsideRepo(ValueError):
     pass
 
 
-def repo_relative(path: str) -> str:
-    root = get_repo_root().resolve()
-    if not (root / path).resolve().is_relative_to(root):
+@functools.lru_cache(maxsize=1)
+def _resolved_repo_root() -> Path:
+    return get_repo_root().resolve()
+
+
+def repo_path(path: str) -> Path:
+    root = _resolved_repo_root()
+    full = root / path
+    if not full.resolve().is_relative_to(root):
         raise PathOutsideRepo(path)
+    return full
+
+
+def repo_relative(path: str) -> str:
+    repo_path(path)
     # Returned unchanged: resolving would rewrite a symlinked path to its target.
     return path
 
 
 def get_file_mtime(path: str) -> float:
+    # Unchecked on purpose: both callers pass paths git gave them, and /api/files
+    # asks for every changed file, where resolving each one costs more than an mtime.
     try:
         return (get_repo_root() / path).stat().st_mtime
     except FileNotFoundError:
@@ -270,7 +284,7 @@ def get_file_mtime(path: str) -> float:
 
 
 def get_file_content(path: str) -> str:
-    full_path = get_repo_root() / path
+    full_path = repo_path(path)
     try:
         return full_path.read_text()
     except (OSError, UnicodeDecodeError):
@@ -333,6 +347,7 @@ def current_branch() -> str:
 
 
 def diff_stat(diff_text: str) -> tuple[int, int]:
+    # Local: diff.py pulls in pygments, which the --comments and --json paths never need.
     from diffui.diff import is_meta_line
 
     adds = 0

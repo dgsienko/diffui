@@ -51,11 +51,7 @@ def _pending_is_stale() -> bool:
 
 
 def _flush_buffer() -> bytes:
-    chunks = list(_output_buffer)
-    total = b"".join(chunks)
-    if len(total) > _BUFFER_MAX_BYTES:
-        total = total[-_BUFFER_MAX_BYTES:]
-    return total
+    return b"".join(_output_buffer)
 
 
 def _is_running() -> bool:

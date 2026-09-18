@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 
 from diffui.diff import strip_diff_prefix
-from diffui.git_utils import get_repo_root, repo_relative, save_comments
+from diffui.git_utils import repo_path, repo_relative, save_comments
 from diffui.server.models import BulkResolve, CommentCreate, CommentEdit, ReplyCreate
 from diffui.server.state import app_state
 
@@ -114,7 +114,7 @@ def apply_suggestion(file_path: str, comment_id: str):
     end_index = c.get("sel_end_index")
     if end_index is not None and end_index != c.get("line_index"):
         raise HTTPException(status_code=400, detail="Suggestion covers more than one line; apply it by hand")
-    full_path = get_repo_root() / repo_relative(file_path)
+    full_path = repo_path(file_path)
     if not full_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     lines = full_path.read_text().splitlines(keepends=True)

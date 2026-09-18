@@ -24,6 +24,10 @@ _cache_lock = threading.Lock()
 _MAX_CACHE = 128
 
 
+def _find_commit(view: str):
+    return next((c for c in app_state.commits if c.sha == view), None)
+
+
 def clear_diff_cache() -> None:
     with _cache_lock:
         _diff_cache.clear()
@@ -44,8 +48,8 @@ def _get_diff(path: str, view: str, context: int = 3, ignore_whitespace: bool = 
         result = get_full_diff(merge_base, path, context, ignore_whitespace=ignore_whitespace)
     elif view == "working":
         result = get_working_diff(path, context, ignore_whitespace=ignore_whitespace)
-    elif any(c.sha == view for c in app_state.commits):
-        result = get_commit_diff(view, path, context, ignore_whitespace=ignore_whitespace)
+    elif (commit := _find_commit(view)) is not None:
+        result = get_commit_diff(commit.sha, path, context, ignore_whitespace=ignore_whitespace)
     else:
         # An unrecognised view reaches git as a revision, where a leading "--" is an option.
         result = ""
@@ -111,7 +115,7 @@ def list_files(view: str = "all"):
     elif view == "working":
         files = list(app_state.working_files)
     else:
-        commit = next((c for c in app_state.commits if c.sha == view), None)
+        commit = _find_commit(view)
         files = commit.files if commit else []
 
     numstat = app_state.numstat if view == "all" else {}
