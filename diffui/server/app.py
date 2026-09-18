@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -12,8 +13,8 @@ from diffui.server.events import start_poller
 from diffui.server.routes_comments import router as comments_router
 from diffui.server.routes_diff import router as diff_router
 from diffui.server.routes_repo import router as repo_router
-from diffui.server.routes_review import register_shutdown
 from diffui.server.routes_review import router as review_router
+from diffui.server.routes_review import shutdown as review_shutdown
 from diffui.server.routes_settings import router as settings_router
 from diffui.server.state import app_state
 from diffui.themes import ALL_THEMES
@@ -30,12 +31,19 @@ class _NoCacheStaticFiles(StaticFiles):
 _STATIC_DIR = Path(__file__).parent.parent / "static"
 
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    start_poller()
+    yield
+    review_shutdown()
+
+
 def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:
     app_state.repos = repos
     app_state.active_repo_index = active_index
     app_state.reload_repo_state()
 
-    app = FastAPI(title="diffui")
+    app = FastAPI(title="diffui", lifespan=_lifespan)
     app.include_router(repo_router)
     app.include_router(diff_router)
     app.include_router(comments_router)
@@ -46,15 +54,10 @@ def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:
     from diffui.server.routes_agent_terminal import router as agent_terminal_router
 
     app.include_router(agent_terminal_router)
-    register_shutdown(app)
 
     @app.exception_handler(PathOutsideRepo)
     def path_outside_repo(_request: Request, _exc: PathOutsideRepo):
         return JSONResponse({"detail": "Path outside repository"}, status_code=400)
-
-    @app.on_event("startup")
-    async def startup():
-        start_poller()
 
     @app.get("/api/themes")
     def list_themes():

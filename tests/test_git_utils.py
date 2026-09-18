@@ -232,6 +232,18 @@ class TestRepoHasChanges:
 
         assert repo_has_changes(temp_repo) is True
 
+    def test_untracked_file_alone_counts(self, tmp_path):
+        from diffui.git_utils import repo_has_changes
+        from tests.conftest import _git
+
+        repo = tmp_path / "untracked-only"
+        repo.mkdir()
+        _git(repo, "init", "-q", "-b", "main")
+        _git(repo, "commit", "-qm", "init", "--allow-empty")
+        assert repo_has_changes(repo) is False
+        (repo / "brand_new.py").write_text("x = 1\n")
+        assert repo_has_changes(repo) is True
+
 
 class TestGetFileMtime:
     def test_missing_file_returns_zero(self):
@@ -341,3 +353,38 @@ class TestRepoRelative:
             assert repo_relative("alias.py") == "alias.py"
         finally:
             link.unlink()
+
+
+class TestDiffStatSeparatorLines:
+    def test_removed_separator_counts_as_a_deletion(self):
+        from diffui.git_utils import diff_stat
+
+        diff = (
+            "diff --git a/k8s.yaml b/k8s.yaml\n"
+            "--- a/k8s.yaml\n"
+            "+++ b/k8s.yaml\n"
+            "@@ -1,3 +1,2 @@\n"
+            "----\n"
+            "-kind: Service\n"
+            "+kind: Deployment\n"
+        )
+        assert diff_stat(diff) == (1, 2)
+
+
+class TestJsonPersistence:
+    def test_corrupt_file_is_moved_aside_and_default_returned(self, tmp_path):
+        from diffui.git_utils import _load_json
+
+        path = tmp_path / "comments.json"
+        path.write_text('{"a": [{"id"')
+        assert _load_json(path, {}) == {}
+        assert not path.exists()
+        assert (tmp_path / "comments.json.corrupt").read_text() == '{"a": [{"id"'
+
+    def test_save_leaves_no_temp_file(self, tmp_path):
+        from diffui.git_utils import _load_json, _save_json
+
+        path = tmp_path / "comments.json"
+        _save_json(path, {"a.py": [{"id": "1"}]})
+        assert _load_json(path, {}) == {"a.py": [{"id": "1"}]}
+        assert list(p.name for p in tmp_path.iterdir()) == ["comments.json"]

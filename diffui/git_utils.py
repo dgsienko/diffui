@@ -16,6 +16,7 @@ def set_active_repo(path: Path) -> None:
     global _active_repo_root
     _active_repo_root = path
     get_repo_root.cache_clear()
+    _resolved_repo_root.cache_clear()
     _cached_current_branch.cache_clear()
 
 
@@ -78,7 +79,9 @@ def repo_has_changes(repo_root: Path) -> bool:
     base = _git_at(repo_root, "merge-base", main, "HEAD")
     if base.returncode != 0:
         return False
-    return _git_at(repo_root, "diff", "--quiet", base.stdout.strip()).returncode != 0
+    if _git_at(repo_root, "diff", "--quiet", base.stdout.strip()).returncode != 0:
+        return True
+    return bool(_git_at(repo_root, "ls-files", "--others", "--exclude-standard").stdout.strip())
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
@@ -98,13 +101,21 @@ def get_git_dir() -> Path:
 
 
 def _load_json(path: Path, default: Any = None) -> Any:
+    fallback = {} if default is None else default
     if not path.exists():
-        return default if default is not None else {}
-    return json.loads(path.read_text())
+        return fallback
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError:
+        # comments.json is the review record, so a file we cannot parse is kept.
+        path.replace(path.with_suffix(path.suffix + ".corrupt"))
+        return fallback
 
 
 def _save_json(path: Path, data: Any) -> None:
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n")
+    tmp.replace(path)
 
 
 @dataclass
@@ -185,7 +196,7 @@ def get_working_diff(path: str, context: int = 3, *, ignore_whitespace: bool = F
 
 
 def _diff_untracked(path: str) -> str:
-    full_path = get_repo_root() / path
+    full_path = repo_path(path)
     if not full_path.exists():
         return ""
     try:
@@ -244,15 +255,28 @@ class PathOutsideRepo(ValueError):
     pass
 
 
-def repo_relative(path: str) -> str:
-    root = get_repo_root().resolve()
-    if not (root / path).resolve().is_relative_to(root):
+@functools.lru_cache(maxsize=1)
+def _resolved_repo_root() -> Path:
+    return get_repo_root().resolve()
+
+
+def repo_path(path: str) -> Path:
+    root = _resolved_repo_root()
+    full = root / path
+    if not full.resolve().is_relative_to(root):
         raise PathOutsideRepo(path)
-    # Returned unchanged: resolving would rewrite a symlinked path to its target.
+    return full
+
+
+def repo_relative(path: str) -> str:
+    repo_path(path)
+    # Resolving here would rewrite a symlinked path to its target.
     return path
 
 
 def get_file_mtime(path: str) -> float:
+    # Both callers pass paths git gave them, so repo_path() would only add a
+    # resolve() per changed file to every /api/files request.
     try:
         return (get_repo_root() / path).stat().st_mtime
     except FileNotFoundError:
@@ -260,7 +284,7 @@ def get_file_mtime(path: str) -> float:
 
 
 def get_file_content(path: str) -> str:
-    full_path = get_repo_root() / path
+    full_path = repo_path(path)
     try:
         return full_path.read_text()
     except (OSError, UnicodeDecodeError):
@@ -323,12 +347,17 @@ def current_branch() -> str:
 
 
 def diff_stat(diff_text: str) -> tuple[int, int]:
+    # diff.py pulls in pygments, which the --comments and --json paths never load.
+    from diffui.diff import is_meta_line
+
     adds = 0
     dels = 0
     for line in diff_text.splitlines():
-        if line.startswith("+") and not line.startswith("+++"):
+        if is_meta_line(line):
+            continue
+        if line.startswith("+"):
             adds += 1
-        elif line.startswith("-") and not line.startswith("---"):
+        elif line.startswith("-"):
             dels += 1
     return adds, dels
 

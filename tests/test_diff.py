@@ -3,9 +3,9 @@ from __future__ import annotations
 from pygments.token import Token
 
 from diffui.diff import (
-    _is_meta_line,
     classify_line,
     get_lexer,
+    is_meta_line,
     pair_diff_lines,
     parse_line_numbers,
     resolve_line_num,
@@ -47,22 +47,22 @@ class TestClassifyLine:
 
 class TestIsMetaLine:
     def test_diff_header(self):
-        assert _is_meta_line("diff --git a/f b/f")
+        assert is_meta_line("diff --git a/f b/f")
 
     def test_index_line(self):
-        assert _is_meta_line("index abc..def")
+        assert is_meta_line("index abc..def")
 
     def test_plus_header(self):
-        assert _is_meta_line("+++ b/file")
+        assert is_meta_line("+++ b/file")
 
     def test_minus_header(self):
-        assert _is_meta_line("--- a/file")
+        assert is_meta_line("--- a/file")
 
     def test_regular_add(self):
-        assert not _is_meta_line("+some code")
+        assert not is_meta_line("+some code")
 
     def test_context(self):
-        assert not _is_meta_line(" context line")
+        assert not is_meta_line(" context line")
 
 
 class TestStripDiffPrefix:
@@ -263,3 +263,34 @@ class TestPairDiffLines:
         assert 0 in result
         assert 2 in result
         assert 1 not in result
+
+
+class TestYamlSeparatorLines:
+    def test_removed_separator_is_not_meta(self):
+        assert not is_meta_line("----")
+        assert classify_line("----") == "remove"
+
+    def test_added_line_starting_with_plusses_is_not_meta(self):
+        assert not is_meta_line("+++i")
+        assert classify_line("+++i") == "add"
+
+    def test_dev_null_header_is_meta(self):
+        assert is_meta_line("--- /dev/null")
+        assert is_meta_line("+++ /dev/null")
+
+    def test_line_numbers_survive_a_removed_separator(self):
+        diff = (
+            "diff --git a/k8s.yaml b/k8s.yaml\n"
+            "--- a/k8s.yaml\n"
+            "+++ b/k8s.yaml\n"
+            "@@ -1,5 +1,5 @@\n"
+            " apiVersion: v1\n"
+            "----\n"
+            "-kind: Service\n"
+            "+kind: Deployment\n"
+            " metadata:\n"
+        )
+        nums = parse_line_numbers(diff)
+        assert nums[5] == ("2", None)
+        assert nums[6] == ("3", None)
+        assert nums[8] == ("4", "3")
