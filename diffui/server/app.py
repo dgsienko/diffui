@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.staticfiles import StaticFiles
 
+from diffui.git_utils import PathOutsideRepo
 from diffui.server.events import router as events_router
 from diffui.server.events import start_poller
 from diffui.server.routes_comments import router as comments_router
@@ -46,6 +47,10 @@ def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:
 
     app.include_router(agent_terminal_router)
     register_shutdown(app)
+
+    @app.exception_handler(PathOutsideRepo)
+    def path_outside_repo(_request: Request, _exc: PathOutsideRepo):
+        return JSONResponse({"detail": "Path outside repository"}, status_code=400)
 
     @app.on_event("startup")
     async def startup():

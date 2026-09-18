@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
+import pathlib
 
 import pytest
 
@@ -38,13 +38,12 @@ class TestGenerateCssVars:
 
 
 @pytest.fixture(scope="class")
-def _server_app():
-    from diffui.git_utils import resolve_repo_root, set_active_repo
+def _server_app(temp_repo):
+    from diffui.git_utils import set_active_repo
     from diffui.server.app import create_app
 
-    root = resolve_repo_root(Path(__file__).parent.parent)
-    set_active_repo(root)
-    app = create_app([root])
+    set_active_repo(temp_repo)
+    app = create_app([temp_repo])
 
     from fastapi.testclient import TestClient
 
@@ -1076,3 +1075,93 @@ class TestExportJson:
             msg = ws.receive_json()
             assert msg["type"] == "error"
             assert "No agent running" in msg["message"]
+
+
+class TestPathContainment:
+    def test_preview_rejects_absolute_path(self, _server_app, tmp_path):
+        secret = tmp_path / "secret.txt"
+        secret.write_text("top secret\n")
+        r = _server_app.get(f"/api/preview/{secret}")
+        assert r.status_code == 400
+        assert "top secret" not in r.text
+
+    def test_file_rejects_absolute_path(self, _server_app, tmp_path):
+        secret = tmp_path / "secret.txt"
+        secret.write_text("top secret\n")
+        r = _server_app.get(f"/api/file/{secret}")
+        assert r.status_code == 400
+
+    def test_blame_rejects_absolute_path(self, _server_app, tmp_path):
+        r = _server_app.get(f"/api/blame/{tmp_path / 'secret.txt'}")
+        assert r.status_code == 400
+
+    def test_diff_rejects_absolute_path(self, _server_app, tmp_path):
+        r = _server_app.get(f"/api/diff/{tmp_path / 'secret.txt'}")
+        assert r.status_code == 400
+
+    def test_reviewed_rejects_absolute_path(self, _server_app, tmp_path):
+        r = _server_app.post(f"/api/reviewed/{tmp_path / 'secret.txt'}")
+        assert r.status_code == 400
+
+    def test_editor_open_rejects_absolute_path(self, _server_app, tmp_path):
+        r = _server_app.post("/api/editor/open", json={"file_path": str(tmp_path / "secret.txt")})
+        assert r.status_code == 400
+
+    def test_comment_rejects_absolute_path(self, _server_app, tmp_path):
+        r = _server_app.post(
+            "/api/comments",
+            json={"file_path": str(tmp_path / "outside.py"), "line_index": 0, "comment": "x"},
+        )
+        assert r.status_code == 400
+
+    def test_apply_suggestion_cannot_write_outside_repo(self, _server_app, temp_repo, tmp_path):
+        outside = tmp_path / "outside.py"
+        outside.write_text("original\n")
+        link = temp_repo / "escape.py"
+        link.symlink_to(outside)
+        try:
+            _server_app.post(
+                "/api/comments",
+                json={
+                    "file_path": "escape.py",
+                    "line_index": 0,
+                    "file_line_num": 1,
+                    "comment": "replace it",
+                    "suggestion": "overwritten",
+                },
+            )
+            comments = _server_app.get("/api/comments").json().get("escape.py", [])
+            assert comments == []
+            assert outside.read_text() == "original\n"
+        finally:
+            link.unlink()
+
+
+class TestDiffViewValidation:
+    def test_unknown_view_returns_empty_diff(self, _server_app):
+        r = _server_app.get("/api/diff/app.py", params={"view": "deadbeefdeadbeef"})
+        assert r.status_code == 200
+        assert r.json()["hunks"] == []
+
+    def test_option_shaped_view_does_not_reach_git(self, _server_app, tmp_path):
+        target = tmp_path / "written-by-git.diff"
+        r = _server_app.get("/api/diff/app.py", params={"view": f"--output={target}"})
+        assert r.status_code == 200
+        assert not target.exists()
+
+    def test_known_commit_sha_still_works(self, _server_app):
+        commits = _server_app.get("/api/commits").json()
+        sha = commits[0]["sha"]
+        r = _server_app.get(f"/api/diff/app.py?view={sha}")
+        assert r.status_code == 200
+
+
+class TestExplainViewGuard:
+    def test_sibling_of_tempdir_is_rejected(self, _server_app, tmp_path):
+        import tempfile
+        from unittest.mock import patch
+
+        evil = pathlib.Path(f"{tempfile.gettempdir()}-evil") / "payload.html"
+        with patch("diffui.server.routes_review._explain_output_path", str(evil)):
+            r = _server_app.get("/api/explain/view")
+        assert r.status_code == 400

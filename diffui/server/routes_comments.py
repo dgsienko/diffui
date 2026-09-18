@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 
-from diffui.git_utils import get_repo_root, save_comments
+from diffui.git_utils import get_repo_root, repo_relative, save_comments
 from diffui.server.models import BulkResolve, CommentCreate, CommentEdit, ReplyCreate
 from diffui.server.state import app_state
 
@@ -26,7 +26,7 @@ def get_comments():
 
 @router.post("/comments")
 def add_comment(body: CommentCreate):
-    file_path = body.file_path
+    file_path = repo_relative(body.file_path)
     if file_path not in app_state.comments:
         app_state.comments[file_path] = []
     app_state.comments[file_path].append(
@@ -110,7 +110,7 @@ def apply_suggestion(file_path: str, comment_id: str):
     line_num = c.get("file_line_num")
     if not line_num:
         raise HTTPException(status_code=400, detail="No line number")
-    full_path = get_repo_root() / file_path
+    full_path = get_repo_root() / repo_relative(file_path)
     if not full_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     lines = full_path.read_text().splitlines(keepends=True)

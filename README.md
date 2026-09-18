@@ -4,7 +4,7 @@ A local code review UI tool with optional AI agent integration.
 
 Review any branch with syntax-highlighted diffs, inline comments, and risk scoring. If you have a coding agent installed locally, you can leave feedback directly on the diff, watch the agent respond, and review the next round of changes in a tight loop without leaving the browser. There is also an AI-powered explain feature that walks you through what the branch does.
 
-Runs as a local web server with a Preact frontend. No build step, no accounts, and no network required; everything stays on your machine.
+Runs as a local web server with a Preact frontend. No build step and no accounts. Your code stays on your machine, with one exception: a markdown file containing a mermaid or plantuml block is rendered by kroki.io, so that block's source is sent there when you preview the file. Frontend libraries load from a CDN, so the first paint needs a network.
 
 ## Who is this for
 
@@ -83,7 +83,7 @@ Configure your preferred agent CLI in Settings (gear icon).
 
 - 15 color themes: Catppuccin Mocha/Latte, GitHub Dark, Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night, Rose Pine, Rose Pine Moon, Monokai Pro, Kanagawa, Everforest, Ayu Dark
 - Blame gutter: toggleable git blame showing author and age
-- Markdown/image preview: rendered preview for `.md` files, inline display for images
+- Markdown/image preview: rendered preview for `.md` files, inline display for images. Markdown is sanitized before rendering. Diagram blocks are rendered by kroki.io, which is the only thing diffui sends off the machine
 - Font size and line wrap: adjustable in settings or via command palette
 - Ignore whitespace: toggle via toolbar button or `w` key
 - Open in editor: `ctrl+click` a line to open it in VS Code, Cursor, Vim, or Neovim (configurable in settings)

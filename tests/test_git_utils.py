@@ -227,11 +227,10 @@ class TestDiscoverSiblingRepos:
 
 
 class TestRepoHasChanges:
-    def test_test_repo_has_changes(self):
+    def test_branch_with_commits_has_changes(self, temp_repo):
         from diffui.git_utils import repo_has_changes
 
-        root = Path(__file__).parent.parent
-        assert repo_has_changes(root) is True
+        assert repo_has_changes(temp_repo) is True
 
 
 class TestGetFileMtime:
@@ -293,3 +292,52 @@ class TestGetDiffNumstat:
                 assert isinstance(dels, int)
         except RuntimeError:
             pytest.skip("No merge base available")
+
+
+class TestRepoRelative:
+    def test_in_repo_path_returned_unchanged(self, temp_repo):
+        from diffui.git_utils import repo_relative, set_active_repo
+
+        set_active_repo(temp_repo)
+        assert repo_relative("app.py") == "app.py"
+
+    def test_absolute_path_outside_repo_raises(self, temp_repo, tmp_path):
+        from diffui.git_utils import PathOutsideRepo, repo_relative, set_active_repo
+
+        set_active_repo(temp_repo)
+        outside = tmp_path / "secret.txt"
+        outside.write_text("secret\n")
+        with pytest.raises(PathOutsideRepo):
+            repo_relative(str(outside))
+
+    def test_dotdot_escape_raises(self, temp_repo):
+        from diffui.git_utils import PathOutsideRepo, repo_relative, set_active_repo
+
+        set_active_repo(temp_repo)
+        with pytest.raises(PathOutsideRepo):
+            repo_relative("../../etc/hostname")
+
+    def test_symlink_pointing_outside_raises(self, temp_repo, tmp_path):
+        from diffui.git_utils import PathOutsideRepo, repo_relative, set_active_repo
+
+        set_active_repo(temp_repo)
+        outside = tmp_path / "target.txt"
+        outside.write_text("secret\n")
+        link = temp_repo / "link.txt"
+        link.symlink_to(outside)
+        try:
+            with pytest.raises(PathOutsideRepo):
+                repo_relative("link.txt")
+        finally:
+            link.unlink()
+
+    def test_symlink_inside_repo_allowed(self, temp_repo):
+        from diffui.git_utils import repo_relative, set_active_repo
+
+        set_active_repo(temp_repo)
+        link = temp_repo / "alias.py"
+        link.symlink_to(temp_repo / "app.py")
+        try:
+            assert repo_relative("alias.py") == "alias.py"
+        finally:
+            link.unlink()
