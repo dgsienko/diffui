@@ -66,9 +66,20 @@ diffui/
 
 - Multi-repo discovery: `resolve_repos()` in `git_utils.py` scans
   the parent directory for sibling git repos.
+- Path containment: every path that arrives from a client goes through
+  `repo_relative()` first, which raises `PathOutsideRepo` for anything that
+  resolves outside the repo root, symlinks included. `app.py` maps that to a
+  400. Joining `get_repo_root()` with a request value directly reaches any
+  file on the machine, because pathlib returns an absolute right-hand operand
+  whole. A new route taking a path needs this call.
+- Revisions from a client: a `view` that is neither `all` nor `working` is
+  looked up in `app_state.commits` before it reaches `git diff`. Git reads a
+  leading `--` as an option, so an unchecked value can write files.
 - Branch-scoped state: reviewed status, comments, and session stored
   at `~/.config/diffui/{repo}/{branch}/`. `get_repo_root()` and
-  `_cached_current_branch()` are `lru_cache`'d.
+  `_cached_current_branch()` are `lru_cache`'d. `_save_json` writes a temp
+  file and renames it. `_load_json` moves an unparseable file aside to
+  `.corrupt`, so the next save cannot overwrite it.
 - Comment threads: comments have `id` (UUID), `author`/`author_type`
   fields, `category` (bug/suggestion/nit/question), optional `suggestion`
   (proposed code), and `status` (open/resolved). Replies are structured
@@ -91,7 +102,11 @@ diffui/
   Both use `watchfiles` (Rust-backed FSEvents/inotify) for real-time
   filesystem watching with 400ms debounce. Watches repo dir, `.git`
   dir, and comments file. Background tasks use `_bg_tasks` set to
-  prevent garbage collection.
+  prevent garbage collection. `start_poller` runs from the lifespan handler,
+  so both it and `_do_restart` can use `asyncio.get_running_loop()`.
+- Git dir boundary: `_classify_changes` compares against the git dir plus a
+  separator. A bare `startswith` also matches `.gitignore` and `.github/`,
+  which turns a workflow edit into a full `reload_repo_state()`.
 - Watcher follows the branch: comments live in a per-branch dir, and
   `_watch_loop` snapshots that path when it starts, so a branch switch
   (`git_changed`) restarts the watcher. `reload_repo_state()` also re-reads
@@ -126,6 +141,12 @@ diffui/
   history. Agent CLI configurable in settings (Claude Code, Codex,
   OpenCode, Cursor Agent). Legacy polling endpoints (`/api/agent/run`,
   `/api/agent/status`) still available for non-terminal use.
+- Markdown is sanitized: `renderMd` in `lib/markdown.js` runs marked's output
+  through an allowlist of tags, attributes and URL schemes before it reaches
+  `dangerouslySetInnerHTML`. marked emits raw HTML, and comment bodies, agent
+  replies and any previewed `.md` file are attacker-controlled, so removing
+  this gives a reviewed branch script execution in the diffui origin. Diagram
+  blocks are the one thing that leaves the machine: they are sent to kroki.io.
 - Explain changes: `/api/explain` spawns the configured agent CLI
   to generate a self-contained HTML walkthrough. `/api/explain/status`
   polls. `/api/explain/view` serves the result as a localhost page
@@ -195,6 +216,13 @@ After making changes, always:
   accessed via `get_current_theme()`. No circular imports.
 - Search is debounced at 400ms. Comment navigation uses `commentNavRef`
   index cycling through a flat comment list.
+- A bare `---` or `+++` line is content, not a diff file header.
+  `is_meta_line` in `diff.py` requires the `a/`, `b/` or `/dev/null` shape,
+  because a deleted YAML separator arrives as `----` and misreading it shifts
+  every line number below it in the hunk.
+- `apply_suggestion` checks the target line still matches the comment's
+  `line_text` and refuses a range that covers more than one line. It is the
+  one endpoint that writes to a file in the repo under review.
 - `get_branch_commits` gets every commit's file list from one
   `git log --name-only` call, avoiding an N+1 of `git diff-tree`
   subprocesses.

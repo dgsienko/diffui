@@ -58,7 +58,7 @@ Right-click a line or press `c` to leave a comment. Comments support:
 
 - Text selection: highlight text, within a line or across several, and click the floating "Comment" button to leave a comment that references that exact span; the referenced text stays highlighted in the diff (works in unified and split views)
 - Categories: tag as bug, suggestion, nit, or question (colored badges)
-- Code suggestions: attach a proposed code change with inline before/after preview and an Apply button that patches the file
+- Code suggestions: attach a proposed code change with inline before/after preview and an Apply button that patches the file. Apply refuses if the line has changed since you wrote the comment, or if the comment covers more than one line
 - Threads: reply to comments; named authors (user vs agent) with color-coded identities
 - Resolution: resolve/reopen with a toggle; resolved comments appear dimmed
 - Navigation: `n`/`p` to jump between comments across files
