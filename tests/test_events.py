@@ -275,7 +275,7 @@ class TestApplyStateUpdates:
 
         reload.assert_called_once()
         clear_cache.assert_called_once()
-        # reload_repo_state() already re-read them — no second trip to disk.
+        # reload_repo_state() already re-read them, so there's no second trip to disk.
         load.assert_not_called()
         assert "files_changed" in result
         assert "comments_changed" in result

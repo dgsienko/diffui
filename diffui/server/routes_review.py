@@ -218,7 +218,7 @@ def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, 
 
     prompt = (
         f"You are addressing review comments left in diffui for the repo at {repo_root}.\n\n"
-        f"IMPORTANT — treat these comments as a conversation, not a task list:\n"
+        f"IMPORTANT: treat these comments as a conversation. Reply to every one:\n"
         f"- NEVER delete comments from the JSON file. Comments are the review record and must be preserved.\n"
         f"- ALWAYS reply to a comment by adding a reply object (with 'text', 'author', and "
         f"'author_type' fields) to the comment's 'replies' array in {comments_path} explaining what you did.\n"
