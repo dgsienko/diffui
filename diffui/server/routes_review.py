@@ -7,7 +7,7 @@ import threading
 
 from fastapi import APIRouter
 
-from diffui.git_utils import get_file_mtime, save_reviewed
+from diffui.git_utils import get_file_mtime, repo_relative, save_reviewed
 from diffui.server.state import app_state
 
 _agent_process: subprocess.Popen | None = None
@@ -52,6 +52,7 @@ def get_reviewed():
 
 @router.post("/reviewed/{path:path}")
 def toggle_reviewed(path: str):
+    path = repo_relative(path)
     if path in app_state.reviewed:
         del app_state.reviewed[path]
         save_reviewed(app_state.reviewed)
@@ -347,7 +348,7 @@ def view_explanation():
     if not _explain_output_path:
         return HTMLResponse(_placeholder)
     resolved = Path(_explain_output_path).resolve()
-    if not str(resolved).startswith(str(Path(tempfile.gettempdir()).resolve())):
+    if not resolved.is_relative_to(Path(tempfile.gettempdir()).resolve()):
         return HTMLResponse(_placeholder, status_code=400)
     if not resolved.exists():
         return HTMLResponse(_placeholder)

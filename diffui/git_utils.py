@@ -240,6 +240,18 @@ def get_working_changed_files() -> list[str]:
     return sorted(files)
 
 
+class PathOutsideRepo(ValueError):
+    pass
+
+
+def repo_relative(path: str) -> str:
+    root = get_repo_root().resolve()
+    if not (root / path).resolve().is_relative_to(root):
+        raise PathOutsideRepo(path)
+    # Returned unchanged: resolving would rewrite a symlinked path to its target.
+    return path
+
+
 def get_file_mtime(path: str) -> float:
     try:
         return (get_repo_root() / path).stat().st_mtime

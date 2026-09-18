@@ -11,6 +11,7 @@ from diffui.git_utils import (
     get_full_diff,
     get_repo_root,
     get_working_diff,
+    repo_relative,
     short_name,
 )
 from diffui.server.highlight import parse_diff_to_json
@@ -43,8 +44,11 @@ def _get_diff(path: str, view: str, context: int = 3, ignore_whitespace: bool = 
         result = get_full_diff(merge_base, path, context, ignore_whitespace=ignore_whitespace)
     elif view == "working":
         result = get_working_diff(path, context, ignore_whitespace=ignore_whitespace)
-    else:
+    elif any(c.sha == view for c in app_state.commits):
         result = get_commit_diff(view, path, context, ignore_whitespace=ignore_whitespace)
+    else:
+        # An unrecognised view reaches git as a revision, where a leading "--" is an option.
+        result = ""
 
     with _cache_lock:
         if cache_key in _diff_cache:
@@ -97,7 +101,6 @@ def _score_risk(path: str, adds: int, dels: int) -> tuple[int, str, list[str]]:
 
 
 def _is_ignored(path: str) -> bool:
-
     return any(fnmatch(path, p) or fnmatch(path.split("/")[-1], p) for p in app_state.ignore_patterns)
 
 
@@ -139,6 +142,7 @@ def list_files(view: str = "all"):
 
 @router.get("/diff/{path:path}")
 def get_diff(path: str, view: str = "all", context: int = 3, ignore_whitespace: bool = False):
+    path = repo_relative(path)
     diff_text = _get_diff(path, view, context, ignore_whitespace=ignore_whitespace)
     return parse_diff_to_json(diff_text, path, app_state.theme)
 
@@ -148,6 +152,7 @@ def get_file(path: str, view: str = "all"):
     from diffui.git_utils import get_file_content
     from diffui.server.highlight import highlight_file_to_json
 
+    path = repo_relative(path)
     content = get_file_content(path)
     diff_text = _get_diff(path, view)
     return highlight_file_to_json(content, diff_text, path, app_state.theme)
@@ -157,7 +162,7 @@ def get_file(path: str, view: str = "all"):
 def get_blame_data(path: str):
     from diffui.git_utils import get_blame
 
-    return get_blame(path)
+    return get_blame(repo_relative(path))
 
 
 @router.get("/preview/{path:path}")
@@ -166,6 +171,7 @@ def get_preview(path: str):
 
     from diffui.git_utils import get_file_content, get_repo_root
 
+    path = repo_relative(path)
     mime, _ = mimetypes.guess_type(path)
     if mime and mime.startswith("image/"):
         full_path = get_repo_root() / path
