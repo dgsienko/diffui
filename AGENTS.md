@@ -108,9 +108,6 @@ diffui/
 - **Scroll persistence** — client saves/restores scroll positions per
   file in a Map. Comment dropdown navigation scrolls to the exact line
   using `data-line-new` attributes for O(1) DOM lookup.
-- **Session persistence** — `session.json` per branch saves active file,
-  diff mode, file tree state, show-reviewed toggle, and scroll positions.
-  Restored on page load; saved with 1-second debounce.
 - **Risk scoring** — `_score_risk()` in `routes_diff.py` assigns
   risk_level (low/medium/high) based on file patterns (migrations,
   configs, large deletions, test removal, high churn). Shown as colored
@@ -141,15 +138,6 @@ diffui/
 - **Bulk resolve** — `/api/comments/bulk-resolve` with optional
   `file_path` filter and `action` (resolve/reopen). Used by command
   palette, comments panel header, and diff file header.
-- **Go to line** — `Ctrl+G` opens a dialog, scrolls to the line in
-  the current diff with a flash highlight.
-- **Expand/collapse all hunks** — `collapseAll` prop propagated from
-  app to Hunk components via useEffect.
-- **Hunk statistics** — `hunkStats()` in DiffViewer counts adds/dels
-  per hunk, shown in hunk headers.
-- **Inline suggestion preview** — when a comment has both `line_text`
-  and `suggestion`, CommentDisplay renders a before/after diff instead
-  of a plain code block.
 - **Font size / word wrap** — `font_size` and `word_wrap` persisted in
   settings. Font size sets `--code-font-size` CSS variable. Word wrap
   adds `.word-wrap-enabled` class to `<html>`, uses `pre-wrap` on
@@ -157,8 +145,6 @@ diffui/
 - **Custom keybindings** — `keybindings` dict in settings maps action
   IDs to key strings. SettingsPanel has a collapsible rebinding UI with
   key capture. ShortcutOverlay and CommandPalette reflect overrides.
-- **Connection status** — `wsConnected` state tracks WebSocket/SSE
-  connection. Shown as a colored dot in the footer legend.
 - **Blame gutter** — toggleable per-file. Fetches `git blame --porcelain`
   via `/api/blame/{path}`. Results cached client-side in a `Map`.
 - **Preview mode** — toggleable for `.md` and image files. Backend uses
@@ -177,40 +163,11 @@ diffui/
   automatically unreviewed. `_invalidate_stale_reviews()` in `events.py`
   compares stored mtime against current on both `files_changed` and
   `git_changed` events.
-- **Comment notification pulse** — when `comments_changed` fires, the
-  Comments button and file tree items with comments briefly pulse to
-  draw attention.
-- **Skeleton loading** — diff content shows placeholder lines during
-  load instead of a spinner.
-- **Contextual empty states** — empty state messages vary based on
-  context (no changes, all reviewed, no filter matches, select a file).
-- **Two-row header** — row 1 has repo/view selects and branch pill;
-  row 2 (toolbar) has mode toggle, review controls, panel toggles
-  (Explorer, Search files, Comments), agent button, and diff stats.
-- **Inline hover actions** — `LineActions` component shows `+` (comment)
-  and `↗` (open in editor) buttons on diff line hover.
-- **Comments panel** — `CommentsPanel` sidebar shows all open comments
-  grouped by file. Click to jump.
-- **File filter** — `FileFilterBar` toggled via `Ctrl+Shift+F`. Filters
-  `visibleFiles` by path substring.
-- **Explorer sidebar** — `FileTree` with grouping modes (directory, type,
-  status), resizable via drag handle, open by default.
-- **Review progress** — visual progress bar + count in toolbar.
-- **CSS design system** — `--radius-sm/md/lg`, `--shadow-low/high`,
-  `--highlight-bg/border`, `--overlay-bg`, `--minimap-viewport` CSS
-  variables. All spacing on 4/8pt grid. No hardcoded colors — zero
-  hex/rgba values outside `:root`.
 - **Error handling** — `safeFetch` wrapper shows toast on failed requests.
 - **Accessibility** — ARIA labels on selects, `role="tab"` and keyboard
   activation on file tabs, `role="treeitem"` on file tree items, focus
   trapping in settings dialog, `:focus-visible` outlines on all buttons,
   bold color-coded `+`/`-` diff prefixes for color-blind users.
-- **Tab scroll indicators** — gradient fades on tab bar edges when
-  more tabs exist offscreen.
-- **Resizable panels** — FileTree, CommentsPanel, and AgentTerminal
-  all have drag-to-resize handles via shared `useResize` hook.
-- **File tab tooltips** — hover shows full path, +/- counts, and
-  risk level.
 
 ### Design System
 
@@ -219,7 +176,7 @@ All frontend changes must follow these rules:
 - **Spacing:** 4/8pt grid only (4, 8, 12, 16, 24, 32px)
 - **Border radius:** use `--radius-sm`, `--radius-md`, `--radius-lg` tokens
 - **Shadows:** use `--shadow-low`, `--shadow-high` tokens
-- **Colors:** all via CSS variables, no hardcoded hex
+- **Colors:** all via CSS variables, zero hex/rgba outside `:root`
 - **Buttons:** consistent padding/font-size within each context
 - **Animations:** 0.15s duration, intentional only
 - **No emoji as UI elements** — use text labels or CSS indicators
@@ -249,7 +206,7 @@ diffui                               # Start server (from any git repo)
 diffui --open                        # Start + open in browser
 diffui --comments                    # Dump comments to stdout
 diffui --json                        # Export review session as JSON
-pytest                               # Run tests (263 tests, 86% coverage)
+pytest                               # Run tests
 ruff check diffui/ tests/           # Lint
 ```
 
@@ -258,29 +215,29 @@ ruff check diffui/ tests/           # Lint
 Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
 `themes/`) and the web server (`server/`).
 
-- `tests/test_diff.py` — 46 tests: line classification, number parsing,
+- `tests/test_diff.py` — line classification, number parsing,
   hunk splitting, prefix stripping, lexer selection, token color,
   word diff ranges, pair diff lines
-- `tests/test_events.py` — 42 tests: change classification (source files,
+- `tests/test_events.py` — change classification (source files,
   git paths, comments, mixed, empty, dedup), watch filter (accept/reject
   for source, pyc, git paths, unrelated dirs), SSE broadcast, WebSocket
   broadcast delivery, `_apply_state_updates` (git/files/comments changed
   paths, numstat refresh, auto-unreview on mtime mismatch, comments
   announced and watcher restarted on branch switch), watcher
   lifecycle (restart, start_poller)
-- `tests/test_git_utils.py` — 37 tests: short_name, _safe_name, JSON
+- `tests/test_git_utils.py` — short_name, _safe_name, JSON
   load/save roundtrips, diff_stat counting, resolve_repos,
   get_diff_numstat, get_blame, session persistence, get_file_mtime,
   repo_has_changes, get_file_content error handling
-- `tests/test_agent_terminal.py` — 18 tests: PTY helpers (_flush_buffer,
+- `tests/test_agent_terminal.py` — PTY helpers (_flush_buffer,
   _read_pty, _write_pty, _resize_pty, _kill_agent, _is_running),
   /api/agent/start endpoint (already running, no comments, unknown CLI,
   spawn success, slave fd cleanup), /api/agent/ws WebSocket (no process,
   buffer replay, output streaming, kill message)
-- `tests/test_highlight.py` — 18 tests: highlight_line_html escaping and
+- `tests/test_highlight.py` — highlight_line_html escaping and
   coloring, _apply_word_highlights with spans/entities/malformed HTML,
   parse_diff_to_json structure, highlight_file_to_json
-- `tests/test_server.py` — 93 tests: CSS vars generation, all API routes
+- `tests/test_server.py` — CSS vars generation, all API routes
   (repos, branch, commits, files, diff, themes, settings, comments CRUD,
   comment resolution toggle, review toggle, static files, JSON export),
   comment categories, code suggestions, blame, preview, review summary
@@ -291,7 +248,7 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
   _build_agent_context, _process_status, explain view with temp files,
   repo switch, working files view, diff context/whitespace params,
   editor open endpoint
-- `tests/test_themes.py` — 8 tests: all themes have valid hex colors,
+- `tests/test_themes.py` — all themes have valid hex colors,
   unique names, syntax maps; theme state get/set
 
 ## Linting
