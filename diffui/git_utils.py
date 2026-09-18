@@ -78,7 +78,9 @@ def repo_has_changes(repo_root: Path) -> bool:
     base = _git_at(repo_root, "merge-base", main, "HEAD")
     if base.returncode != 0:
         return False
-    return _git_at(repo_root, "diff", "--quiet", base.stdout.strip()).returncode != 0
+    if _git_at(repo_root, "diff", "--quiet", base.stdout.strip()).returncode != 0:
+        return True
+    return bool(_git_at(repo_root, "ls-files", "--others", "--exclude-standard").stdout.strip())
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:

@@ -41,11 +41,11 @@ class RepoSwitch(BaseModel):
 
 class SettingsUpdate(BaseModel):
     theme_index: int | None = None
-    editor: str | None = None
+    editor: str | None = Field(default=None, pattern="^(code|cursor|vim|nvim)$")
     view_mode: str | None = None
     user_name: str | None = None
-    agent_cli: str | None = None
-    font_size: int | None = None
+    agent_cli: str | None = Field(default=None, pattern="^(claude|codex|opencode|cursor)$")
+    font_size: int | None = Field(default=None, ge=8, le=32)
     word_wrap: bool | None = None
     keybindings: dict[str, str] | None = None
 

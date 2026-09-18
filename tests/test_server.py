@@ -1224,3 +1224,26 @@ class TestApplySuggestionGuards:
         finally:
             (temp_repo / "app.py").write_text(original)
             self._cleanup(_server_app)
+
+
+class TestSettingsValidation:
+    def test_unknown_editor_is_rejected(self, _server_app):
+        r = _server_app.put("/api/settings", json={"editor": "rm -rf /"})
+        assert r.status_code == 422
+
+    def test_unknown_agent_cli_is_rejected(self, _server_app):
+        r = _server_app.put("/api/settings", json={"agent_cli": "curl"})
+        assert r.status_code == 422
+
+    def test_font_size_out_of_range_is_rejected(self, _server_app):
+        assert _server_app.put("/api/settings", json={"font_size": 0}).status_code == 422
+        assert _server_app.put("/api/settings", json={"font_size": 400}).status_code == 422
+
+    def test_documented_editor_is_accepted(self, _server_app):
+        original = _server_app.get("/api/settings").json()
+        try:
+            r = _server_app.put("/api/settings", json={"editor": "nvim"})
+            assert r.status_code == 200
+            assert _server_app.get("/api/settings").json()["editor"] == "nvim"
+        finally:
+            _server_app.put("/api/settings", json={"editor": original["editor"]})

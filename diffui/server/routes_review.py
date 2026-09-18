@@ -204,7 +204,8 @@ def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, 
             ctx_lines.append("")
 
     context_path = f"{tempfile.gettempdir()}/diffui-agent-context-{branch_name.replace('/', '-')}.md"
-    with open(context_path, "w") as f:
+    fd = os.open(context_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as f:
         f.write("\n".join(ctx_lines))
     _temp_files.append(context_path)
 
