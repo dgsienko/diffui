@@ -6,13 +6,15 @@ import re
 from pygments.lexers import get_lexer_for_filename
 from pygments.lexers.special import TextLexer
 
-_META_PREFIXES = ("---", "+++", "diff ", "index ")
+_META_PREFIXES = ("diff ", "index ")
 _HUNK_RE = re.compile(r"^@@ -(\d+)")
 _HUNK_NEW_RE = re.compile(r"\+(\d+)")
+# A bare "---" is a removed line whose content is "--", not a file header.
+_FILE_HEADER_RE = re.compile(r"^(?:---|\+\+\+) (?:a/|b/|/dev/null)")
 
 
-def _is_meta_line(line: str) -> bool:
-    return any(line.startswith(p) for p in _META_PREFIXES)
+def is_meta_line(line: str) -> bool:
+    return line.startswith(_META_PREFIXES) or bool(_FILE_HEADER_RE.match(line))
 
 
 def get_lexer(file_path: str):
@@ -41,7 +43,7 @@ def parse_line_numbers(diff_text: str) -> list[tuple[str | None, str | None]]:
             new_num_match = _HUNK_NEW_RE.search(line)
             new_num = int(new_num_match.group(1)) if new_num_match else 0
             numbers.append((None, None))
-        elif _is_meta_line(line):
+        elif is_meta_line(line):
             numbers.append((None, None))
         elif line.startswith("-"):
             numbers.append((str(old_num), None))
@@ -65,7 +67,7 @@ def resolve_line_num(old_num: str, new_num: str) -> int | None:
 
 
 def classify_line(line: str) -> str:
-    if _is_meta_line(line):
+    if is_meta_line(line):
         return "meta"
     if line.startswith("@@"):
         return "hunk"

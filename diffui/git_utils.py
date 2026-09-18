@@ -323,12 +323,16 @@ def current_branch() -> str:
 
 
 def diff_stat(diff_text: str) -> tuple[int, int]:
+    from diffui.diff import is_meta_line
+
     adds = 0
     dels = 0
     for line in diff_text.splitlines():
-        if line.startswith("+") and not line.startswith("+++"):
+        if is_meta_line(line):
+            continue
+        if line.startswith("+"):
             adds += 1
-        elif line.startswith("-") and not line.startswith("---"):
+        elif line.startswith("-"):
             dels += 1
     return adds, dels
 

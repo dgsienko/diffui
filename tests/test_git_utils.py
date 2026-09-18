@@ -341,3 +341,19 @@ class TestRepoRelative:
             assert repo_relative("alias.py") == "alias.py"
         finally:
             link.unlink()
+
+
+class TestDiffStatSeparatorLines:
+    def test_removed_separator_counts_as_a_deletion(self):
+        from diffui.git_utils import diff_stat
+
+        diff = (
+            "diff --git a/k8s.yaml b/k8s.yaml\n"
+            "--- a/k8s.yaml\n"
+            "+++ b/k8s.yaml\n"
+            "@@ -1,3 +1,2 @@\n"
+            "----\n"
+            "-kind: Service\n"
+            "+kind: Deployment\n"
+        )
+        assert diff_stat(diff) == (1, 2)
