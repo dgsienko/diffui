@@ -81,8 +81,8 @@ def _apply_state_updates(events: list[str]) -> list[str]:
         _invalidate_stale_reviews()
         if "files_changed" not in events:
             events = [*events, "files_changed"]
-        # reload_repo_state() re-read comments from the (possibly new) branch dir —
-        # tell clients so they don't sit on a stale thread.
+        # reload_repo_state() re-read comments from the (possibly new) branch dir,
+        # so clients need telling or they sit on a stale thread.
         if app_state.comments != prev_comments and "comments_changed" not in events:
             events = [*events, "comments_changed"]
         # Comments live in a per-branch dir, so the watcher's paths are now wrong.

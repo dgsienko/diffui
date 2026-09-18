@@ -26,7 +26,6 @@ from diffui.server.routes_agent_terminal import (
 
 @pytest.fixture(autouse=True)
 def _reset_module_state():
-    """Snapshot and restore module globals around each test."""
     saved_proc = rat._agent_proc
     saved_fd = rat._agent_pty_fd
     saved_buffer = list(rat._output_buffer)
@@ -290,8 +289,6 @@ class TestStartAgentEndpoint:
 
 
 class TestPtyIntegration:
-    """Integration tests that spawn real PTY processes to verify terminal setup."""
-
     def test_child_has_controlling_terminal(self):
         pty_fd, child_fd = pty.openpty()
         child_tty = os.ttyname(child_fd)
@@ -413,7 +410,6 @@ class TestPtyIntegration:
         assert "40x100" in text, f"Expected SIGWINCH with 40x100, got: {text!r}"
 
     def test_without_setsid_no_controlling_terminal(self):
-        """Verify that without setsid, the child does NOT get a controlling terminal."""
         pty_fd, child_fd = pty.openpty()
         tty.setraw(child_fd)
 
