@@ -1165,3 +1165,62 @@ class TestExplainViewGuard:
         with patch("diffui.server.routes_review._explain_output_path", str(evil)):
             r = _server_app.get("/api/explain/view")
         assert r.status_code == 400
+
+
+class TestApplySuggestionGuards:
+    def _add(self, client, **fields):
+        payload = {"file_path": "app.py", "line_index": 0, "comment": "fix it", **fields}
+        client.post("/api/comments", json=payload)
+        return client.get("/api/comments").json()["app.py"][-1]["id"]
+
+    def _cleanup(self, client):
+        for c in client.get("/api/comments").json().get("app.py", []):
+            client.delete(f"/api/comments/app.py/{c['id']}")
+
+    def test_stale_line_text_is_rejected(self, _server_app, temp_repo):
+        before = (temp_repo / "app.py").read_text()
+        cid = self._add(
+            _server_app,
+            file_line_num=1,
+            line_text="-this line is long gone",
+            suggestion="replacement",
+        )
+        try:
+            r = _server_app.post(f"/api/comments/app.py/{cid}/apply")
+            assert r.status_code == 409
+            assert (temp_repo / "app.py").read_text() == before
+        finally:
+            self._cleanup(_server_app)
+
+    def test_multi_line_range_is_rejected(self, _server_app, temp_repo):
+        before = (temp_repo / "app.py").read_text()
+        cid = self._add(
+            _server_app,
+            file_line_num=1,
+            line_text=" line 1",
+            suggestion="replacement",
+            sel_end_index=4,
+        )
+        try:
+            r = _server_app.post(f"/api/comments/app.py/{cid}/apply")
+            assert r.status_code == 400
+            assert "more than one line" in r.json()["detail"]
+            assert (temp_repo / "app.py").read_text() == before
+        finally:
+            self._cleanup(_server_app)
+
+    def test_matching_line_text_still_applies(self, _server_app, temp_repo):
+        original = (temp_repo / "app.py").read_text()
+        cid = self._add(
+            _server_app,
+            file_line_num=1,
+            line_text=" line 1",
+            suggestion="line one",
+        )
+        try:
+            r = _server_app.post(f"/api/comments/app.py/{cid}/apply")
+            assert r.status_code == 200
+            assert (temp_repo / "app.py").read_text().splitlines()[0] == "line one"
+        finally:
+            (temp_repo / "app.py").write_text(original)
+            self._cleanup(_server_app)

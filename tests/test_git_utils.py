@@ -357,3 +357,22 @@ class TestDiffStatSeparatorLines:
             "+kind: Deployment\n"
         )
         assert diff_stat(diff) == (1, 2)
+
+
+class TestJsonPersistence:
+    def test_corrupt_file_is_moved_aside_and_default_returned(self, tmp_path):
+        from diffui.git_utils import _load_json
+
+        path = tmp_path / "comments.json"
+        path.write_text('{"a": [{"id"')
+        assert _load_json(path, {}) == {}
+        assert not path.exists()
+        assert (tmp_path / "comments.json.corrupt").read_text() == '{"a": [{"id"'
+
+    def test_save_leaves_no_temp_file(self, tmp_path):
+        from diffui.git_utils import _load_json, _save_json
+
+        path = tmp_path / "comments.json"
+        _save_json(path, {"a.py": [{"id": "1"}]})
+        assert _load_json(path, {}) == {"a.py": [{"id": "1"}]}
+        assert list(p.name for p in tmp_path.iterdir()) == ["comments.json"]

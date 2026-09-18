@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 
+from diffui.diff import strip_diff_prefix
 from diffui.git_utils import get_repo_root, repo_relative, save_comments
 from diffui.server.models import BulkResolve, CommentCreate, CommentEdit, ReplyCreate
 from diffui.server.state import app_state
@@ -110,6 +111,9 @@ def apply_suggestion(file_path: str, comment_id: str):
     line_num = c.get("file_line_num")
     if not line_num:
         raise HTTPException(status_code=400, detail="No line number")
+    end_index = c.get("sel_end_index")
+    if end_index is not None and end_index != c.get("line_index"):
+        raise HTTPException(status_code=400, detail="Suggestion covers more than one line; apply it by hand")
     full_path = get_repo_root() / repo_relative(file_path)
     if not full_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
@@ -117,6 +121,9 @@ def apply_suggestion(file_path: str, comment_id: str):
     idx = line_num - 1
     if idx < 0 or idx >= len(lines):
         raise HTTPException(status_code=400, detail="Line out of range")
+    expected = strip_diff_prefix(c.get("line_text") or "")
+    if expected and lines[idx].rstrip("\n") != expected:
+        raise HTTPException(status_code=409, detail="The file changed since this comment was written")
     suggestion = c["suggestion"]
     if not suggestion.endswith("\n"):
         suggestion += "\n"

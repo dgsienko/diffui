@@ -98,13 +98,21 @@ def get_git_dir() -> Path:
 
 
 def _load_json(path: Path, default: Any = None) -> Any:
+    fallback = {} if default is None else default
     if not path.exists():
-        return default if default is not None else {}
-    return json.loads(path.read_text())
+        return fallback
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError:
+        # Kept, not discarded: comments.json is the review record.
+        path.replace(path.with_suffix(path.suffix + ".corrupt"))
+        return fallback
 
 
 def _save_json(path: Path, data: Any) -> None:
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n")
+    tmp.replace(path)
 
 
 @dataclass
