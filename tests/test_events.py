@@ -408,7 +408,7 @@ class TestWatcherLifecycle:
         events._watch_cancel = old_event
         try:
             with (
-                patch.object(events.asyncio, "get_event_loop") as get_loop,
+                patch.object(events.asyncio, "get_running_loop") as get_loop,
                 patch.object(events, "_watch_loop", return_value=MagicMock()),
             ):
                 events._do_restart()
@@ -428,7 +428,7 @@ class TestWatcherLifecycle:
         events._watch_cancel = None
         try:
             with (
-                patch.object(events.asyncio, "get_event_loop") as get_loop,
+                patch.object(events.asyncio, "get_running_loop") as get_loop,
                 patch.object(events, "_watch_loop", return_value=MagicMock()),
             ):
                 events._do_restart()
@@ -465,7 +465,7 @@ class TestWatcherLifecycle:
         loop = MagicMock()
         try:
             with (
-                patch.object(events.asyncio, "get_event_loop", return_value=loop),
+                patch.object(events.asyncio, "get_running_loop", return_value=loop),
                 patch.object(events, "_do_restart") as do_restart,
             ):
                 events.start_poller()
@@ -474,3 +474,23 @@ class TestWatcherLifecycle:
             do_restart.assert_called_once()
         finally:
             events._loop = prev_loop
+
+
+class TestGitDirBoundary:
+    def test_gitignore_is_a_file_change(self):
+        from diffui.server.events import _classify_changes
+
+        events = _classify_changes({(1, "/repo/.gitignore")}, "/repo/.git", "/cfg/comments.json")
+        assert events == ["files_changed"]
+
+    def test_github_workflow_is_a_file_change(self):
+        from diffui.server.events import _classify_changes
+
+        events = _classify_changes({(1, "/repo/.github/workflows/ci.yml")}, "/repo/.git", "/cfg/comments.json")
+        assert events == ["files_changed"]
+
+    def test_git_head_is_a_git_change(self):
+        from diffui.server.events import _classify_changes
+
+        events = _classify_changes({(1, "/repo/.git/HEAD")}, "/repo/.git", "/cfg/comments.json")
+        assert events == ["git_changed"]

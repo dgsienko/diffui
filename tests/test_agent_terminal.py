@@ -6,6 +6,7 @@ import select
 import struct
 import subprocess
 import termios
+import time
 import tty
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -517,3 +518,26 @@ class TestAgentWebSocket:
 
         assert exit_msg == {"type": "exit", "code": -15}
         mock_kill.assert_called_once()
+
+
+class TestPendingStart:
+    def test_missing_pending_is_stale(self):
+        rat._pending_start = None
+        assert rat._pending_is_stale() is True
+
+    def test_fresh_pending_is_not_stale(self):
+        rat._pending_start = {"created": time.monotonic()}
+        assert rat._pending_is_stale() is False
+
+    def test_abandoned_pending_goes_stale(self):
+        rat._pending_start = {"created": time.monotonic() - rat._PENDING_TTL - 1}
+        assert rat._pending_is_stale() is True
+
+
+class TestOutputBufferBounds:
+    def test_append_keeps_the_buffer_under_the_cap(self):
+        rat._output_buffer.clear()
+        for _ in range(64):
+            rat._append_output(b"y" * 16384)
+        assert sum(len(c) for c in rat._output_buffer) <= _BUFFER_MAX_BYTES
+        assert _flush_buffer().endswith(b"y" * 100)

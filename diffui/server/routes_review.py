@@ -38,11 +38,9 @@ def _cleanup_temp_files() -> None:
     _temp_files.clear()
 
 
-def register_shutdown(app) -> None:
-    @app.on_event("shutdown")
-    async def shutdown():
-        _cleanup_processes()
-        _cleanup_temp_files()
+def shutdown() -> None:
+    _cleanup_processes()
+    _cleanup_temp_files()
 
 
 @router.get("/reviewed")
