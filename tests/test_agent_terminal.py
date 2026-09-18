@@ -6,6 +6,7 @@ import select
 import struct
 import subprocess
 import termios
+import time
 import tty
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -55,17 +56,14 @@ class TestFlushBuffer:
         rat._output_buffer.append(b"world")
         assert _flush_buffer() == b"hello world"
 
-    def test_buffer_exceeding_max_is_truncated_to_tail(self):
+    def test_buffer_stays_under_max_as_output_arrives(self):
         rat._output_buffer.clear()
-        # Append more than _BUFFER_MAX_BYTES total.
         chunk = b"x" * 1000
-        total_len = 0
-        while total_len <= _BUFFER_MAX_BYTES:
-            rat._output_buffer.append(chunk)
-            total_len += len(chunk)
+        for _ in range(_BUFFER_MAX_BYTES // len(chunk) + 10):
+            rat._append_output(chunk)
         result = _flush_buffer()
-        assert len(result) == _BUFFER_MAX_BYTES
-        assert result == b"x" * _BUFFER_MAX_BYTES
+        assert len(result) <= _BUFFER_MAX_BYTES
+        assert result.endswith(chunk)
 
 
 class TestIsRunning:
@@ -517,3 +515,17 @@ class TestAgentWebSocket:
 
         assert exit_msg == {"type": "exit", "code": -15}
         mock_kill.assert_called_once()
+
+
+class TestPendingStart:
+    def test_missing_pending_is_stale(self):
+        rat._pending_start = None
+        assert rat._pending_is_stale() is True
+
+    def test_fresh_pending_is_not_stale(self):
+        rat._pending_start = {"created": time.monotonic()}
+        assert rat._pending_is_stale() is False
+
+    def test_abandoned_pending_goes_stale(self):
+        rat._pending_start = {"created": time.monotonic() - rat._PENDING_TTL - 1}
+        assert rat._pending_is_stale() is True

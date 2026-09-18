@@ -91,6 +91,7 @@ def export_json() -> None:
 def main() -> None:
     if "--comments" in sys.argv:
         try:
+            _setup_repo()
             print_comments()
         except RuntimeError as e:
             print(f"Error: {e}", file=sys.stderr)

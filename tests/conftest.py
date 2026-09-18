@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+import diffui.git_utils
+
 _APP_V1 = "\n".join(f"line {i}" for i in range(1, 21)) + "\n"
 _APP_V2 = _APP_V1.replace("line 5", "line five").replace("line 12", "line twelve")
 _APP_DIRTY = _APP_V2 + "uncommitted tail\n"
@@ -22,7 +24,7 @@ def _git(repo: Path, *args: str) -> None:
 def diffui_config_root(tmp_path_factory):
     root = tmp_path_factory.mktemp("diffui-config")
     mp = pytest.MonkeyPatch()
-    mp.setattr("diffui.git_utils._CONFIG_ROOT", root)
+    mp.setattr(diffui.git_utils, "_CONFIG_ROOT", root)
     yield root
     mp.undo()
 

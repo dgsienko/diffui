@@ -4,7 +4,7 @@ import subprocess
 
 from fastapi import APIRouter
 
-from diffui.git_utils import get_repo_root, load_session, repo_relative, save_session, save_settings
+from diffui.git_utils import load_session, repo_path, save_session, save_settings
 from diffui.server.models import EditorOpen, SessionUpdate, SettingsUpdate
 from diffui.server.state import app_state
 from diffui.server.theme_css import generate_css_vars
@@ -67,7 +67,7 @@ def update_settings(body: SettingsUpdate):
 
 @router.post("/editor/open")
 def open_in_editor(body: EditorOpen):
-    full_path = get_repo_root() / repo_relative(body.file_path)
+    full_path = repo_path(body.file_path)
     editor = app_state.editor
 
     if editor in ("code", "cursor"):

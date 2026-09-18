@@ -820,7 +820,7 @@ mark {
 
 /* Persistent highlight for text a comment references */
 .comment-range {
-  background: rgba(137, 180, 250, 0.22);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: inherit;
   border-radius: var(--radius-sm);
   padding: 0 1px;

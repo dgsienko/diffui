@@ -10,6 +10,7 @@ import select
 import struct
 import subprocess
 import termios
+import time
 import tty
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -32,15 +33,25 @@ _agent_lock = asyncio.Lock()
 _output_buffer: collections.deque[bytes] = collections.deque(maxlen=4096)
 _BUFFER_MAX_BYTES = 65536
 _IDLE_THRESHOLD = 100
+_PENDING_TTL = 30.0
 _pending_start: dict | None = None
 
 
+def _append_output(data: bytes) -> None:
+    _output_buffer.append(data)
+    total = sum(len(chunk) for chunk in _output_buffer)
+    while total > _BUFFER_MAX_BYTES and len(_output_buffer) > 1:
+        total -= len(_output_buffer.popleft())
+
+
+def _pending_is_stale() -> bool:
+    if _pending_start is None:
+        return True
+    return time.monotonic() - _pending_start.get("created", 0.0) > _PENDING_TTL
+
+
 def _flush_buffer() -> bytes:
-    chunks = list(_output_buffer)
-    total = b"".join(chunks)
-    if len(total) > _BUFFER_MAX_BYTES:
-        total = total[-_BUFFER_MAX_BYTES:]
-    return total
+    return b"".join(_output_buffer)
 
 
 def _is_running() -> bool:
@@ -104,7 +115,13 @@ async def start_agent():
         if not cmd:
             return {"ok": False, "error": f"Unknown agent CLI: {agent}"}
 
-        _pending_start = {"prompt": prompt, "repo_root": repo_root, "agent": agent, "cmd": cmd}
+        _pending_start = {
+            "prompt": prompt,
+            "repo_root": repo_root,
+            "agent": agent,
+            "cmd": cmd,
+            "created": time.monotonic(),
+        }
 
     return {"ok": True, "agent": agent}
 
@@ -175,7 +192,7 @@ async def agent_ws(ws: WebSocket):
         if replay:
             await ws.send_json({"type": "output", "data": replay.decode("utf-8", errors="replace")})
         await ws.send_json({"type": "started", "pid": proc.pid})
-    elif _pending_start is not None:
+    elif not _pending_is_stale():
         init_msg = await _recv_or_none(ws)
         if init_msg is None or init_msg.get("type") != "init":
             await ws.send_json({"type": "error", "message": "Expected init message with dimensions"})
@@ -184,7 +201,12 @@ async def agent_ws(ws: WebSocket):
 
         rows = init_msg.get("rows", 24)
         cols = init_msg.get("cols", 80)
-        result = await asyncio.get_event_loop().run_in_executor(None, _spawn_agent, rows, cols)
+        async with _agent_lock:
+            if _is_running():
+                await ws.send_json({"type": "error", "message": "Agent already running"})
+                await ws.close()
+                return
+            result = await asyncio.get_running_loop().run_in_executor(None, _spawn_agent, rows, cols)
         if not result.get("ok"):
             await ws.send_json({"type": "error", "message": result.get("error", "Failed to start")})
             await ws.close()
@@ -203,7 +225,7 @@ async def agent_ws(ws: WebSocket):
         await ws.close()
         return
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     incoming: asyncio.Queue[dict | None] = asyncio.Queue()
 
     async def _pump_ws():
@@ -225,7 +247,7 @@ async def agent_ws(ws: WebSocket):
         while True:
             data = await loop.run_in_executor(None, _read_pty, pty_fd, 0.03)
             if data:
-                _output_buffer.append(data)
+                _append_output(data)
                 text = utf8_decoder.decode(data)
                 if text:
                     await ws.send_json({"type": "output", "data": text})

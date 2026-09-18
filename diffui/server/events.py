@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import os
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.responses import StreamingResponse
@@ -14,6 +16,8 @@ from diffui.git_utils import (
     load_comments,
 )
 from diffui.server.state import app_state
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
@@ -53,7 +57,7 @@ def _classify_changes(changes: set[tuple], git_dir: str, comments_path: str) -> 
     for _change_type, path in changes:
         if path == comments_path:
             events.add("comments_changed")
-        elif path.startswith(git_dir):
+        elif path == git_dir or path.startswith(git_dir + os.sep):
             events.add("git_changed")
         else:
             events.add("files_changed")
@@ -141,10 +145,10 @@ async def _watch_loop(cancel: asyncio.Event) -> None:
         try:
             events = _classify_changes(changes, git_dir_str, comments_path_str)
             if events:
-                events = await asyncio.get_event_loop().run_in_executor(None, _apply_state_updates, events)
+                events = await asyncio.get_running_loop().run_in_executor(None, _apply_state_updates, events)
                 _broadcast(events)
         except Exception:
-            pass
+            log.exception("watch loop failed to apply a change")
 
 
 # --- SSE fallback ---
@@ -211,7 +215,7 @@ def _do_restart() -> None:
     if _watch_cancel is not None:
         _watch_cancel.set()
     _watch_cancel = asyncio.Event()
-    task = asyncio.get_event_loop().create_task(_watch_loop(_watch_cancel))
+    task = asyncio.get_running_loop().create_task(_watch_loop(_watch_cancel))
     _bg_tasks.add(task)
     task.add_done_callback(_bg_tasks.discard)
 
@@ -224,5 +228,5 @@ def restart_watcher() -> None:
 
 def start_poller() -> None:
     global _loop
-    _loop = asyncio.get_event_loop()
+    _loop = asyncio.get_running_loop()
     _do_restart()
