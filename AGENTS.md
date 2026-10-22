@@ -236,6 +236,9 @@ After making changes, always:
   subprocesses.
 - The merge base comes from `origin/<main>` when that ref exists. Local main
   goes stale between pulls, and a stale base shows already-merged files.
+- File counts and open comments come from `AppState.review_files`,
+  `reviewed_count` and `open_comments()`, so the progress bar, the summary,
+  the agent prompt and the herdr sidebar all count the same files.
 
 ## Commands
 

@@ -5,7 +5,6 @@ import os
 import subprocess
 from pathlib import Path
 
-from diffui.git_utils import is_comment_open
 from diffui.server.state import app_state
 
 _SOURCE = "diffui"
@@ -63,9 +62,9 @@ def _report_metadata(*flags: str) -> None:
 
 
 def report_status() -> None:
-    open_count = sum(1 for cs in app_state.comments.values() for c in cs if is_comment_open(c))
-    files = set(app_state.all_files) | set(app_state.working_files)
-    reviewed = sum(1 for f in files if f in app_state.reviewed)
+    open_count = len(app_state.open_comments())
+    files = app_state.review_files
+    reviewed = app_state.reviewed_count
     # An empty token value clears it, which hides it from the sidebar row.
     _report_metadata(
         "--token",

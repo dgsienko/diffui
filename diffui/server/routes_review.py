@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
-from diffui.git_utils import get_file_mtime, repo_relative, save_reviewed
+from diffui.git_utils import get_file_mtime, is_comment_open, repo_relative, save_reviewed
 from diffui.server.herdr import find_agent, paste_to_agent
 from diffui.server.state import app_state
 
@@ -67,15 +67,16 @@ def review_summary():
     from diffui.git_utils import current_branch, short_name
 
     branch_name = current_branch()
-    total = len(app_state.all_files)
-    reviewed_count = sum(1 for f in app_state.all_files if f in app_state.reviewed)
+    review_files = app_state.review_files
+    total = len(review_files)
+    reviewed_count = app_state.reviewed_count
     all_comments = []
     for file_path, file_comments in app_state.comments.items():
         for c in file_comments:
             all_comments.append({**c, "_file": file_path})
 
-    open_comments = [c for c in all_comments if c.get("status", "open") != "resolved"]
-    resolved_comments = [c for c in all_comments if c.get("status", "open") == "resolved"]
+    open_comments = [c for c in all_comments if is_comment_open(c)]
+    resolved_comments = [c for c in all_comments if not is_comment_open(c)]
 
     by_category: dict[str, list[dict]] = {}
     for c in open_comments:
@@ -102,10 +103,10 @@ def review_summary():
                 lines.append(f"- **{fname}:{line_num}** — {c.get('comment', '')}")
             lines.append("")
 
-    if app_state.all_files:
+    if review_files:
         lines.append("## Files")
         lines.append("")
-        for f in app_state.all_files:
+        for f in review_files:
             status = "reviewed" if f in app_state.reviewed else "pending"
             comment_count = len(app_state.comments.get(f, []))
             suffix = f" ({comment_count} comments)" if comment_count else ""
@@ -140,11 +141,7 @@ def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, 
         short_name,
     )
 
-    open_comments: list[dict] = []
-    for file_path, file_comments in app_state.comments.items():
-        for c in file_comments:
-            if c.get("status", "open") != "resolved":
-                open_comments.append({**c, "_file": file_path})
+    open_comments = app_state.open_comments()
 
     if not open_comments:
         return None, "No open comments", "", 0
@@ -162,8 +159,8 @@ def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, 
         "",
         "## Review State",
         "",
-        f"- {len(app_state.all_files)} files changed",
-        f"- {sum(1 for f in app_state.all_files if f in app_state.reviewed)}/{len(app_state.all_files)} reviewed",
+        f"- {len(app_state.review_files)} files changed",
+        f"- {app_state.reviewed_count}/{len(app_state.review_files)} reviewed",
         f"- {len(open_comments)} open comments",
         "",
     ]

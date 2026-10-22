@@ -406,7 +406,8 @@ class TestServerRoutes:
         assert r.status_code == 200
         md = r.json()["markdown"]
         assert "# Review Summary:" in md
-        assert "**Files:**" in md
+        total = len(_server_app.get("/api/files").json())
+        assert f"/{total} reviewed" in md
 
     def test_session_get_returns_dict(self, _server_app):
         r = _server_app.get("/api/session")
