@@ -16,7 +16,7 @@ from textual.widgets import Footer, Static
 
 from diffui.themes import ALL_THEMES
 from diffui.tui.client import ApiClient, LocalServer
-from diffui.tui.diffview import DiffView
+from diffui.tui.diffview import DiffView, span
 from diffui.tui.filelist import FileList
 from diffui.tui.screens import AgentScreen, ComposeScreen, HelpScreen
 
@@ -38,11 +38,36 @@ ModalScreen { align: center middle; background: $background 60%; }
 """
 
 
+_NEEDS = {"select_range": "line", "clear_selection": "range"}
+
+
+def _number(line: dict) -> str:
+    return str(line["new_num"] or line["old_num"])
+
+
+class ContextFooter(Footer):
+    """The footer, with the range hint naming how many lines `c` will comment on."""
+
+    def compose(self) -> ComposeResult:
+        count = len(self.app.query_one(DiffView).selected_lines())
+        for widget in super().compose():
+            if getattr(widget, "action", "") == "comment('range')":
+                widget.description = f"Comment on {count} line{'s' * (count != 1)}"
+            yield widget
+
+
 class DiffuiApp(App[None]):
     TITLE = "diffui"
     ENABLE_COMMAND_PALETTE = False
     CSS = _CSS
     BINDINGS: ClassVar[list[BindingType]] = [
+        # The first bindings hint what the cursor can do now; check_action shows the one that fits.
+        Binding("c", "comment('range')", "Comment"),
+        Binding("escape", "clear_selection", "Clear"),
+        Binding("c", "comment('thread')", "Reply"),
+        Binding("x", "resolve('thread')", "Resolve"),
+        Binding("c", "comment('line')", "Comment"),
+        Binding("v", "select_range", "Select range"),
         Binding("right,l", "file(1)", "Files", key_display="←/→"),
         Binding("left,h", "file(-1)", show=False),
         Binding("j", "hunk(1)", "Hunks", key_display="j/k"),
@@ -50,8 +75,10 @@ class DiffuiApp(App[None]):
         Binding("n", "thread(1)", show=False),
         Binding("p", "thread(-1)", show=False),
         Binding("right_square_bracket", "next_unreviewed", show=False),
-        Binding("c,enter", "comment", "Comment"),
-        Binding("x", "resolve", "Resolve"),
+        Binding("c", "comment('none')", "Comment"),
+        Binding("x", "resolve('none')", "Resolve"),
+        Binding("enter", "comment", show=False),
+        Binding("x", "resolve", show=False),
         Binding("r", "review", "Reviewed"),
         Binding("s", "sort", "Risk sort"),
         Binding("A", "agent", "Agent", key_display="A"),
@@ -76,7 +103,7 @@ class DiffuiApp(App[None]):
         with Horizontal(id="body"):
             yield FileList()
             yield DiffView()
-        yield Footer()
+        yield ContextFooter()
 
     async def on_unmount(self) -> None:
         await self.client.aclose()
@@ -86,7 +113,19 @@ class DiffuiApp(App[None]):
         self.run_worker(self._start(), exit_on_error=False)
 
     def check_action(self, action: str, parameters: tuple) -> bool | None:
-        return action == "quit" or not isinstance(self.screen, ModalScreen)
+        if isinstance(self.screen, ModalScreen):
+            return action == "quit"
+        views = self.query(DiffView)
+        context = views.first().context if views else "none"
+        if action in ("comment", "resolve") and parameters:
+            return parameters[0] == context
+        if action in _NEEDS:
+            return _NEEDS[action] == context
+        return True
+
+    def push_screen(self, *args, **kwargs):
+        self.query_one(DiffView).clear_hover()
+        return super().push_screen(*args, **kwargs)
 
     async def _start(self) -> None:
         await self._safely(self._apply_theme())
@@ -223,17 +262,21 @@ class DiffuiApp(App[None]):
         files = self.query_one(FileList)
         files.display = not files.display
 
-    def action_comment(self) -> None:
-        row = self.query_one(DiffView).current
+    def action_comment(self, _context: str = "") -> None:
+        view = self.query_one(DiffView)
+        row = view.current
         if row is None or not self.active:
             return
         path = self.active
-        if row.kind == "line":
-            line = row.line
-            number = line["new_num"] or line["old_num"]
+        lines = view.selected_lines() or ([row.line] if row.kind == "line" else [])
+        if lines:
+            first, last = lines[0], lines[-1]
+            where = (
+                f"{path}:{_number(first)}" if len(lines) == 1 else f"{path} lines {span(_number(first), _number(last))}"
+            )
             self.push_screen(
-                ComposeScreen(f"Comment on {path}:{number}", line["text"][1:].strip()[:120]),
-                self._submit(lambda text: self.client.add_comment(path, line, text)),
+                ComposeScreen(f"Comment on {where}", first["text"][1:].strip()[:120]),
+                self._submit(lambda text: self.client.add_comment(path, first, text, lines)),
             )
         elif row.kind == "thread" and row.thread.get("id"):
             thread = row.thread
@@ -244,6 +287,12 @@ class DiffuiApp(App[None]):
         else:
             self.notify("Move to a diff line to comment", timeout=2)
 
+    def action_select_range(self) -> None:
+        self.query_one(DiffView).start_selection()
+
+    def action_clear_selection(self) -> None:
+        self.query_one(DiffView).clear_selection()
+
     def on_diff_view_activated(self, _event: DiffView.Activated) -> None:
         self.action_comment()
 
@@ -251,6 +300,7 @@ class DiffuiApp(App[None]):
         async def callback(text: str | None) -> None:
             if text:
                 await self._safely(self._write(make_request(text)))
+                self.query_one(DiffView).clear_selection()
 
         return callback
 
@@ -258,7 +308,7 @@ class DiffuiApp(App[None]):
         await request
         await self._refresh_comments()
 
-    async def action_resolve(self) -> None:
+    async def action_resolve(self, _context: str = "") -> None:
         row = self.query_one(DiffView).current
         if row is None or row.kind != "thread" or not self.active:
             self.notify("Move to a comment thread to resolve it", timeout=2)

@@ -106,17 +106,23 @@ class ApiClient:
     async def toggle_reviewed(self, path: str) -> bool:
         return _json(await self._post(f"/api/reviewed/{quote(path)}"))["reviewed"]
 
-    async def add_comment(self, path: str, line: dict, text: str) -> None:
-        await self._post(
-            "/api/comments",
-            json={
-                "file_path": path,
-                "line_index": line["index"],
-                "line_text": line["text"],
-                "file_line_num": int(line["new_num"] or line["old_num"] or 0) or None,
-                "comment": text,
-            },
-        )
+    async def add_comment(self, path: str, line: dict, text: str, covered: list[dict] | None = None) -> None:
+        """`covered` is the range's diff lines, starting at `line`. It sends the fields the web UI sends for a multi-line selection."""
+        body = {
+            "file_path": path,
+            "line_index": line["index"],
+            "line_text": line["text"],
+            "file_line_num": int(line["new_num"] or line["old_num"] or 0) or None,
+            "comment": text,
+        }
+        if covered and len(covered) > 1:
+            body |= {
+                "selected_text": "\n".join(ln["text"] for ln in covered),
+                "sel_start": 0,
+                "sel_end": len(covered[-1]["text"]),
+                "sel_end_index": covered[-1]["index"],
+            }
+        await self._post("/api/comments", json=body)
 
     async def reply(self, path: str, comment_id: str, text: str) -> None:
         await self._post(f"/api/comments/{quote(path)}/{comment_id}/reply", json={"text": text})

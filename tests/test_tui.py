@@ -5,12 +5,15 @@ import json
 import time
 
 import pytest
+from textual.widgets import Footer
 
 from diffui.git_utils import _comments_path, save_comments, save_reviewed, set_active_repo
 from diffui.server.routes_diff import _order_files
 from diffui.tui.app import DiffuiApp
 from diffui.tui.client import ApiClient, LocalServer
 from diffui.tui.diffview import DiffView
+from diffui.tui.filelist import FileList
+from diffui.tui.screens import ComposeScreen
 
 
 @pytest.fixture
@@ -88,6 +91,137 @@ def test_comment_from_tui_is_stored_at_the_line(server):
         assert comment["line_index"] == target["index"]
         assert comment["file_line_num"] == 5
         assert comment["line_text"] == "+line five"
+
+    run_tui(server, scenario)
+
+
+def row_y(view, row) -> int:
+    return row.top - view.scroll_offset.y
+
+
+def line_rows(view, count: int = 3):
+    return [r for r in view.rows if r.kind == "line"][:count]
+
+
+def heading(app) -> str:
+    return str(app.screen.query_one(".dialog-title").content)
+
+
+def hints(app) -> str:
+    return " · ".join(f"{k.key_display} {k.description}" for k in app.query_one(Footer).query("FooterKey"))
+
+
+async def type_and_save(pilot, text: str) -> None:
+    await pilot.press(*("space" if ch == " " else ch for ch in text))
+    await pilot.press("ctrl+s")
+
+
+def test_hovering_a_line_shows_the_add_marker(server):
+    async def scenario(app, view, pilot):
+        hunk, line = view.rows[0], line_rows(view, 1)[0]
+        assert hunk.kind == "hunk"
+        y = row_y(view, line)
+
+        await pilot.hover(view, offset=(30, y))
+        assert "[+]" in view.render_line(y).text
+        assert "[+]" not in view.render_line(y + 1).text
+
+        await pilot.hover(view, offset=(30, row_y(view, hunk)))
+        assert "[+]" not in view.render_line(y).text
+        assert "[+]" not in view.render_line(row_y(view, hunk)).text
+
+        await pilot.hover(view, offset=(30, y))
+        await pilot.hover(app.query_one(FileList))
+        assert "[+]" not in view.render_line(y).text
+
+        await pilot.hover(view, offset=(30, y))
+        await pilot.press("c")
+        assert isinstance(app.screen, ComposeScreen)
+        assert "[+]" not in view.render_line(y).text
+
+    run_tui(server, scenario)
+
+
+def test_one_gutter_click_opens_the_composer_for_that_line(server):
+    async def scenario(app, view, pilot):
+        first, other = line_rows(view, 2)
+
+        await pilot.click(view, offset=(40, row_y(view, other)))
+        assert view.cursor == view.rows.index(other)
+        assert len(app.screen_stack) == 1
+
+        await pilot.click(view, offset=(2, row_y(view, first)))
+        assert isinstance(app.screen, ComposeScreen)
+        assert len(app.screen_stack) == 2
+        assert str(first.line["new_num"]) in heading(app)
+
+        await type_and_save(pilot, "from the gutter")
+        await until(pilot, lambda: any(r.thread for r in view.rows))
+        (comment,) = (await app.client.comments())["app.py"]
+        assert comment["line_index"] == first.line["index"]
+        assert comment["sel_end_index"] is None
+
+    run_tui(server, scenario)
+
+
+def test_dragging_across_the_gutter_comments_on_the_range(server):
+    async def scenario(app, view, pilot):
+        first, middle, last = line_rows(view)
+        await pilot.mouse_down(view, offset=(2, row_y(view, first)))
+        await pilot.hover(view, offset=(2, row_y(view, middle)))
+        await pilot.hover(view, offset=(2, row_y(view, last)))
+        assert len(view.selected_lines()) == 3
+        assert not isinstance(app.screen, ComposeScreen)
+        await pilot.mouse_up(view, offset=(2, row_y(view, last)))
+
+        assert isinstance(app.screen, ComposeScreen)
+        a, b = (str(r.line["new_num"] or r.line["old_num"]) for r in (first, last))
+        assert f"lines {a}\N{EN DASH}{b}" in heading(app)
+
+        await type_and_save(pilot, "this whole block")
+        await until(pilot, lambda: any(r.thread for r in view.rows))
+        (comment,) = (await app.client.comments())["app.py"]
+        assert comment["line_index"] == first.line["index"]
+        assert comment["sel_end_index"] == last.line["index"]
+        assert (comment["sel_start"], comment["sel_end"]) == (0, len(last.line["text"]))
+        assert comment["selected_text"] == "\n".join(r.line["text"] for r in (first, middle, last))
+        assert view.anchor is None
+        thread_y = row_y(view, next(r for r in view.rows if r.thread))
+        assert f"lines {a}\N{EN DASH}{b}" in view.render_line(thread_y).text
+
+    run_tui(server, scenario)
+
+
+def test_keyboard_range_comment_with_a_footer_that_follows_the_cursor(server):
+    async def scenario(app, view, pilot):
+        first, _, last = line_rows(view)
+        await pilot.pause()
+        assert hints(app).startswith("c Comment · v Select range")
+
+        await pilot.press("shift+down")
+        await pilot.pause()
+        assert hints(app).startswith("c Comment on 2 lines · esc Clear")
+        await pilot.press("escape", "up")
+        await pilot.pause()
+        assert view.anchor is None
+        assert hints(app).startswith("c Comment · v Select range")
+
+        await pilot.press("v", "down", "down")
+        await pilot.pause()
+        assert hints(app).startswith("c Comment on 3 lines · esc Clear")
+        await pilot.press("c")
+        assert isinstance(app.screen, ComposeScreen)
+        await type_and_save(pilot, "keyboard range")
+        await until(pilot, lambda: any(r.thread for r in view.rows))
+
+        (comment,) = (await app.client.comments())["app.py"]
+        assert (comment["line_index"], comment["sel_end_index"]) == (first.line["index"], last.line["index"])
+
+        await pilot.press("n")
+        await pilot.pause()
+        assert hints(app).startswith("c Reply · x Resolve")
+        await pilot.press("x")
+        await until(pilot, lambda: (view.current.thread or {}).get("status") == "resolved")
 
     run_tui(server, scenario)
 

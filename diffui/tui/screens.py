@@ -29,7 +29,10 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
         [
             ("r", "Mark the file reviewed or unreviewed"),
             ("s", "Sort files by risk"),
-            ("c, enter", "Comment on the line, or reply to the thread"),
+            ("c, enter", "Comment on the line or range, or reply to the thread"),
+            ("v", "Start a range at the cursor"),
+            ("shift+up / shift+down", "Start or extend a range"),
+            ("esc", "Clear the range"),
             ("x", "Resolve or reopen the thread"),
             ("A", "Send open comments to the agent"),
             ("o", "Open this file in the browser"),
@@ -53,7 +56,10 @@ class HelpScreen(ModalScreen[None]):
         with Vertical(classes="dialog"):
             yield Static("Keys", classes="dialog-title")
             yield VerticalScroll(Static(table))
-            yield Static("Click a file to open it. Click a selected line to comment on it. Esc closes.", classes="hint")
+            yield Static(
+                "Click a file to open it. Click a line number, or drag across several, to comment. Esc closes.",
+                classes="hint",
+            )
 
 
 class ComposeScreen(ModalScreen[str | None]):

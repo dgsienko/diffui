@@ -110,7 +110,10 @@ The TUI covers the file list, a unified diff with syntax highlighting, comment t
 | `r` | Mark the file reviewed or unreviewed, then open the next unreviewed file |
 | `]` | Next unreviewed file |
 | `s` | Sort files by risk |
-| `c` or `enter` | Comment on the line, or reply to the thread |
+| `c` or `enter` | Comment on the line or range, or reply to the thread |
+| `v` | Start a line range at the cursor, then extend it with `up` / `down` |
+| `shift+up` / `shift+down` | Start or extend a line range |
+| `esc` | Clear the range |
 | `x` | Resolve or reopen the thread |
 | `A` | Send open comments to the agent |
 | `o` | Open this file in the browser |
@@ -118,7 +121,9 @@ The TUI covers the file list, a unified diff with syntax highlighting, comment t
 | `?` | Help |
 | `q` | Quit |
 
-Clicking a file opens it. Clicking the selected line opens the comment box, and `ctrl+s` saves it.
+The footer's first hints follow the cursor: `c` Comment and `v` Select range on a line, `c` Comment on N lines and `esc` Clear with a range, `c` Reply and `x` Resolve on a thread.
+
+Clicking a file opens it, and clicking a diff row selects it. Hovering a row swaps its line number for a `[+]`. Clicking the number column opens the comment box for that line in one click, and dragging down it comments on the range. `ctrl+s` saves the comment. A range comment is stored the way a multi-line text selection is in the browser, so the web UI highlights the same lines.
 
 ## Display
 

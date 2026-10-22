@@ -13,7 +13,7 @@ from rich.segment import Segment
 from rich.style import Style
 from textual import events
 from textual.binding import Binding, BindingType
-from textual.geometry import Size
+from textual.geometry import Region, Size
 from textual.message import Message
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
@@ -29,6 +29,10 @@ _MAX_CODE_COLS = 1000
 @lru_cache(maxsize=512)
 def _style(fg: str | None, bg: str, bold: bool = False, dim: bool = False) -> Style:
     return Style(color=Color.parse(fg) if fg else None, bgcolor=Color.parse(bg), bold=bold or None, dim=dim or None)
+
+
+def span(first: str, last: str) -> str:
+    return f"{first}\N{EN DASH}{last}"
 
 
 def add_fg(theme: Theme) -> str:
@@ -88,16 +92,20 @@ class DiffView(ScrollView, can_focus=True):
         Binding("ctrl+u", "page(-0.5)", show=False),
         Binding("home,g", "goto_edge(0)", show=False),
         Binding("end,G", "goto_edge(1)", show=False),
+        Binding("shift+down", "extend(1)", show=False),
+        Binding("shift+up", "extend(-1)", show=False),
     ]
 
     class Activated(Message):
-        """The row under the cursor was clicked again."""
+        """A gutter was clicked or dragged, or the row under the cursor was clicked again."""
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.palette: Theme = DEFAULT_THEME
         self.rows: list[Row] = []
         self.cursor = 0
+        self.anchor: int | None = None
+        self.hover: int | None = None
         self.path = ""
         self._data: dict = {}
         self._tops: list[int] = []
@@ -106,6 +114,10 @@ class DiffView(ScrollView, can_focus=True):
         self._wrap_w = 0
         self._lexer = None
         self._code_w = 0
+        self._nums: dict[int, str] = {}
+        self._press: int | None = None
+        self._swallow_click = False
+        self._hints: tuple[str, int] = ("none", 0)
 
     @property
     def current(self) -> Row | None:
@@ -131,6 +143,11 @@ class DiffView(ScrollView, can_focus=True):
             (len(ln["text"]) for h in data.get("hunks", []) for ln in h["lines"]),
             default=0,
         )
+        self._nums = {
+            ln["index"]: str(ln["new_num"] or ln["old_num"] or "") for h in data.get("hunks", []) for ln in h["lines"]
+        }
+        if not same_file:
+            self.anchor = None
         self._rebuild(comments, keep=same_file)
 
     def set_comments(self, comments: list[dict]) -> None:
@@ -138,14 +155,18 @@ class DiffView(ScrollView, can_focus=True):
 
     def _rebuild(self, comments: list[dict], keep: bool) -> None:
         old_key = self.current.key() if keep and self.current else None
+        anchor_key = self.rows[self.anchor].key() if self.anchor is not None and self.anchor < len(self.rows) else None
         old_cursor, old_scroll = self.cursor, self.scroll_offset.y
         self.rows = build_rows(self._data, comments)
+        self.anchor = next((i for i, r in enumerate(self.rows) if anchor_key and r.key() == anchor_key), None)
+        self.hover = None
         self._wrap_w = 0
         self._layout()
         self.cursor = self._find_cursor(old_key, old_cursor)
         self.scroll_to(y=min(old_scroll, max(self._tops[-1] if self._tops else 0, 0)) if keep else 0, animate=False)
         self._reveal(self.cursor)
         self.refresh()
+        self._sync_hints()
 
     def _find_cursor(self, key: tuple | None, fallback: int) -> int:
         if key is not None:
@@ -194,6 +215,7 @@ class DiffView(ScrollView, can_focus=True):
             self.scroll_to(y=max(self.rows[self.cursor].top - 1, 0), animate=False)
         self._reveal(self.cursor)
         self.refresh()
+        self._sync_hints()
 
     def action_move(self, delta: int) -> None:
         self._set_cursor(self.cursor + delta)
@@ -204,6 +226,43 @@ class DiffView(ScrollView, can_focus=True):
 
     def action_goto_edge(self, end: int) -> None:
         self._set_cursor(len(self.rows) - 1 if end else 0)
+
+    def action_extend(self, delta: int) -> None:
+        if self.anchor is None and self.current and self.current.kind == "line":
+            self.anchor = self.cursor
+        self._set_cursor(self.cursor + delta)
+
+    def start_selection(self) -> None:
+        if self.current and self.current.kind == "line":
+            self.anchor = self.cursor
+            self.refresh()
+            self._sync_hints()
+
+    def clear_selection(self) -> None:
+        if self.anchor is not None:
+            self.anchor = None
+            self.refresh()
+            self._sync_hints()
+
+    def selected_lines(self) -> list[dict]:
+        """The diff lines between the anchor and the cursor, or none without a selection."""
+        if self.anchor is None:
+            return []
+        lo, hi = sorted((self.anchor, self.cursor))
+        return [r.line for r in self.rows[lo : hi + 1] if r.line]
+
+    @property
+    def context(self) -> str:
+        """What the user can do next: range, thread, line or none."""
+        if self.anchor is not None:
+            return "range"
+        return {"line": "line", "thread": "thread"}.get(self.current.kind if self.current else "", "none")
+
+    def _sync_hints(self) -> None:
+        state = (self.context, len(self.selected_lines()))
+        if state != self._hints:
+            self._hints = state
+            self.refresh_bindings()
 
     def _row_at(self, y: int) -> int:
         return max(bisect_right(self._tops, y) - 1, 0)
@@ -226,8 +285,73 @@ class DiffView(ScrollView, can_focus=True):
         self._set_cursor(target)
         return True
 
+    def _in_gutter(self, x: int) -> bool:
+        return x + self.scroll_offset.x < self._gutter_w - 1
+
+    def _row_under(self, y: int) -> int | None:
+        """The row at a widget-relative y, or None below the last row."""
+        y += self.scroll_offset.y
+        return self._row_at(y) if self.rows and 0 <= y < self.virtual_size.height else None
+
+    def _refresh_rows(self, *indexes: int | None) -> None:
+        view = Region(0, 0, self.size.width, self.size.height)
+        shown = (self.rows[i] for i in indexes if i is not None and i < len(self.rows))
+        regions = [view.intersection(Region(0, r.top - self.scroll_offset.y, view.width, r.height)) for r in shown]
+        self.refresh(*[r for r in regions if r])
+
+    def _hoverable(self, index: int | None) -> int | None:
+        return index if index is not None and self.rows[index].kind == "line" else None
+
+    def _set_hover(self, index: int | None) -> None:
+        index = self._hoverable(index)
+        if index != self.hover:
+            old, self.hover = self.hover, index
+            self._refresh_rows(old, index)
+
+    def clear_hover(self) -> None:
+        self._set_hover(None)
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        """Scrolling moves rows under a still pointer, so the hover follows it."""
+        super().watch_scroll_y(old_value, new_value)
+        if self.hover is not None:
+            pointer = self.app.mouse_position
+            inside = self.content_region.contains_point(pointer)
+            self.hover = self._hoverable(self._row_under(pointer.y - self.content_region.y)) if inside else None
+
+    def on_mouse_move(self, event: events.MouseMove) -> None:
+        if self._press is not None:
+            index = self._row_under(max(0, min(event.y, self.size.height - 1)))
+            index = len(self.rows) - 1 if index is None else index
+            self.anchor = self._press if index != self._press else None
+            self._set_cursor(index)
+        else:
+            self._set_hover(self._row_under(event.y))
+
+    def on_leave(self, _event: events.Leave) -> None:
+        self.clear_hover()
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        self._swallow_click = False
+        index = self._row_under(event.y)
+        if event.button == 1 and index is not None and self.rows[index].kind == "line" and self._in_gutter(event.x):
+            self._press = index
+            self.capture_mouse()
+            event.stop()
+
+    def on_mouse_up(self, event: events.MouseUp) -> None:
+        press, self._press = self._press, None
+        if press is None:
+            return
+        self.release_mouse()
+        self._swallow_click = True
+        if self.anchor is None:
+            self._set_cursor(press)
+        self.post_message(self.Activated())
+
     def on_click(self, event: events.Click) -> None:
-        if not self.rows:
+        if self._swallow_click or not self.rows:
+            self._swallow_click = False
             return
         index = self._row_at(event.y + self.scroll_offset.y)
         again = index == self.cursor
@@ -250,13 +374,19 @@ class DiffView(ScrollView, can_focus=True):
             strip = strips[min(y - row.top, len(strips) - 1)]
             base = self.palette.comment_header_bg if active else self.palette.comment_bg
         else:
-            strip, base = self._flat_strip(row, active)
+            strip, base = self._flat_strip(index, row, active)
         total = max(self.virtual_size.width, width)
         return strip.extend_cell_length(total, _style(None, base)).crop(scroll_x, scroll_x + width)
 
-    def _flat_strip(self, row: Row, active: bool) -> tuple[Strip, str]:
+    def _flat_strip(self, index: int, row: Row, active: bool) -> tuple[Strip, str]:
         p = self.palette
-        mark = "▸" if active else " "
+        selected = (
+            row.kind == "line"
+            and self.anchor is not None
+            and min(self.anchor, self.cursor) <= index <= max(self.anchor, self.cursor)
+        )
+        mark = "▸" if active else "▌" if selected else " "
+        active = active or selected
         if row.kind == "hunk":
             base = p.hover_bg if active else p.hunk_bg
             return Strip([Segment(f"{mark}{row.text}", _style(p.hunk_fg, base))]), base
@@ -272,10 +402,15 @@ class DiffView(ScrollView, can_focus=True):
         else:
             base = p.hover_bg if active else p.bg
         d = self._digits
-        gutter = f"{mark}{line['old_num'] or '':>{d}} {line['new_num'] or '':>{d}} "
         prefix_fg = {"add": add_fg(self.palette), "remove": p.delete_fg}.get(kind, p.gutter_fg)
+        if index == self.hover:
+            numbers = Segment(f"{'[+]':>{2 * d + 1}}", _style(p.accent, base, bold=True))
+        else:
+            numbers = Segment(f"{line['old_num'] or '':>{d}} {line['new_num'] or '':>{d}}", _style(p.gutter_fg, base))
         segments = [
-            Segment(gutter, _style(p.gutter_fg, base)),
+            Segment(mark, _style(p.gutter_fg, base)),
+            numbers,
+            Segment(" ", _style(p.gutter_fg, base)),
             Segment(line["text"][:1], _style(prefix_fg, base, bold=True)),
         ]
         for text, color in self._tokens(row):
@@ -316,7 +451,11 @@ class DiffView(ScrollView, can_focus=True):
                 emit((first if i == 0 else rest) + ln, fg)
 
         who = c.get("author") or "user"
-        head = f"{who}" + (f" [{c['category']}]" if c.get("category") else "") + ("  ✓ resolved" if resolved else "")
+        head = f"{who}" + (f" [{c['category']}]" if c.get("category") else "")
+        end = c.get("sel_end_index")
+        if end not in (None, c.get("line_index")) and self._nums.get(end):
+            head += f"  lines {span(self._nums.get(c['line_index'], '?'), self._nums[end])}"
+        head += "  ✓ resolved" if resolved else ""
         emit(head, p.fg_muted if resolved else p.accent, bold=True)
         emit_wrapped(c.get("comment", ""), p.fg_muted if resolved else p.fg)
         if c.get("suggestion"):

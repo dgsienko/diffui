@@ -243,6 +243,19 @@ diffui/
   without a keypress.
 - Open in browser writes `activeFile` to `/api/session`, which the web UI
   restores on load.
+- Range comments send what the web UI sends for a selection across lines:
+  `line_index` is the first diff line's `index`, `sel_end_index` the last,
+  `sel_start` 0, `sel_end` the last line's text length, and `selected_text` the
+  lines joined by newlines. Threads anchor under the first line. A single line
+  sends none of the selection fields.
+- Hover and drag state live in `DiffView` (`hover`, `anchor`). Hover changes
+  refresh only the affected rows. A press on the number column captures the
+  mouse so the drag keeps tracking outside the widget, and the `Click` that
+  follows the release is swallowed so it cannot open a second composer.
+- The footer's leading hints come from `DiffuiApp.check_action`: bindings share
+  a key and differ in their `'range'`, `'thread'`, `'line'` or `'none'`
+  parameter, and `DiffView.context` picks the one shown. `ContextFooter` fills
+  in the line count, because a `Binding` description is fixed text.
 
 ### Design System
 
