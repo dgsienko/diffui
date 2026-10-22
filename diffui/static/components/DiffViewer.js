@@ -64,7 +64,6 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor,
     add: 'add',
     remove: 'remove',
     context: '',
-    hunk: 'hunk-line',
     meta: 'meta',
   }[line.type] || '';
 
@@ -104,7 +103,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor,
         <span class="gutter-sep">│</span>
       </div>
       <div class="diff-code" dangerouslySetInnerHTML=${{ __html: lineHtml }}></div>
-      ${line.type !== 'meta' && line.type !== 'hunk' && html`
+      ${line.type !== 'meta' && html`
         <${LineActions}
           onComment=${() => onRightClick(line)}
           onOpenInEditor=${onOpenInEditor && line.new_num ? () => onCtrlClick(parseInt(line.new_num) || 1) : null}
@@ -145,7 +144,7 @@ function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onOpenInEdi
         </span>
       </div>
       <div class=${'hunk-lines' + (collapsed ? ' collapsed' : '')}>
-        ${hunk.lines.filter(line => line.type !== 'hunk').map(line => {
+        ${hunk.lines.map(line => {
           const { comments: lineComments, ranges: commentRanges } = byLine.get(line.index) || NO_COMMENTS;
           return html`
             <${DiffLine}
@@ -256,7 +255,7 @@ export function DiffViewer({ data, comments, searchTerm, onAddComment, onDeleteC
         >Comment</button>
       `}
       ${data.file_note && html`<div class="diff-file-note">${data.file_note}</div>`}
-      ${data.hunks.filter(hunk => !hunk.file_header).map((hunk, i) => html`
+      ${data.hunks.map((hunk, i) => html`
         <${Hunk}
           key=${i}
           hunk=${hunk}

@@ -4,6 +4,10 @@ export function shortName(path) {
   return path.split('/').pop();
 }
 
+export function kb(keybindings, id, fallback) {
+  return keybindings?.[id] || fallback;
+}
+
 export function mergeRef(...refs) {
   return (el) => { for (const r of refs) { if (r) r.current = el; } };
 }

@@ -681,7 +681,6 @@ function App() {
     const lower = searchTerm.toLowerCase();
     const matches = [];
     for (const hunk of diffData.hunks) {
-      if (hunk.file_header) continue;
       for (const line of hunk.lines) {
         if (line.text && line.text.toLowerCase().includes(lower)) {
           matches.push(line.new_num || line.old_num || line.index);
@@ -719,9 +718,9 @@ function App() {
       const lower = fileFilter.toLowerCase();
       filtered = filtered.filter(f => f.path.toLowerCase().includes(lower));
     }
-    if (sortByRisk) filtered = [...filtered].sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
-    return treeOrder(filtered, groupMode);
+    return treeOrder(filtered, groupMode, sortByRisk);
   }, [files, showReviewed, sortByRisk, fileFilter, showIgnored, groupMode]);
+  const previewing = showPreview && !!activeFile && isPreviewable(activeFile);
   const activeFileReviewed = useMemo(() => files.find(f => f.path === activeFile)?.reviewed, [files, activeFile]);
 
   visibleFilesRef.current = visibleFiles;
@@ -993,6 +992,7 @@ function App() {
           files=${visibleFiles}
           activeFile=${activeFile}
           groupMode=${groupMode}
+          sortByRisk=${sortByRisk}
           onGroupModeChange=${setGroupMode}
           onSelect=${handleFileSelect}
           onClose=${() => setShowFileTree(false)}
@@ -1025,7 +1025,7 @@ function App() {
           openCommentCount=${activeFileOpenComments}
           onBulkResolve=${() => handleBulkResolve(activeFile)}
           onToggleReview=${handleToggleReview}
-          showPreview=${showPreview}
+          previewing=${previewing}
           onTogglePreview=${() => setShowPreview(v => !v)}
           keybindings=${keybindings}
         />
@@ -1034,7 +1034,7 @@ function App() {
             ? html`<${DiffSkeleton} />`
             : !activeFile
               ? html`<${EmptyState} files=${files} visibleFiles=${visibleFiles} fileFilter=${fileFilter} showReviewed=${showReviewed} />`
-              : showPreview && isPreviewable(activeFile)
+              : previewing
                 ? html`<${PreviewViewer} containerRef=${diffRef} filePath=${activeFile} />`
                 : diffMode === 'file'
                 ? html`<${FullFileViewer} containerRef=${diffRef} filePath=${activeFile} view=${view} />`

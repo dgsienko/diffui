@@ -81,9 +81,9 @@ export function SplitDiffViewer({ data, comments, onAddComment, onDeleteComment,
 
   const splitData = useMemo(() => {
     if (!data?.hunks) return null;
-    return data.hunks.filter(hunk => !hunk.file_header).map(hunk => ({
+    return data.hunks.map(hunk => ({
       header: hunk.header,
-      ...splitHunkLines(hunk.lines.filter(l => l.type !== 'hunk' && l.type !== 'meta')),
+      ...splitHunkLines(hunk.lines.filter(l => l.type !== 'meta')),
     }));
   }, [data]);
 

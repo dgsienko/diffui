@@ -214,7 +214,7 @@ export function AgentTerminal({ onClose, agentCli }) {
             onInput=${(e) => setInputValue(e.target.value)}
             onKeyDown=${handleInputKeyDown}
           />
-          <button class="agent-terminal-send-btn" onClick=${() => { sendStdin((inputValue || '') + '\r'); setInputValue(''); }} title="Send">Enter</button>
+          <button class="btn btn-primary" onClick=${() => { sendStdin((inputValue || '') + '\r'); setInputValue(''); }} title="Send">Enter</button>
         </div>
       `}
     </div>

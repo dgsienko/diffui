@@ -187,14 +187,15 @@ diffui/
   control, Whitespace, Hide reviewed, Blame, context, Resolve all and Mark
   reviewed. The viewers have no header of their own. The file tree is the only
   file navigator, and `treeOrder()` in `FileTree.js` gives the order that
-  prev/next file and next-unreviewed follow. There is no footer.
+  prev/next file and next-unreviewed follow. Sort by risk turns the tree into one
+  flat list in risk order, and `treeOrder()` follows it. There is no footer.
 - Diff file headers: `split_into_hunks` returns the lines before the first `@@`
-  as a pseudo hunk, which `parse_diff_to_json` flags with `file_header`. The
-  client skips that hunk, since its line indices still count toward comment
-  anchors, and shows `file_note` (from `file_change_note`) when the header
-  holds a rename, mode change, new or deleted file, or binary marker.
-  Unified hunks drop the `@@` line under the collapsible header. The split
-  view prints the hunk header in the left pane only.
+  as a pseudo hunk. `parse_diff_to_json` does not emit that hunk or the `@@`
+  line of each hunk, but both still advance the line `index`, which saved
+  comments anchor on. `file_note` (from `file_change_note`) is set when the
+  header holds a rename, mode change, new or deleted file, or binary marker.
+  The unified view shows each hunk header once, in the collapsible bar. The
+  split view prints it in the left pane only.
 - Theme switching: server generates CSS custom properties from
   Theme dataclass fields. Client injects a `<style>` tag. All colors
   use CSS variables, with no hardcoded values.
@@ -302,7 +303,7 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
   buffer replay, output streaming, kill message)
 - `tests/test_highlight.py`: highlight_line_html escaping and
   coloring, _apply_word_highlights with spans/entities/malformed HTML,
-  parse_diff_to_json structure and `file_header`/`file_note`,
+  parse_diff_to_json structure and line `index` and `file_note`,
   highlight_file_to_json
 - `tests/test_server.py`: CSS vars generation, all API routes
   (repos, branch, commits, files, diff, themes, settings, comments CRUD,

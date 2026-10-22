@@ -1,12 +1,12 @@
 import { h } from 'preact';
 import { useMemo } from 'preact/hooks';
 import htm from 'htm';
+import { kb } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
 export function TopBar({ repos, branch, commits, view, files, fileCount, reviewedCount, openCommentCount, onViewChange, onRepoSwitch, onOpenSettings, onToggleCommentsPanel, onToggleFileTree, onToggleFileFilter, showFileTree, showFileFilter, showCommentsPanel, agentRunning, onSendToAgent, explainRunning, onExplain, onShowShortcuts, wsConnected, keybindings, commentsPulse }) {
   const showRepoSelect = repos.length > 1;
-  const kb = (id, fallback) => keybindings?.[id] || fallback;
 
   const viewOptions = [
     { value: 'all', label: 'All changes' },
@@ -25,7 +25,7 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
   return html`
     <div class="top-bar">
       <div class="top-bar-left">
-        <button class=${'btn' + (showFileTree ? ' active' : '')} onClick=${onToggleFileTree} title=${`Toggle explorer (${kb('toggle-file-tree', 'b')})`}>
+        <button class=${'btn' + (showFileTree ? ' active' : '')} onClick=${onToggleFileTree} title=${`Toggle explorer (${kb(keybindings, 'toggle-file-tree', 'b')})`}>
           Explorer
         </button>
         ${showRepoSelect && html`

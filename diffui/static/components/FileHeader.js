@@ -1,21 +1,18 @@
 import { h } from 'preact';
 import htm from 'htm';
 import { isPreviewable, previewLabel } from './PreviewViewer.js';
+import { kb, shortName } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
 const MODES = [['unified', 'Unified'], ['split', 'Split'], ['file', 'File']];
 
-function splitPath(path) {
-  const i = path.lastIndexOf('/');
-  return i === -1 ? ['', path] : [path.slice(0, i + 1), path.slice(i + 1)];
-}
-
-export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeChange, ignoreWhitespace, onToggleWhitespace, showReviewed, onToggleShowReviewed, showBlame, onToggleBlame, contextLines, onExpandContext, openCommentCount, onBulkResolve, onToggleReview, showPreview, onTogglePreview, keybindings }) {
-  const kb = (id, fallback) => keybindings?.[id] || fallback;
-  const [dir, name] = activeFile ? splitPath(activeFile) : ['', ''];
+export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeChange, ignoreWhitespace, onToggleWhitespace, showReviewed, onToggleShowReviewed, showBlame, onToggleBlame, contextLines, onExpandContext, openCommentCount, onBulkResolve, onToggleReview, previewing, onTogglePreview, keybindings }) {
+  const name = activeFile ? shortName(activeFile) : '';
+  const dir = activeFile ? activeFile.slice(0, activeFile.length - name.length) : '';
   const previewable = activeFile && isPreviewable(activeFile);
-  const diffView = activeFile && diffMode === 'unified' && !(showPreview && previewable);
+  const diffView = activeFile && diffMode === 'unified' && !previewing;
+  const reviewKey = kb(keybindings, 'toggle-review', 'r');
 
   return html`
     <div class="file-header">
@@ -33,20 +30,20 @@ export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeCh
         `}
       </div>
       <div class="file-header-actions">
-        <div class="mode-toggle">
+        <div class="segmented">
           ${MODES.map(([val, label]) => html`
-            <button class=${'mode-btn' + (diffMode === val ? ' active' : '')} onClick=${() => onDiffModeChange(val)} title=${label + ' diff view'}>${label}</button>
+            <button class=${'segmented-btn' + (diffMode === val ? ' active' : '')} onClick=${() => onDiffModeChange(val)} title=${label + ' diff view'}>${label}</button>
           `)}
         </div>
         <button class=${'btn' + (ignoreWhitespace ? ' active' : '')} onClick=${onToggleWhitespace} title="Toggle ignore whitespace (w)">
           Whitespace
         </button>
-        <button class=${'btn' + (showReviewed ? '' : ' active')} onClick=${onToggleShowReviewed} title=${`${showReviewed ? 'Hide' : 'Show'} reviewed files (${kb('toggle-show-reviewed', 'a')})`}>
+        <button class=${'btn' + (showReviewed ? '' : ' active')} onClick=${onToggleShowReviewed} title=${`${showReviewed ? 'Hide' : 'Show'} reviewed files (${kb(keybindings, 'toggle-show-reviewed', 'a')})`}>
           ${showReviewed ? 'Hide reviewed' : 'Show all'}
         </button>
         ${previewable && html`
-          <button class=${'btn' + (showPreview ? ' active' : '')} onClick=${onTogglePreview} title="Toggle rendered preview">
-            ${showPreview ? 'Raw' : previewLabel(activeFile)}
+          <button class=${'btn' + (previewing ? ' active' : '')} onClick=${onTogglePreview} title="Toggle rendered preview">
+            ${previewing ? 'Raw' : previewLabel(activeFile)}
           </button>
         `}
         ${diffView && html`
@@ -69,9 +66,13 @@ export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeCh
             </button>
           `}
         `}
-        ${activeFile && (reviewed
-          ? html`<button class="btn reviewed" onClick=${onToggleReview} title=${`Reviewed. Click to mark as unreviewed (${kb('toggle-review', 'r')})`}>Reviewed ✓</button>`
-          : html`<button class="btn btn-primary" onClick=${onToggleReview} title=${`Mark as reviewed (${kb('toggle-review', 'r')})`}>Mark reviewed</button>`)}
+        ${activeFile && html`
+          <button
+            class=${'btn ' + (reviewed ? 'reviewed' : 'btn-primary')}
+            onClick=${onToggleReview}
+            title=${(reviewed ? 'Reviewed. Click to mark as unreviewed' : 'Mark as reviewed') + ` (${reviewKey})`}
+          >${reviewed ? 'Reviewed ✓' : 'Mark reviewed'}</button>
+        `}
       </div>
     </div>
   `;

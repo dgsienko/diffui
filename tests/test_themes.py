@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from diffui.themes import (
     ALL_THEMES,
-    GRAPHITE,
+    DEFAULT_THEME,
     get_current_theme,
     set_current_theme,
 )
+from diffui.themes.definitions import GRAPHITE
 
 
 class TestThemeDefinitions:
@@ -79,13 +80,13 @@ class TestThemeState:
 
 
 class TestDefaultTheme:
-    def test_no_saved_theme_uses_graphite_and_saved_theme_wins(self, monkeypatch):
+    def test_no_saved_theme_uses_default_and_saved_theme_wins(self, monkeypatch):
         from diffui.server import state
 
         original = get_current_theme()
         try:
             monkeypatch.setattr(state, "load_settings", lambda: {})
-            assert state.AppState().theme is GRAPHITE
+            assert state.AppState().theme is DEFAULT_THEME
             monkeypatch.setattr(state, "load_settings", lambda: {"theme": "Dracula"})
             assert state.AppState().theme.name == "Dracula"
         finally:
