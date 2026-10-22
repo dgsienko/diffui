@@ -1,7 +1,7 @@
 # diffui
 
 UI for reviewing AI agent diffs. FastAPI backend + Preact frontend,
-no build step required.
+no build step required, plus a Textual terminal client of the same API.
 
 ## Tech Stack
 
@@ -13,6 +13,7 @@ no build step required.
 - xterm.js for interactive agent terminal (loaded via ESM importmap)
 - Git operations via `subprocess` (no gitpython dependency)
 - PTY-based agent process management (`pty` + `select` stdlib)
+- Textual + httpx for the terminal UI (`diffui --tui`)
 - Installed globally via `pipx install -e .`
 
 ## Architecture
@@ -41,6 +42,12 @@ diffui/
 │   ├── models.py       # Pydantic request models for all endpoints
 │   ├── state.py        # AppState singleton: shared server state
 │   └── theme_css.py    # generate_css_vars(theme): CSS custom properties
+├── tui/                # Textual client (`diffui --tui`), a thin client of server/
+│   ├── app.py          # DiffuiApp: key bindings, review actions, SSE-driven refresh
+│   ├── client.py       # LocalServer (uvicorn in a thread) and ApiClient (httpx)
+│   ├── diffview.py     # DiffView: virtual-scrolled unified diff with inline threads
+│   ├── filelist.py     # FileList: tree or risk-ordered files
+│   └── screens.py      # Help, comment composer and agent prompt dialogs
 ├── static/             # Preact frontend (no build step, ESM imports via importmap)
 │   ├── app.js          # Root component, state management, keyboard shortcuts,
 │   │                   #   WebSocket client, session restore
@@ -213,6 +220,30 @@ diffui/
   activation on file tree items, focus trapping in settings dialog, `:focus-visible` outlines on all buttons,
   bold color-coded `+`/`-` diff prefixes for color-blind users.
 
+### Terminal UI Patterns
+
+- Thin client: the TUI holds no review logic. Comments, reviewed state, risk
+  scores, file order, next-unreviewed, the agent prompt, the herdr paste and the
+  herdr status all stay in `server/`. When the TUI needs data the API lacks, add
+  or extend an endpoint. Pygments highlighting of the `text` the diff endpoint
+  returns is the one thing computed client-side, because it is presentation.
+- `LocalServer` runs `create_app` under uvicorn in a background thread so the
+  lifespan starts the watcher and herdr reporting. The client must use
+  `http://localhost:<port>`, which `_LocalOriginOnly` accepts.
+- File order: `/api/files?order=tree|risk` mirrors `treeOrder()` in
+  `FileTree.js`, and `/api/files/next-unreviewed` gives the file the web UI
+  advances to after Mark reviewed. `hide_ignored` drops `.diffuiignore` matches.
+  Each entry carries `dir` and `open_comment_count`.
+- `DiffView` is a `ScrollView` that renders rows on demand. Pygments runs on a
+  row the first time it is drawn, so a few thousand lines open at once.
+  A comment's `line_index` is the diff line's `index`, the same anchor the web
+  UI uses. Threads whose line left the diff are listed after the last hunk.
+- Live updates come from the `/api/events` SSE stream. The TUI refetches files,
+  the diff or comments per event, so an agent writing `comments.json` shows up
+  without a keypress.
+- Open in browser writes `activeFile` to `/api/session`, which the web UI
+  restores on load.
+
 ### Design System
 
 All frontend changes must follow these rules:
@@ -269,6 +300,7 @@ After making changes, always:
 pipx install -e .                    # Install (editable)
 diffui                               # Start server (from any git repo)
 diffui --open                        # Start + open in browser
+diffui --tui                         # Terminal UI in the current pane
 diffui --comments                    # Dump comments to stdout
 diffui --json                        # Export review session as JSON
 pytest                               # Run tests
@@ -278,7 +310,7 @@ ruff check diffui/ tests/           # Lint
 ## Testing
 
 Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
-`themes/`) and the web server (`server/`).
+`themes/`), the web server (`server/`) and the terminal UI (`tui/`).
 
 - `tests/test_diff.py`: line classification, number parsing,
   hunk splitting, prefix stripping, lexer selection, token color,
@@ -315,6 +347,13 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
   _build_agent_context, _process_status, explain view with temp files,
   repo switch, working files view, diff context/whitespace params,
   editor open endpoint
+- `tests/test_tui.py`: runs the real `DiffuiApp` under `App.run_test()` against
+  a `LocalServer` on the `temp_repo` fixture. Covers file keys in tree order,
+  a comment added from the keyboard stored at the right line, Mark reviewed
+  advancing to the next unreviewed file, an external `comments.json` write
+  refreshing the view, and `_order_files` for tree and risk order. Tests drive
+  the app with `asyncio.run` and poll with `until()`, since the server reaches
+  the view through the watcher and SSE.
 - `tests/test_themes.py`: all themes have valid hex colors,
   unique names, syntax maps; Graphite first and the default when no theme is
   saved; theme state get/set

@@ -40,6 +40,7 @@ Sibling repos in the same parent directory are auto-discovered and available via
 diffui --open        # Automatically open the URL in an external browser
 diffui --comments    # Dump all comments to stdout
 diffui --json        # Export review session as structured JSON
+diffui --tui         # Review in the terminal instead of the browser
 ```
 
 ## Reviewing changes
@@ -94,6 +95,31 @@ rows = [
 ]
 ```
 
+## Terminal UI
+
+`diffui --tui` runs the review loop in the terminal, so it fits in a herdr split next to the coding agent. It starts the same server on a free port and talks to it over HTTP, which means comments, reviewed state and risk scores are the ones the browser shows. Press `o` to open the web UI at the current file.
+
+The TUI covers the file list, a unified diff with syntax highlighting, comment threads, reviewed state, and Send to agent. Inside herdr, Send to agent pastes the prompt into the workspace's agent pane. Anywhere else it shows the prompt so you can copy it with `c`. Explain changes, markdown and mermaid preview, blame, split view and the agent terminal stay in the browser.
+
+| Key | Action |
+| --- | --- |
+| `left` / `right`, `h` / `l` | Previous / next file |
+| `k` / `j` | Previous / next hunk |
+| `p` / `n` | Previous / next comment thread |
+| `up` / `down`, `pgup` / `pgdn`, `g` / `G` | Move the cursor |
+| `r` | Mark the file reviewed or unreviewed, then open the next unreviewed file |
+| `]` | Next unreviewed file |
+| `s` | Sort files by risk |
+| `c` or `enter` | Comment on the line, or reply to the thread |
+| `x` | Resolve or reopen the thread |
+| `A` | Send open comments to the agent |
+| `o` | Open this file in the browser |
+| `b` | Show or hide the file list |
+| `?` | Help |
+| `q` | Quit |
+
+Clicking a file opens it. Clicking the selected line opens the comment box, and `ctrl+s` saves it.
+
 ## Display
 
 - 16 color themes, with Graphite as the default: Graphite, Catppuccin Mocha/Latte, GitHub Dark, Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night, Rose Pine, Rose Pine Moon, Monokai Pro, Kanagawa, Everforest, Ayu Dark
@@ -145,7 +171,7 @@ All state lives in `~/.config/diffui/`. Nothing is written to repo directories.
 
 - `.diffuiignore` file to hide files from review (still visible to agents)
 - `diffui --json` for programmatic agent workflows
-- Auto-refresh via WebSocket (SSE fallback) powered by watchfiles
+- Auto-refresh via WebSocket (SSE fallback) powered by watchfiles; the terminal UI uses the SSE stream
 - Virtual scrolling for large files
 - Session persistence (active file, scroll positions, UI state)
 - Context-aware keybindings (suppressed when dialogs are open)

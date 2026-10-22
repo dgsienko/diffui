@@ -11,6 +11,7 @@ from diffui.git_utils import (
     get_full_diff,
     get_repo_root,
     get_working_diff,
+    is_comment_open,
     repo_relative,
     short_name,
 )
@@ -108,8 +109,16 @@ def _is_ignored(path: str) -> bool:
     return any(fnmatch(path, p) or fnmatch(path.split("/")[-1], p) for p in app_state.ignore_patterns)
 
 
-@router.get("/files")
-def list_files(view: str = "all"):
+def _order_files(entries: list[dict], order: str) -> list[dict]:
+    # Mirrors treeOrder() in FileTree.js: directories sorted by name, then the risk score for a flat list.
+    if order == "risk":
+        return sorted(entries, key=lambda f: -f["risk_score"])
+    if order == "tree":
+        return sorted(entries, key=lambda f: f["dir"])
+    return entries
+
+
+def _file_entries(view: str, order: str, hide_ignored: bool) -> list[dict]:
     if view == "all":
         files = app_state.review_files
     elif view == "working":
@@ -124,15 +133,18 @@ def list_files(view: str = "all"):
     for f in files:
         adds, dels = numstat.get(f, (0, 0))
         risk_score, risk_level, risk_reasons = _score_risk(f, adds, dels)
+        comments = app_state.comments.get(f, [])
         result.append(
             {
                 "path": f,
                 "short_name": short_name(f),
+                "dir": f.rpartition("/")[0] or ".",
                 "reviewed": f in app_state.reviewed,
                 "review_mtime": app_state.reviewed.get(f),
                 "file_mtime": get_file_mtime(f),
                 "has_comments": f in app_state.comments,
-                "comment_count": len(app_state.comments.get(f, [])),
+                "comment_count": len(comments),
+                "open_comment_count": sum(1 for c in comments if is_comment_open(c)),
                 "adds": adds,
                 "dels": dels,
                 "risk_score": risk_score,
@@ -141,7 +153,20 @@ def list_files(view: str = "all"):
                 "ignored": _is_ignored(f),
             }
         )
-    return result
+    if hide_ignored:
+        result = [f for f in result if not f["ignored"]]
+    return _order_files(result, order)
+
+
+@router.get("/files")
+def list_files(view: str = "all", order: str = "", hide_ignored: bool = False):
+    return _file_entries(view, order, hide_ignored)
+
+
+@router.get("/files/next-unreviewed")
+def next_unreviewed(order: str = "tree"):
+    entries = _file_entries("all", order, hide_ignored=True)
+    return {"path": next((f["path"] for f in entries if not f["reviewed"]), None)}
 
 
 @router.get("/diff/{path:path}")
