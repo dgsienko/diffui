@@ -15,7 +15,7 @@ from diffui.git_utils import (
     load_reviewed,
     load_settings,
 )
-from diffui.themes import ALL_THEMES, CATPPUCCIN_MOCHA, get_current_theme, set_current_theme
+from diffui.themes import ALL_THEMES, GRAPHITE, get_current_theme, set_current_theme
 
 
 class AppState:
@@ -33,7 +33,7 @@ class AppState:
         self.branch_name: str = ""
 
         saved = load_settings()
-        theme_name = saved.get("theme", CATPPUCCIN_MOCHA.name)
+        theme_name = saved.get("theme", GRAPHITE.name)
         theme_index = next((i for i, t in enumerate(ALL_THEMES) if t.name == theme_name), 0)
         set_current_theme(ALL_THEMES[theme_index])
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import pytest
 from pygments.token import Token
 
 from diffui.diff import (
     classify_line,
+    file_change_note,
     get_lexer,
     is_meta_line,
     pair_diff_lines,
@@ -294,3 +296,26 @@ class TestYamlSeparatorLines:
         assert nums[5] == ("2", None)
         assert nums[6] == ("3", None)
         assert nums[8] == ("4", "3")
+
+
+class TestFileChangeNote:
+    @pytest.mark.parametrize(
+        ("header", "note"),
+        [
+            (["diff --git a/f.py b/f.py", "index 1..2 100644", "--- a/f.py", "+++ b/f.py"], ""),
+            (["diff --git a/f.py b/f.py", "new file mode 100644", "--- /dev/null", "+++ b/f.py"], "New file"),
+            (["diff --git a/f.py b/f.py", "deleted file mode 100644", "--- a/f.py", "+++ /dev/null"], "Deleted file"),
+            (["diff --git a/f.py b/f.py", "old mode 100644", "new mode 100755"], "Mode 100644 → 100755"),
+            (["diff --git a/f.py b/f.py", "Binary files a/f.py and b/f.py differ"], "Binary file"),
+            (
+                ["diff --git a/old.py b/new.py", "similarity index 100%", "rename from old.py", "rename to new.py"],
+                "Renamed from old.py",
+            ),
+            (
+                ["diff --git a/old.py b/new.py", "similarity index 92%", "rename from old.py", "rename to new.py"],
+                "Renamed from old.py (92% similar)",
+            ),
+        ],
+    )
+    def test_note(self, header, note):
+        assert file_change_note(header) == note

@@ -9,7 +9,7 @@ const OVERSCAN = 40;
 
 // All line HTML is server-generated from Pygments — source code is html.escape'd
 // in highlight.py before wrapping in <span> tags. No user content is rendered as HTML.
-export function FullFileViewer({ filePath, view, onToggleReview, reviewed, containerRef }) {
+export function FullFileViewer({ filePath, view, containerRef }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [scrollTop, setScrollTop] = useState(0);
@@ -55,28 +55,15 @@ export function FullFileViewer({ filePath, view, onToggleReview, reviewed, conta
   if (loading) return html`<div class="loading">Loading...</div>`;
   if (!data?.lines?.length) return html`<div class="empty-state"><span class="empty-state-title">File is empty</span></div>`;
 
-  const headerHeight = 44;
   const totalLines = data.lines.length;
   const totalHeight = totalLines * LINE_HEIGHT;
-  const adjustedScroll = Math.max(0, scrollTop - headerHeight);
-  const startIdx = Math.max(0, Math.floor(adjustedScroll / LINE_HEIGHT) - OVERSCAN);
-  const endIdx = Math.min(totalLines, Math.ceil((adjustedScroll + viewportHeight) / LINE_HEIGHT) + OVERSCAN);
+  const startIdx = Math.max(0, Math.floor(scrollTop / LINE_HEIGHT) - OVERSCAN);
+  const endIdx = Math.min(totalLines, Math.ceil((scrollTop + viewportHeight) / LINE_HEIGHT) + OVERSCAN);
   const offsetY = startIdx * LINE_HEIGHT;
 
   // Line HTML is Pygments-generated (escaped server-side in highlight.py)
   return html`
     <div class="diff-container" ref=${mergedRef}>
-      <div class="diff-file-header">
-        <div>
-          <span class="diff-file-path">${data.file_path}</span>
-          <span style="color: var(--fg-muted); margin-left: 12px">${data.total_lines} lines</span>
-          ${data.adds > 0 && html`<span class="diff-stat-add">+${data.adds}</span>`}
-          ${data.dels > 0 && html`<span class="diff-stat-del">-${data.dels}</span>`}
-        </div>
-        <button class=${'review-btn' + (reviewed ? ' reviewed' : '')} onClick=${onToggleReview}>
-          ${reviewed ? 'Mark unreviewed' : 'Mark reviewed'}
-        </button>
-      </div>
       <div style="height: ${totalHeight}px; position: relative;">
         <div style="transform: translateY(${offsetY}px); will-change: transform;">
           ${data.lines.slice(startIdx, endIdx).map(line => html`

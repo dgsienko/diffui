@@ -35,7 +35,7 @@ export function CommentsPanel({ comments, onSelect, onClose, onBulkResolve }) {
         <span class="comments-panel-title">${allComments.length} open comment${allComments.length === 1 ? '' : 's'}</span>
         <div style="display:flex;gap:4px;align-items:center">
           ${onBulkResolve && allComments.length > 0 && html`
-            <button class="expand-ctx-btn" onClick=${() => onBulkResolve(null)} title="Resolve all open comments">Resolve all</button>
+            <button class="btn" onClick=${() => onBulkResolve(null)} title="Resolve all open comments">Resolve all</button>
           `}
           <button class="file-tree-close" onClick=${onClose} title="Close comments panel">✕</button>
         </div>

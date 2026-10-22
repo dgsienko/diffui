@@ -135,6 +135,36 @@ def pair_diff_lines(lines: list[str]) -> dict[int, list[tuple[int, int]]]:
     return paired
 
 
+_BINARY_RE = re.compile(r"^(?:Binary files .* differ|GIT binary patch)$")
+
+
+def file_change_note(header_lines: list[str]) -> str:
+    """One muted line for a file header that says something beyond the paths: a
+    rename, a mode change, a new or deleted file or a binary file."""
+    notes: list[str] = []
+    props: dict[str, str] = {}
+    for line in header_lines:
+        for key in ("rename from ", "copy from ", "old mode ", "new mode ", "similarity index "):
+            if line.startswith(key):
+                props[key.strip()] = line[len(key) :]
+        if line.startswith("new file mode"):
+            notes.append("New file")
+        elif line.startswith("deleted file mode"):
+            notes.append("Deleted file")
+        elif _BINARY_RE.match(line):
+            notes.append("Binary file")
+    for verb, label in (("rename", "Renamed"), ("copy", "Copied")):
+        if f"{verb} from" in props:
+            note = f"{label} from {props[f'{verb} from']}"
+            similarity = props.get("similarity index")
+            if similarity and similarity != "100%":
+                note += f" ({similarity} similar)"
+            notes.append(note)
+    if "old mode" in props and "new mode" in props:
+        notes.append(f"Mode {props['old mode']} → {props['new mode']}")
+    return " · ".join(notes)
+
+
 def split_into_hunks(lines: list[str]) -> list[tuple[str, list[str]]]:
     hunks: list[tuple[str, list[str]]] = []
     header_lines: list[str] = []

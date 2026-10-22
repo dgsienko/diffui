@@ -6,6 +6,7 @@ from pygments import lex
 
 from diffui.diff import (
     classify_line,
+    file_change_note,
     get_lexer,
     pair_diff_lines,
     parse_line_numbers,
@@ -93,7 +94,7 @@ def _apply_word_highlights(code_html: str, ranges: list[tuple[int, int]], code_p
 def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme) -> dict:
     lines = diff_text.splitlines()
     if not lines:
-        return {"file_path": file_path, "adds": 0, "dels": 0, "hunks": []}
+        return {"file_path": file_path, "adds": 0, "dels": 0, "file_note": "", "hunks": []}
 
     adds, dels = diff_stat(diff_text)
     numbers = parse_line_numbers(diff_text)
@@ -102,6 +103,7 @@ def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme) -> dict:
     lexer = get_lexer(file_path)
 
     result_hunks: list[dict] = []
+    file_note = ""
     global_idx = 0
 
     for hunk_header, hunk_lines in hunks:
@@ -136,9 +138,12 @@ def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme) -> dict:
             )
             global_idx += 1
 
-        result_hunks.append({"header": hunk_header[:80], "lines": result_lines})
+        is_file_header = not hunk_header.startswith("@@")
+        if is_file_header:
+            file_note = file_change_note(hunk_lines)
+        result_hunks.append({"header": hunk_header[:80], "lines": result_lines, "file_header": is_file_header})
 
-    return {"file_path": file_path, "adds": adds, "dels": dels, "hunks": result_hunks}
+    return {"file_path": file_path, "adds": adds, "dels": dels, "file_note": file_note, "hunks": result_hunks}
 
 
 def highlight_file_to_json(content: str, diff_text: str, file_path: str, theme: Theme) -> dict:

@@ -6,7 +6,7 @@ const html = htm.bind(h);
 
 function MinimapMarks({ diffData, comments }) {
   const marks = useMemo(() => {
-    const allLines = diffData?.hunks?.flatMap(h => h.lines) || [];
+    const allLines = diffData?.hunks?.filter(h => !h.file_header).flatMap(h => h.lines) || [];
     const totalLines = allLines.length;
     if (!totalLines) return [];
     const filePath = diffData?.file_path;

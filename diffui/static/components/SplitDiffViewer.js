@@ -56,7 +56,7 @@ function SplitLine({ line, side, onRightClick, commentRanges }) {
   `;
 }
 
-export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, reviewed, containerRef }) {
+export function SplitDiffViewer({ data, comments, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, containerRef }) {
   const [commentingLine, setCommentingLine] = useState(null);
   const leftRef = useRef(null);
   const rightRef = useRef(null);
@@ -81,7 +81,7 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
 
   const splitData = useMemo(() => {
     if (!data?.hunks) return null;
-    return data.hunks.map(hunk => ({
+    return data.hunks.filter(hunk => !hunk.file_header).map(hunk => ({
       header: hunk.header,
       ...splitHunkLines(hunk.lines.filter(l => l.type !== 'hunk' && l.type !== 'meta')),
     }));
@@ -97,18 +97,9 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
           style=${{ left: selMenu.x + 'px', top: selMenu.y + 'px' }}
           onMouseDown=${(e) => e.preventDefault()}
           onClick=${handleCommentSelection}
-        >💬 Comment</button>
+        >Comment</button>
       `}
-      <div class="diff-file-header">
-        <div>
-          <span class="diff-file-path">${data.file_path}</span>
-          <span class="diff-stat-add">+${data.adds}</span>
-          <span class="diff-stat-del">-${data.dels}</span>
-        </div>
-        <button class=${'review-btn' + (reviewed ? ' reviewed' : '')} onClick=${onToggleReview}>
-          ${reviewed ? 'Mark unreviewed' : 'Mark reviewed'}
-        </button>
-      </div>
+      ${data.file_note && html`<div class="diff-file-note">${data.file_note}</div>`}
       <div class="split-panes">
         <div class="split-pane" ref=${leftRef} onScroll=${() => syncScroll(leftRef, rightRef)}>
           ${splitData.map(s => html`
@@ -149,7 +140,7 @@ export function SplitDiffViewer({ data, comments, onToggleReview, onAddComment, 
           ${splitData.map(s => {
             const { right } = s;
             return html`
-              <div class="split-hunk-header">${s.header}</div>
+              <div class="split-hunk-header" aria-hidden="true">${"\u00a0"}</div>
               ${right.map((line, i) => {
                 const entry = entryFor(line);
                 return html`

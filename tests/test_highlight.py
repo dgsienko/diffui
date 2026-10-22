@@ -104,6 +104,12 @@ class TestParseDiffToJson:
                 assert "index" in line
                 assert isinstance(line["index"], int)
 
+    def test_file_header_is_flagged_and_summarized(self):
+        diff = "diff --git a/f.py b/f.py\nnew file mode 100644\n--- /dev/null\n+++ b/f.py\n@@ -0,0 +1 @@\n+x\n"
+        result = parse_diff_to_json(diff, "f.py", CATPPUCCIN_MOCHA)
+        assert [h["file_header"] for h in result["hunks"]] == [True, False]
+        assert result["file_note"] == "New file"
+
 
 class TestHighlightFileToJson:
     def test_empty_content(self):
