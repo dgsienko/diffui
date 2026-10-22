@@ -15,6 +15,7 @@ from diffui.git_utils import (
     get_repo_root,
     load_comments,
 )
+from diffui.server.herdr import report_status
 from diffui.server.state import app_state
 
 log = logging.getLogger(__name__)
@@ -103,6 +104,7 @@ def _apply_state_updates(events: list[str]) -> list[str]:
     if "comments_changed" in events and "git_changed" not in events:
         app_state.comments = load_comments()
 
+    report_status()
     return events
 
 

@@ -10,6 +10,7 @@ from starlette.staticfiles import StaticFiles
 from diffui.git_utils import PathOutsideRepo
 from diffui.server.events import router as events_router
 from diffui.server.events import start_poller
+from diffui.server.herdr import clear_status, report_status
 from diffui.server.routes_comments import router as comments_router
 from diffui.server.routes_diff import router as diff_router
 from diffui.server.routes_repo import router as repo_router
@@ -34,8 +35,10 @@ _STATIC_DIR = Path(__file__).parent.parent / "static"
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     start_poller()
+    report_status()
     yield
     review_shutdown()
+    clear_status()
 
 
 def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:

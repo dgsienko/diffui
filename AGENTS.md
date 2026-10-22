@@ -28,6 +28,7 @@ diffui/
 │   ├── app.py          # App factory: mounts routes, static files, starts watcher
 │   ├── events.py       # WebSocket + SSE endpoints, watchfiles-based filesystem
 │   │                   #   watcher with 400ms debounce
+│   ├── herdr.py        # herdr CLI calls: agent paste, sidebar status
 │   ├── highlight.py    # Pygments-to-HTML adapter, word highlight overlay
 │   ├── routes_comments.py  # Comment CRUD, suggestion apply endpoint
 │   ├── routes_diff.py      # Diff, files, blame, preview, risk scoring
@@ -142,6 +143,13 @@ diffui/
   history. Agent CLI configurable in settings (Claude Code, Codex,
   OpenCode, Cursor Agent). Legacy polling endpoints (`/api/agent/run`,
   `/api/agent/status`) still available for non-terminal use.
+- herdr: inside a herdr pane (`HERDR_WORKSPACE_ID` set), `/api/agent/prompt`
+  returns the workspace's agent as `herdr_agent`, and the confirm dialog
+  calls `/api/agent/paste` in place of `/api/agent/start`. The prompt goes to
+  that pane as one bracketed paste. `report_status` pushes the open comment
+  and reviewed counts to the herdr sidebar after each state change, and
+  `clear_status` removes them on shutdown. Tests run a fake `herdr` from
+  `PATH`.
 - Markdown is sanitized: `renderMd` in `lib/markdown.js` runs marked's output
   through an allowlist of tags, attributes and URL schemes before it reaches
   `dangerouslySetInnerHTML`. marked emits raw HTML, and comment bodies, agent
