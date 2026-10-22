@@ -112,7 +112,6 @@ class TestParseDiffToJson:
         assert result["file_note"] == "New file"
 
     def test_line_index_counts_skipped_header_and_hunk_lines(self):
-        # Saved comments anchor on line_index, so it must match the raw diff position.
         diff = "diff --git a/f.py b/f.py\n--- a/f.py\n+++ b/f.py\n@@ -1 +1 @@\n-old\n+new\n@@ -9 +9 @@\n-a\n+b\n"
         result = parse_diff_to_json(diff, "f.py", CATPPUCCIN_MOCHA)
         by_text = {line["text"]: line["index"] for h in result["hunks"] for line in h["lines"]}

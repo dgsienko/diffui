@@ -50,8 +50,6 @@ function groupEntries(files, groupMode) {
   return Object.keys(groups).sort().map(name => [name, groups[name]]);
 }
 
-// Files in the order the tree lists them, so prev/next file follows the sidebar.
-// Sorting by risk drops the groups: the tree renders one flat list in this order.
 export function treeOrder(files, groupMode, sortByRisk) {
   if (sortByRisk) return [...files].sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
   return groupEntries(files, groupMode).flatMap(([, group]) => group);

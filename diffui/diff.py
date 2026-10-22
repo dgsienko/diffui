@@ -139,8 +139,6 @@ _BINARY_RE = re.compile(r"^(?:Binary files .* differ|GIT binary patch)$")
 
 
 def file_change_note(header_lines: list[str]) -> str:
-    """One muted line for a file header that says something beyond the paths: a
-    rename, a mode change, a new or deleted file or a binary file."""
     notes: list[str] = []
     props: dict[str, str] = {}
     for line in header_lines:

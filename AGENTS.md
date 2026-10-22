@@ -185,10 +185,9 @@ diffui/
   Shortcuts, Settings and Send to agent). `App` renders a single `FileHeader`
   above the active viewer with the path breadcrumb, the Unified/Split/File
   control, Whitespace, Hide reviewed, Blame, context, Resolve all and Mark
-  reviewed. The viewers have no header of their own. The file tree is the only
-  file navigator, and `treeOrder()` in `FileTree.js` gives the order that
-  prev/next file and next-unreviewed follow. Sort by risk turns the tree into one
-  flat list in risk order, and `treeOrder()` follows it. There is no footer.
+  reviewed. The file tree is the only file navigator, and `treeOrder()` in
+  `FileTree.js` gives the order that prev/next file and next-unreviewed follow.
+  Sort by risk turns the tree into one flat list in risk order.
 - Diff file headers: `split_into_hunks` returns the lines before the first `@@`
   as a pseudo hunk. `parse_diff_to_json` does not emit that hunk or the `@@`
   line of each hunk, but both still advance the line `index`, which saved
