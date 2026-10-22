@@ -187,7 +187,7 @@ def _server_app():
 
     from fastapi.testclient import TestClient
 
-    return TestClient(app)
+    return TestClient(app, base_url="http://localhost")
 
 
 class TestStartAgentEndpoint:
@@ -438,7 +438,7 @@ class TestAgentWebSocket:
         with (
             patch.object(rat, "_agent_proc", None),
             patch.object(rat, "_agent_pty_fd", None),
-            _server_app.websocket_connect("/api/agent/ws") as ws,
+            _server_app.websocket_connect("ws://localhost/api/agent/ws") as ws,
         ):
             msg = ws.receive_json()
         assert msg == {"type": "error", "message": "No agent running"}
@@ -456,7 +456,7 @@ class TestAgentWebSocket:
             patch.object(rat, "_agent_proc", proc),
             patch.object(rat, "_agent_pty_fd", 10),
             patch.object(rat, "_read_pty", return_value=None),
-            _server_app.websocket_connect("/api/agent/ws") as ws,
+            _server_app.websocket_connect("ws://localhost/api/agent/ws") as ws,
         ):
             replay = ws.receive_json()
             started = ws.receive_json()
@@ -484,7 +484,7 @@ class TestAgentWebSocket:
             patch.object(rat, "_agent_proc", proc),
             patch.object(rat, "_agent_pty_fd", 10),
             patch.object(rat, "_read_pty", side_effect=fake_read),
-            _server_app.websocket_connect("/api/agent/ws") as ws,
+            _server_app.websocket_connect("ws://localhost/api/agent/ws") as ws,
         ):
             ws.receive_json()  # started (no replay since buffer empty)
             output = ws.receive_json()
@@ -507,7 +507,7 @@ class TestAgentWebSocket:
             patch.object(rat, "_agent_pty_fd", 10),
             patch.object(rat, "_read_pty", return_value=None),
             patch.object(rat, "_kill_agent", return_value=-15) as mock_kill,
-            _server_app.websocket_connect("/api/agent/ws") as ws,
+            _server_app.websocket_connect("ws://localhost/api/agent/ws") as ws,
         ):
             ws.receive_json()  # started
             ws.send_json({"type": "kill"})
