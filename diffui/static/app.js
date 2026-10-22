@@ -518,8 +518,14 @@ function App() {
     setShowAgentConfirm(data);
   }, []);
 
-  const handleConfirmAgent = useCallback(async () => {
+  const handleConfirmAgent = useCallback(async (herdrAgent) => {
     setShowAgentConfirm(null);
+    if (herdrAgent) {
+      const r = await safeFetch('/api/agent/paste', { method: 'POST' });
+      const data = await r.json();
+      showToast(data.ok ? `Pasted into ${data.agent}. Press Enter there to send.` : data.error, data.ok ? 'success' : 'error');
+      return;
+    }
     const r = await safeFetch('/api/agent/start', { method: 'POST' });
     const data = await r.json();
     if (!data.ok) { showToast(data.error || 'Failed to start agent', 'error'); return; }
@@ -1117,6 +1123,7 @@ function App() {
     ${showAgentConfirm && html`
       <${AgentConfirmDialog}
         agentCli=${showAgentConfirm.agent_cli}
+        herdrAgent=${showAgentConfirm.herdr_agent}
         commentCount=${showAgentConfirm.comment_count}
         onConfirm=${handleConfirmAgent}
         onCancel=${() => setShowAgentConfirm(null)}

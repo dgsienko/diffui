@@ -4,10 +4,12 @@ import os
 import subprocess
 import tempfile
 import threading
+from pathlib import Path
 
 from fastapi import APIRouter
 
 from diffui.git_utils import get_file_mtime, repo_relative, save_reviewed
+from diffui.server.herdr import find_agent, paste_to_agent
 from diffui.server.state import app_state
 
 _agent_process: subprocess.Popen | None = None
@@ -240,14 +242,25 @@ def get_agent_prompt():
     result = _build_agent_context()
     if result[0] is None:
         return {"ok": False, "error": result[1]}
-    prompt, _, context_path, open_count = result
+    prompt, repo_root, context_path, open_count = result
+    herdr_agent = find_agent(Path(repo_root))
     return {
         "ok": True,
         "prompt": prompt,
         "context_path": context_path,
         "agent_cli": app_state.agent_cli,
         "comment_count": open_count,
+        "herdr_agent": herdr_agent["agent"] if herdr_agent else None,
     }
+
+
+@router.post("/agent/paste")
+def paste_agent_prompt():
+    result = _build_agent_context()
+    if result[0] is None:
+        return {"ok": False, "error": result[1]}
+    prompt, repo_root, _, _ = result
+    return paste_to_agent(prompt, Path(repo_root))
 
 
 @router.post("/agent/run")

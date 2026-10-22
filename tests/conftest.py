@@ -25,6 +25,8 @@ def diffui_config_root(tmp_path_factory):
     root = tmp_path_factory.mktemp("diffui-config")
     mp = pytest.MonkeyPatch()
     mp.setattr(diffui.git_utils, "_CONFIG_ROOT", root)
+    # A suite run from a herdr pane would otherwise write to the live sidebar.
+    mp.delenv("HERDR_WORKSPACE_ID", raising=False)
     yield root
     mp.undo()
 

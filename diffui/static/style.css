@@ -90,6 +90,7 @@ html, body {
   padding: 4px 12px;
   border-top: 1px solid var(--border);
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .toolbar-left, .toolbar-center, .toolbar-right {
@@ -97,6 +98,8 @@ html, body {
   align-items: center;
   gap: 8px;
 }
+
+.toolbar-right { margin-left: auto; }
 
 .toolbar-btn {
   background: var(--bg);

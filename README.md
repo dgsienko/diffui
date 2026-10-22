@@ -79,6 +79,21 @@ Or tell your agent directly: "Go address the diffui comments."
 
 Configure your preferred agent CLI in Settings (gear icon).
 
+### Running inside herdr
+
+When you start the `diffui` server in a [herdr](https://herdr.dev) pane, Send to agent in the browser pastes the prompt into the agent already running in that workspace, so you keep its session and context. It picks the agent working in the same repo, or the first agent in the workspace if none is. herdr then focuses that pane, and you can add to the prompt before pressing Enter. diffui won't paste while the agent is sitting at a permission prompt, because Claude Code throws the paste away there.
+
+diffui also reports two values for the workspace's row in herdr's sidebar: `$comments` (like `3 open`) and `$reviewed` (like `12/20 reviewed`). Add them to your herdr config to show them:
+
+```toml
+[ui.sidebar.spaces]
+rows = [
+  ["state_icon", "workspace"],
+  ["branch", "git_status"],
+  ["$comments", "$reviewed"],
+]
+```
+
 ## Display
 
 - 15 color themes: Catppuccin Mocha/Latte, GitHub Dark, Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night, Rose Pine, Rose Pine Moon, Monokai Pro, Kanagawa, Everforest, Ayu Dark
