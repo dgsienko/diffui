@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
-from diffui.git_utils import get_file_mtime, is_comment_open, repo_relative, save_reviewed
+from diffui.git_utils import get_file_mtime, repo_relative, save_reviewed
 from diffui.server.herdr import find_agent, paste_to_agent
 from diffui.server.state import app_state
 
@@ -70,13 +70,8 @@ def review_summary():
     review_files = app_state.review_files
     total = len(review_files)
     reviewed_count = app_state.reviewed_count
-    all_comments = []
-    for file_path, file_comments in app_state.comments.items():
-        for c in file_comments:
-            all_comments.append({**c, "_file": file_path})
-
-    open_comments = [c for c in all_comments if is_comment_open(c)]
-    resolved_comments = [c for c in all_comments if not is_comment_open(c)]
+    open_comments = app_state.open_comments()
+    total_comments = sum(len(cs) for cs in app_state.comments.values())
 
     by_category: dict[str, list[dict]] = {}
     for c in open_comments:
@@ -86,7 +81,8 @@ def review_summary():
     lines = [f"# Review Summary: {branch_name}", ""]
     lines.append(f"**Files:** {reviewed_count}/{total} reviewed")
     lines.append(
-        f"**Comments:** {len(all_comments)} total, {len(open_comments)} open, {len(resolved_comments)} resolved"
+        f"**Comments:** {total_comments} total, {len(open_comments)} open, "
+        f"{total_comments - len(open_comments)} resolved"
     )
     lines.append("")
 
@@ -149,6 +145,7 @@ def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, 
     comments_path = str(_comments_path())
     repo_root = str(get_repo_root())
     branch_name = current_branch()
+    review_files = app_state.review_files
 
     ctx_lines = [
         f"# diffui Agent Context — {branch_name}",
@@ -159,8 +156,8 @@ def _build_agent_context() -> tuple[str, str, str, int] | tuple[None, str, str, 
         "",
         "## Review State",
         "",
-        f"- {len(app_state.review_files)} files changed",
-        f"- {app_state.reviewed_count}/{len(app_state.review_files)} reviewed",
+        f"- {len(review_files)} files changed",
+        f"- {app_state.reviewed_count}/{len(review_files)} reviewed",
         f"- {len(open_comments)} open comments",
         "",
     ]

@@ -237,8 +237,9 @@ After making changes, always:
 - The merge base comes from `origin/<main>` when that ref exists. Local main
   goes stale between pulls, and a stale base shows already-merged files.
 - File counts and open comments come from `AppState.review_files`,
-  `reviewed_count` and `open_comments()`, so the progress bar, the summary,
-  the agent prompt and the herdr sidebar all count the same files.
+  `reviewed_count` and `open_comments()`, so the all-changes progress bar,
+  the summary, the agent prompt and the herdr sidebar count the same files.
+  `diffui --json` builds the same file set without `AppState`.
 - `_LocalOriginOnly` in `app.py` returns 403 for any request whose Host isn't
   localhost or whose Origin doesn't match it. Tests talk to the app as
   `http://localhost` and `ws://localhost` for that reason.

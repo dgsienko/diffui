@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from starlette.datastructures import Headers
 from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocketClose
 
@@ -31,7 +32,7 @@ class _NoCacheStaticFiles(StaticFiles):
 
 
 _STATIC_DIR = Path(__file__).parent.parent / "static"
-_LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
+_LOCAL_HOSTS = {"localhost", "127.0.0.1"}
 
 
 class _LocalOriginOnly:
@@ -42,9 +43,9 @@ class _LocalOriginOnly:
 
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] in ("http", "websocket"):
-            headers = dict(scope["headers"])
-            host = headers.get(b"host", b"").decode()
-            origin = headers.get(b"origin", b"").decode()
+            headers = Headers(scope=scope)
+            host = headers.get("host", "")
+            origin = headers.get("origin", "")
             if host.rsplit(":", 1)[0] not in _LOCAL_HOSTS or (origin and origin.split("://", 1)[-1] != host):
                 reject = WebSocketClose(1008) if scope["type"] == "websocket" else PlainTextResponse("Forbidden", 403)
                 await reject(scope, receive, send)
