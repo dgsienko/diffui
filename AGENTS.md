@@ -234,15 +234,13 @@ After making changes, always:
 - `get_branch_commits` gets every commit's file list from one
   `git log --name-only` call, avoiding an N+1 of `git diff-tree`
   subprocesses.
-- The merge base comes from `origin/<main>` when that ref exists. Local main
-  goes stale between pulls, and a stale base shows already-merged files.
 - File counts and open comments come from `AppState.review_files`,
   `reviewed_count` and `open_comments()`, so the all-changes progress bar,
   the summary, the agent prompt and the herdr sidebar count the same files.
   `diffui --json` builds the same file set without `AppState`.
-- `_LocalOriginOnly` in `app.py` returns 403 for any request whose Host isn't
-  localhost or whose Origin doesn't match it. Tests talk to the app as
-  `http://localhost` and `ws://localhost` for that reason.
+- `_LocalOriginOnly` in `app.py` returns 403 unless Host is localhost, so
+  tests build clients with `base_url="http://localhost"` and connect
+  WebSockets to `ws://localhost`.
 
 ## Commands
 
