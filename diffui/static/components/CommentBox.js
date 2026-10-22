@@ -86,8 +86,8 @@ export function CommentBox({ onSubmit, onCancel, lineText, selectedText }) {
           ${CATEGORIES.map(c => html`<option value=${c.value}>${c.label}</option>`)}
         </select>
         <span class="comment-md-hint">Markdown supported</span>
-        <button class="comment-submit-btn" onClick=${submit}>Comment</button>
-        <button class="comment-cancel-btn" onClick=${onCancel}>Cancel</button>
+        <button class="btn btn-primary" onClick=${submit}>Comment</button>
+        <button class="btn" onClick=${onCancel}>Cancel</button>
       </div>
     </div>
   `;

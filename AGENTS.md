@@ -47,7 +47,7 @@ diffui/
 │   ├── lib/            # Shared utilities
 │   │   ├── markdown.js #   marked.js wrapper with GFM config
 │   │   └── utils.js    #   shortName(), mergeRef(), useResize() helpers
-│   ├── components/     # TopBar, FileTabs, DiffViewer, SplitDiffViewer,
+│   ├── components/     # TopBar, FileHeader, DiffViewer, SplitDiffViewer,
 │   │                   #   FullFileViewer, FileTree, CommentBox,
 │   │                   #   CommentDisplay, CommentsPanel, SearchBar,
 │   │                   #   FileFilterBar, LineActions, SettingsPanel,
@@ -60,7 +60,7 @@ diffui/
 └── themes/
     ├── __init__.py     # Theme state (get/set_current_theme), re-exports
     ├── theme.py        # Theme dataclass (30+ color fields)
-    └── definitions.py  # 15 theme instances with Pygments token color maps
+    └── definitions.py  # 16 theme instances with Pygments token color maps
 ```
 
 ### Shared Patterns
@@ -117,7 +117,7 @@ diffui/
   while the server has the new one.
 - Diff caching: server-side `_diff_cache` keyed by
   `(repo, merge_base, path, view, mtime)`. Client-side `diffCache` Map
-  for instant tab switching with stale-while-revalidate. Numstat is
+  for instant file switching with stale-while-revalidate. Numstat is
   cached in `AppState` and refreshed on `reload_repo_state`.
 - Virtual scrolling: `FullFileViewer` uses windowed rendering (only
   visible lines + buffer in DOM). Hunk blocks in unified/split views
@@ -128,7 +128,7 @@ diffui/
 - Risk scoring: `_score_risk()` in `routes_diff.py` assigns
   risk_level (low/medium/high) based on file patterns (migrations,
   configs, large deletions, test removal, high churn). Shown as colored
-  dots on file tabs and tree items. Sort-by-risk toggle via command
+  dots on tree items, with the level in the tooltip. Sort-by-risk toggle via command
   palette.
 - Agent orchestration: confirmation dialog shows agent name, comment
   count, and behavior summary. `/api/agent/start` spawns the configured
@@ -159,7 +159,7 @@ diffui/
 - Explain changes: `/api/explain` spawns the configured agent CLI
   to generate a self-contained HTML walkthrough. `/api/explain/status`
   polls. `/api/explain/view` serves the result as a localhost page
-  (path-traversal guarded to tempdir). Toolbar button + status bar link.
+  (path-traversal guarded to tempdir). Top bar button + status bar link.
 - Ignore whitespace: `ignore_whitespace` query param on diff
   endpoints passes `-w` to `git diff`. Frontend toggle (`w` key).
 - Ignore patterns: `.diffuiignore` file in repo root, fnmatch
@@ -167,7 +167,7 @@ diffui/
   default in UI but always included in agent context.
 - Bulk resolve: `/api/comments/bulk-resolve` with optional
   `file_path` filter and `action` (resolve/reopen). Used by command
-  palette, comments panel header, and diff file header.
+  palette, comments panel header, and the file header.
 - Font size / word wrap: `font_size` and `word_wrap` persisted in
   settings. Font size sets `--code-font-size` CSS variable. Word wrap
   adds `.word-wrap-enabled` class to `<html>`, uses `pre-wrap` on
@@ -180,6 +180,21 @@ diffui/
 - Preview mode: toggleable for `.md` and image files. Backend uses
   `mimetypes.guess_type` for image detection with 10MB size cap. Markdown
   rendered via `marked.js` through shared `lib/markdown.js`.
+- Layout: one top bar (explorer toggle, repo and branch, connection dot, view
+  filter, review progress, then Search files, Comments, Explain changes,
+  Shortcuts, Settings and Send to agent). `App` renders a single `FileHeader`
+  above the active viewer with the path breadcrumb, the Unified/Split/File
+  control, Whitespace, Hide reviewed, Blame, context, Resolve all and Mark
+  reviewed. The file tree is the only file navigator, and `treeOrder()` in
+  `FileTree.js` gives the order that prev/next file and next-unreviewed follow.
+  Sort by risk turns the tree into one flat list in risk order.
+- Diff file headers: `split_into_hunks` returns the lines before the first `@@`
+  as a pseudo hunk. `parse_diff_to_json` does not emit that hunk or the `@@`
+  line of each hunk, but both still advance the line `index`, which saved
+  comments anchor on. `file_note` (from `file_change_note`) is set when the
+  header holds a rename, mode change, new or deleted file, or binary marker.
+  The unified view shows each hunk header once, in the collapsible bar. The
+  split view prints it in the left pane only.
 - Theme switching: server generates CSS custom properties from
   Theme dataclass fields. Client injects a `<style>` tag. All colors
   use CSS variables, with no hardcoded values.
@@ -194,9 +209,8 @@ diffui/
   compares stored mtime against current on both `files_changed` and
   `git_changed` events.
 - Error handling: `safeFetch` wrapper shows toast on failed requests.
-- Accessibility: ARIA labels on selects, `role="tab"` and keyboard
-  activation on file tabs, `role="treeitem"` on file tree items, focus
-  trapping in settings dialog, `:focus-visible` outlines on all buttons,
+- Accessibility: ARIA labels on selects, `role="treeitem"` and keyboard
+  activation on file tree items, focus trapping in settings dialog, `:focus-visible` outlines on all buttons,
   bold color-coded `+`/`-` diff prefixes for color-blind users.
 
 ### Design System
@@ -207,7 +221,14 @@ All frontend changes must follow these rules:
 - Border radius: use `--radius-sm`, `--radius-md`, `--radius-lg` tokens
 - Shadows: use `--shadow-low`, `--shadow-high` tokens
 - Colors: all via CSS variables, zero hex/rgba outside `:root`
-- Buttons: consistent padding/font-size within each context
+- Buttons: consistent padding/font-size within each context. One filled
+  `btn-primary` per area ("Send to agent" in the top bar, "Mark reviewed" in the
+  file header). Every other action is a quiet `btn`: no border, muted text,
+  `--hover-bg` on hover. Mode toggles are one segmented control.
+- Fonts: `--font-ui` for chrome (bars, buttons, tree, panels, dialogs, toasts),
+  `--font-mono` for code, line numbers, diff paths and comment code blocks
+- Borders: only where they carry structure (the bar bottom edge, the tree/diff
+  divider). Use spacing or a background shift elsewhere.
 - Animations: 0.15s duration, intentional only
 - No emoji as UI elements: use text labels or CSS indicators
 - Loading states for every async action
@@ -261,7 +282,8 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
 
 - `tests/test_diff.py`: line classification, number parsing,
   hunk splitting, prefix stripping, lexer selection, token color,
-  word diff ranges, pair diff lines
+  word diff ranges, pair diff lines, `file_change_note` (rename, mode,
+  new, deleted, binary)
 - `tests/test_events.py`: change classification (source files,
   git paths, comments, mixed, empty, dedup), watch filter (accept/reject
   for source, pyc, git paths, unrelated dirs), SSE broadcast, WebSocket
@@ -280,7 +302,8 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
   buffer replay, output streaming, kill message)
 - `tests/test_highlight.py`: highlight_line_html escaping and
   coloring, _apply_word_highlights with spans/entities/malformed HTML,
-  parse_diff_to_json structure, highlight_file_to_json
+  parse_diff_to_json structure and line `index` and `file_note`,
+  highlight_file_to_json
 - `tests/test_server.py`: CSS vars generation, all API routes
   (repos, branch, commits, files, diff, themes, settings, comments CRUD,
   comment resolution toggle, review toggle, static files, JSON export),
@@ -293,7 +316,8 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
   repo switch, working files view, diff context/whitespace params,
   editor open endpoint
 - `tests/test_themes.py`: all themes have valid hex colors,
-  unique names, syntax maps; theme state get/set
+  unique names, syntax maps; Graphite first and the default when no theme is
+  saved; theme state get/set
 
 ## Linting
 
@@ -328,5 +352,6 @@ Session objects: `activeFile`, `diffMode`, `showFileTree`, `showReviewed`,
 ## Adding a Theme
 
 1. Add a `Theme(...)` instance in `themes/definitions.py`
-2. Add it to the `ALL_THEMES` list at the bottom
+2. Add it to the `ALL_THEMES` list at the bottom. The first entry (Graphite) is
+   the default when settings have no saved theme
 3. Run `pytest tests/test_themes.py` to verify colors and CSS generation

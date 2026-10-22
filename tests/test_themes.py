@@ -2,15 +2,16 @@ from __future__ import annotations
 
 from diffui.themes import (
     ALL_THEMES,
-    CATPPUCCIN_MOCHA,
+    DEFAULT_THEME,
     get_current_theme,
     set_current_theme,
 )
+from diffui.themes.definitions import GRAPHITE
 
 
 class TestThemeDefinitions:
     def test_all_themes_count(self):
-        assert len(ALL_THEMES) == 15
+        assert len(ALL_THEMES) == 16
 
     def test_all_themes_have_names(self):
         for theme in ALL_THEMES:
@@ -26,8 +27,8 @@ class TestThemeDefinitions:
         names = [t.name for t in ALL_THEMES]
         assert len(names) == len(set(names))
 
-    def test_catppuccin_is_first(self):
-        assert ALL_THEMES[0] is CATPPUCCIN_MOCHA
+    def test_graphite_is_first(self):
+        assert ALL_THEMES[0] is GRAPHITE
 
     def test_all_color_fields_are_hex(self):
         color_fields = [
@@ -74,5 +75,19 @@ class TestThemeState:
             new_theme = ALL_THEMES[-1]
             set_current_theme(new_theme)
             assert get_current_theme() is new_theme
+        finally:
+            set_current_theme(original)
+
+
+class TestDefaultTheme:
+    def test_no_saved_theme_uses_default_and_saved_theme_wins(self, monkeypatch):
+        from diffui.server import state
+
+        original = get_current_theme()
+        try:
+            monkeypatch.setattr(state, "load_settings", lambda: {})
+            assert state.AppState().theme is DEFAULT_THEME
+            monkeypatch.setattr(state, "load_settings", lambda: {"theme": "Dracula"})
+            assert state.AppState().theme.name == "Dracula"
         finally:
             set_current_theme(original)

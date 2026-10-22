@@ -2,14 +2,14 @@ import { h, render } from 'preact';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'preact/hooks';
 import htm from 'htm';
 import { TopBar } from './components/TopBar.js';
-import { FileTabs } from './components/FileTabs.js';
+import { FileHeader } from './components/FileHeader.js';
 import { DiffViewer } from './components/DiffViewer.js';
 import { SettingsPanel } from './components/SettingsPanel.js';
 import { SearchBar } from './components/SearchBar.js';
 import { ToastContainer, showToast } from './components/Toast.js';
 import { ShortcutOverlay } from './components/ShortcutOverlay.js';
 
-import { FileTree } from './components/FileTree.js';
+import { FileTree, treeOrder } from './components/FileTree.js';
 import { SplitDiffViewer } from './components/SplitDiffViewer.js';
 import { FullFileViewer } from './components/FullFileViewer.js';
 import { Minimap } from './components/Minimap.js';
@@ -45,7 +45,7 @@ function EmptyState({ files, visibleFiles, fileFilter, showReviewed }) {
     if (!showReviewed) return html`<div class="empty-state"><span class="empty-state-title">All files reviewed</span><span class="empty-state-hint">Press <kbd>a</kbd> to show reviewed files</span></div>`;
     return html`<div class="empty-state"><span class="empty-state-title">No files to show</span><span class="empty-state-hint">No files match the current view</span></div>`;
   }
-  return html`<div class="empty-state"><span class="empty-state-title">Select a file</span><span class="empty-state-hint">Choose a file from the tabs or explorer</span></div>`;
+  return html`<div class="empty-state"><span class="empty-state-title">Select a file</span><span class="empty-state-hint">Choose a file from the explorer</span></div>`;
 }
 
 async function safeFetch(url, opts) {
@@ -78,6 +78,8 @@ function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showFileTree, setShowFileTree] = useState(true);
+  const [groupMode, setGroupMode] = useState('dir');
+  const [showBlame, setShowBlame] = useState(false);
   const [showCommentsPanel, setShowCommentsPanel] = useState(false);
   const [showFileFilter, setShowFileFilter] = useState(false);
   const [fileFilter, setFileFilter] = useState('');
@@ -716,12 +718,18 @@ function App() {
       const lower = fileFilter.toLowerCase();
       filtered = filtered.filter(f => f.path.toLowerCase().includes(lower));
     }
-    if (sortByRisk) filtered = [...filtered].sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
-    return filtered;
-  }, [files, showReviewed, sortByRisk, fileFilter, showIgnored]);
+    return treeOrder(filtered, groupMode, sortByRisk);
+  }, [files, showReviewed, sortByRisk, fileFilter, showIgnored, groupMode]);
+  const previewing = showPreview && !!activeFile && isPreviewable(activeFile);
   const activeFileReviewed = useMemo(() => files.find(f => f.path === activeFile)?.reviewed, [files, activeFile]);
 
   visibleFilesRef.current = visibleFiles;
+
+  const activeFileOpenComments = useMemo(
+    () => (comments[activeFile] || []).filter(c => (c.status || 'open') !== 'resolved').length,
+    [comments, activeFile],
+  );
+  const activeStats = diffData && diffData.file_path === activeFile ? { adds: diffData.adds, dels: diffData.dels } : null;
 
   const reviewedCount = useMemo(() => files.filter(f => f.reviewed).length, [files]);
   const commentStats = useMemo(() => {
@@ -933,18 +941,10 @@ function App() {
       view=${view}
       fileCount=${files.length}
       reviewedCount=${reviewedCount}
-      showReviewed=${showReviewed}
       files=${files}
-      comments=${comments}
       openCommentCount=${commentStats.open}
       onViewChange=${handleViewChange}
       onRepoSwitch=${handleRepoSwitch}
-      diffMode=${diffMode}
-      onDiffModeChange=${setDiffMode}
-      showPreview=${showPreview}
-      onTogglePreview=${() => setShowPreview(v => !v)}
-      activeFile=${activeFile}
-      onToggleReviewed=${() => setShowReviewed(v => !v)}
       onOpenSettings=${() => setShowSettings(v => !v)}
       onToggleCommentsPanel=${() => setShowCommentsPanel(v => !v)}
       showCommentsPanel=${showCommentsPanel}
@@ -956,9 +956,8 @@ function App() {
       onSendToAgent=${handleSendToAgent}
       explainRunning=${explainRunning}
       onExplain=${handleExplain}
+      onShowShortcuts=${() => setShowShortcuts(v => !v)}
       wsConnected=${wsConnected}
-      ignoreWhitespace=${ignoreWhitespace}
-      onToggleWhitespace=${handleToggleWhitespace}
       keybindings=${keybindings}
       commentsPulse=${commentsPulse}
     />
@@ -987,16 +986,14 @@ function App() {
         fileCount=${visibleFiles.length}
       />
     `}
-    <${FileTabs}
-      files=${visibleFiles}
-      activeFile=${activeFile}
-      onSelect=${handleFileSelect}
-    />
     <div class="main-content">
       ${showFileTree && html`
         <${FileTree}
           files=${visibleFiles}
           activeFile=${activeFile}
+          groupMode=${groupMode}
+          sortByRisk=${sortByRisk}
+          onGroupModeChange=${setGroupMode}
           onSelect=${handleFileSelect}
           onClose=${() => setShowFileTree(false)}
           commentsPulse=${commentsPulse}
@@ -1010,65 +1007,73 @@ function App() {
           onBulkResolve=${handleBulkResolve}
         />
       `}
-      ${loading
-        ? html`<${DiffSkeleton} />`
-        : !activeFile
-          ? html`<${EmptyState} files=${files} visibleFiles=${visibleFiles} fileFilter=${fileFilter} showReviewed=${showReviewed} />`
-          : showPreview && isPreviewable(activeFile)
-            ? html`<${PreviewViewer}
-                containerRef=${diffRef}
-                filePath=${activeFile}
-                onToggleReview=${handleToggleReview}
-                reviewed=${activeFileReviewed}
-              />`
-            : diffMode === 'file'
-            ? html`<${FullFileViewer}
-                containerRef=${diffRef}
-                filePath=${activeFile}
-                view=${view}
-                onToggleReview=${handleToggleReview}
-                reviewed=${activeFileReviewed}
-              />`
-            : diffMode === 'split' && diffData
-              ? html`<${SplitDiffViewer}
-                  containerRef=${diffRef}
-                  data=${diffData}
-                  comments=${comments}
-                  onToggleReview=${handleToggleReview}
-                  onAddComment=${handleAddComment}
-                  onDeleteComment=${handleDeleteComment}
-                  onEditComment=${handleEditComment}
-                  onReplyComment=${handleReplyComment}
-                  onResolveComment=${handleResolveComment}
-                  onApplySuggestion=${handleApplySuggestion}
-                  reviewed=${activeFileReviewed}
-                />`
-              : diffData
-                ? html`<${DiffViewer}
-                    containerRef=${diffRef}
-                    data=${diffData}
-                    comments=${comments}
-                    searchTerm=${searchTerm}
-                    onToggleReview=${handleToggleReview}
-                    onAddComment=${handleAddComment}
-                    onDeleteComment=${handleDeleteComment}
-                    onEditComment=${handleEditComment}
-                    onReplyComment=${handleReplyComment}
-                    onResolveComment=${handleResolveComment}
-                    onApplySuggestion=${handleApplySuggestion}
-                    onOpenInEditor=${handleOpenInEditor}
-                    onExpandContext=${handleExpandContext}
-                    contextLines=${contextLines}
-                    onLineHover=${(num) => { hoveredLineRef.current = num; }}
-                    reviewed=${activeFileReviewed}
-                    collapseAll=${collapseAll}
-                    onBulkResolve=${() => handleBulkResolve(activeFile)}
-                  />`
-                : html`<${DiffSkeleton} />`
-      }
-      ${diffMode === 'unified' && diffData && html`
-        <${Minimap} diffData=${diffData} comments=${comments} containerRef=${diffRef} />
-      `}
+      <div class="diff-pane">
+        <${FileHeader}
+          activeFile=${activeFile}
+          stats=${activeStats}
+          reviewed=${activeFileReviewed}
+          diffMode=${diffMode}
+          onDiffModeChange=${setDiffMode}
+          ignoreWhitespace=${ignoreWhitespace}
+          onToggleWhitespace=${handleToggleWhitespace}
+          showReviewed=${showReviewed}
+          onToggleShowReviewed=${() => setShowReviewed(v => !v)}
+          showBlame=${showBlame}
+          onToggleBlame=${() => setShowBlame(v => !v)}
+          contextLines=${contextLines}
+          onExpandContext=${handleExpandContext}
+          openCommentCount=${activeFileOpenComments}
+          onBulkResolve=${() => handleBulkResolve(activeFile)}
+          onToggleReview=${handleToggleReview}
+          previewing=${previewing}
+          onTogglePreview=${() => setShowPreview(v => !v)}
+          keybindings=${keybindings}
+        />
+        <div class="diff-body">
+          ${loading
+            ? html`<${DiffSkeleton} />`
+            : !activeFile
+              ? html`<${EmptyState} files=${files} visibleFiles=${visibleFiles} fileFilter=${fileFilter} showReviewed=${showReviewed} />`
+              : previewing
+                ? html`<${PreviewViewer} containerRef=${diffRef} filePath=${activeFile} />`
+                : diffMode === 'file'
+                ? html`<${FullFileViewer} containerRef=${diffRef} filePath=${activeFile} view=${view} />`
+                : diffMode === 'split' && diffData
+                  ? html`<${SplitDiffViewer}
+                      containerRef=${diffRef}
+                      data=${diffData}
+                      comments=${comments}
+                      onAddComment=${handleAddComment}
+                      onDeleteComment=${handleDeleteComment}
+                      onEditComment=${handleEditComment}
+                      onReplyComment=${handleReplyComment}
+                      onResolveComment=${handleResolveComment}
+                      onApplySuggestion=${handleApplySuggestion}
+                    />`
+                  : diffData
+                    ? html`<${DiffViewer}
+                        containerRef=${diffRef}
+                        data=${diffData}
+                        comments=${comments}
+                        searchTerm=${searchTerm}
+                        onAddComment=${handleAddComment}
+                        onDeleteComment=${handleDeleteComment}
+                        onEditComment=${handleEditComment}
+                        onReplyComment=${handleReplyComment}
+                        onResolveComment=${handleResolveComment}
+                        onApplySuggestion=${handleApplySuggestion}
+                        onOpenInEditor=${handleOpenInEditor}
+                        onLineHover=${(num) => { hoveredLineRef.current = num; }}
+                        showBlame=${showBlame}
+                        collapseAll=${collapseAll}
+                      />`
+                    : html`<${DiffSkeleton} />`
+          }
+          ${diffMode === 'unified' && diffData && html`
+            <${Minimap} diffData=${diffData} comments=${comments} containerRef=${diffRef} />
+          `}
+        </div>
+      </div>
     </div>
     ${showSettings && html`
       <${SettingsPanel}
@@ -1094,25 +1099,6 @@ function App() {
         agentCli=${agentCliName}
       />
     `}
-    <div class="legend">
-      <div class="legend-items">
-        <span><kbd>${mod}+K</kbd> commands</span>
-        <span><kbd>?</kbd> shortcuts</span>
-        <span><kbd>←</kbd><kbd>→</kbd> prev/next file</span>
-        <span><kbd>j</kbd><kbd>k</kbd> next/prev hunk</span>
-        <span><kbd>r</kbd> toggle reviewed</span>
-        <span><kbd>a</kbd> show/hide reviewed</span>
-        <span><kbd>c</kbd> comment</span>
-        <span><kbd>Ctrl+F</kbd> search</span>
-        <span><kbd>y</kbd> copy path</span>
-      </div>
-      <div class="legend-fixed">
-        <span class=${'connection-dot' + (wsConnected ? ' connected' : '')}></span>
-        ${wsConnected ? 'Live' : 'Offline'}
-        <span class="risk-dot risk-medium" style="margin-left: 8px"></span> medium risk
-        <span class="risk-dot risk-high" style="margin-left: 8px"></span> high risk
-      </div>
-    </div>
     ${showCommandPalette && html`
       <${CommandPalette}
         commands=${paletteCommands}

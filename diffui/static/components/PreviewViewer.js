@@ -24,7 +24,7 @@ export function previewLabel(path) {
   return IMG_EXTS.has(getExt(path)) ? 'Preview Image' : 'Preview Markdown';
 }
 
-export function PreviewViewer({ filePath, onToggleReview, reviewed, containerRef }) {
+export function PreviewViewer({ filePath, containerRef }) {
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -45,15 +45,6 @@ export function PreviewViewer({ filePath, onToggleReview, reviewed, containerRef
 
   return html`
     <div class="diff-container preview-container" ref=${mergeRef(containerRef)}>
-      <div class="diff-file-header">
-        <div>
-          <span class="diff-file-path">${filePath}</span>
-          <span style="color: var(--fg-muted); margin-left: 12px">preview</span>
-        </div>
-        <button class=${'review-btn' + (reviewed ? ' reviewed' : '')} onClick=${onToggleReview}>
-          ${reviewed ? 'Mark unreviewed' : 'Mark reviewed'}
-        </button>
-      </div>
       ${preview?.type === 'image' ? html`
         <div class="preview-image-container">
           ${preview.exists

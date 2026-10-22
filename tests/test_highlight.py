@@ -104,6 +104,19 @@ class TestParseDiffToJson:
                 assert "index" in line
                 assert isinstance(line["index"], int)
 
+    def test_header_and_hunk_lines_are_not_emitted(self):
+        diff = "diff --git a/f.py b/f.py\nnew file mode 100644\n--- /dev/null\n+++ b/f.py\n@@ -0,0 +1 @@\n+x\n"
+        result = parse_diff_to_json(diff, "f.py", CATPPUCCIN_MOCHA)
+        assert [h["header"] for h in result["hunks"]] == ["@@ -0,0 +1 @@"]
+        assert [line["type"] for line in result["hunks"][0]["lines"]] == ["add"]
+        assert result["file_note"] == "New file"
+
+    def test_line_index_counts_skipped_header_and_hunk_lines(self):
+        diff = "diff --git a/f.py b/f.py\n--- a/f.py\n+++ b/f.py\n@@ -1 +1 @@\n-old\n+new\n@@ -9 +9 @@\n-a\n+b\n"
+        result = parse_diff_to_json(diff, "f.py", CATPPUCCIN_MOCHA)
+        by_text = {line["text"]: line["index"] for h in result["hunks"] for line in h["lines"]}
+        assert by_text == {"-old": 4, "+new": 5, "-a": 7, "+b": 8}
+
 
 class TestHighlightFileToJson:
     def test_empty_content(self):
@@ -111,14 +124,12 @@ class TestHighlightFileToJson:
 
         result = highlight_file_to_json("", "", "f.py", CATPPUCCIN_MOCHA)
         assert result["lines"] == []
-        assert result["total_lines"] == 0
 
     def test_basic_file(self):
         from diffui.server.highlight import highlight_file_to_json
 
         content = "line one\nline two\nline three\n"
         result = highlight_file_to_json(content, "", "f.txt", CATPPUCCIN_MOCHA)
-        assert result["total_lines"] == 3
         assert len(result["lines"]) == 3
         assert result["lines"][0]["num"] == 1
         assert result["lines"][2]["num"] == 3
@@ -131,4 +142,3 @@ class TestHighlightFileToJson:
         diff = "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1,2 @@\n old line\n+new line\n"
         result = highlight_file_to_json(content, diff, "f.txt", CATPPUCCIN_MOCHA)
         assert result["lines"][1]["type"] == "add"
-        assert result["adds"] == 1

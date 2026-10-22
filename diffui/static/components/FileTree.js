@@ -45,79 +45,91 @@ const GROUP_MODES = [
 
 const GROUPERS = { dir: groupByDir, type: groupByType, status: groupByStatus };
 
+function groupEntries(files, groupMode) {
+  const groups = (GROUPERS[groupMode] || groupByDir)(files);
+  return Object.keys(groups).sort().map(name => [name, groups[name]]);
+}
+
+export function treeOrder(files, groupMode, sortByRisk) {
+  if (sortByRisk) return [...files].sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
+  return groupEntries(files, groupMode).flatMap(([, group]) => group);
+}
+
+const RISK_TITLES = { medium: 'Medium risk', high: 'High risk' };
+
+function TreeFiles({ files, activeFile, onSelect, commentsPulse }) {
+  return files.map(f => {
+    const hasComments = (f.comment_count || 0) > 0;
+    const pulse = commentsPulse && hasComments && f.path !== activeFile;
+    return html`
+      <div
+        class=${'tree-file' + (f.path === activeFile ? ' tree-active' : '') + (f.reviewed ? ' tree-reviewed' : '') + (pulse ? ' pulse-notify' : '')}
+        role="treeitem"
+        tabindex="0"
+        onClick=${() => onSelect(f.path)}
+        onKeyDown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(f.path); } }}
+        title=${f.path}
+      >
+        ${f.risk_level && f.risk_level !== 'low' && html`<span class=${'risk-dot risk-' + f.risk_level} title=${RISK_TITLES[f.risk_level]}></span>`}
+        ${f.reviewed ? '✓ ' : ''}${f.short_name}
+        ${hasComments && html`<span class="tree-comment-count">${f.comment_count}</span>`}
+      </div>
+    `;
+  });
+}
+
 function TreeDir({ name, files, activeFile, onSelect, commentsPulse }) {
   const [collapsed, setCollapsed] = useState(false);
-  const commentCount = files.reduce((s, f) => s + (f.comment_count || 0), 0);
-  const unreviewed = files.filter(f => !f.reviewed).length;
 
   return html`
     <div class="tree-dir">
       <div class="tree-dir-header" onClick=${() => setCollapsed(v => !v)}>
         <span class="tree-dir-arrow">${collapsed ? '▶' : '▼'}</span>
-        <span class="tree-dir-name">${name}</span>
+        <span class="tree-dir-name" title=${name}>${name}</span>
         <span class="tree-dir-count">${files.length}</span>
-        ${unreviewed > 0 && html`<span class="tree-badge">${unreviewed}</span>`}
-        ${commentCount > 0 && html`<span class="tree-badge comment">${commentCount}</span>`}
       </div>
       ${!collapsed && html`
         <div class="tree-dir-files">
-          ${files.map(f => {
-            const hasComments = (f.comment_count || 0) > 0;
-            const pulse = commentsPulse && hasComments && f.path !== activeFile;
-            return html`
-            <div
-              class=${'tree-file' + (f.path === activeFile ? ' tree-active' : '') + (f.reviewed ? ' tree-reviewed' : '') + (pulse ? ' pulse-notify' : '')}
-              role="treeitem"
-              tabindex="0"
-              onClick=${() => onSelect(f.path)}
-              onKeyDown=${(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(f.path); } }}
-              title=${f.path}
-            >
-              ${f.risk_level && f.risk_level !== 'low' && html`<span class=${'risk-dot risk-' + f.risk_level}></span>`}
-              ${f.reviewed ? '✓ ' : ''}${f.short_name}
-              ${hasComments && html`<span class="tree-comment-count">${f.comment_count}</span>`}
-            </div>
-          `;
-          })}
+          <${TreeFiles} files=${files} activeFile=${activeFile} onSelect=${onSelect} commentsPulse=${commentsPulse} />
         </div>
       `}
     </div>
   `;
 }
 
-export function FileTree({ files, activeFile, onSelect, onClose, commentsPulse }) {
-  const [groupMode, setGroupMode] = useState('dir');
+export function FileTree({ files, activeFile, groupMode, sortByRisk, onGroupModeChange, onSelect, onClose, commentsPulse }) {
   const { ref: treeRef, size: width, onResizeStart } = useResize(260, 180, 500);
-  const grouper = GROUPERS[groupMode] || groupByDir;
-  const groups = grouper(files);
-  const groupNames = Object.keys(groups).sort();
 
   return html`
     <div class="file-tree" ref=${treeRef} style="width: ${width}px">
       <div class="file-tree-header">
         <span class="file-tree-title">Files</span>
-        <div class="tree-group-toggle">
-          ${GROUP_MODES.map(m => html`
-            <button
-              class=${'tree-group-btn' + (groupMode === m.value ? ' active' : '')}
-              onClick=${() => setGroupMode(m.value)}
-              title=${m.title}
-            >${m.label}</button>
-          `)}
-        </div>
+        ${!sortByRisk && html`
+          <div class="segmented segmented-sm">
+            ${GROUP_MODES.map(m => html`
+              <button
+                class=${'segmented-btn' + (groupMode === m.value ? ' active' : '')}
+                onClick=${() => onGroupModeChange(m.value)}
+                title=${m.title}
+              >${m.label}</button>
+            `)}
+          </div>
+        `}
         <button class="file-tree-close" onClick=${onClose} title="Close explorer">✕</button>
       </div>
       <div class="file-tree-content">
-        ${groupNames.map(name => html`
-          <${TreeDir}
-            key=${name}
-            name=${name}
-            files=${groups[name]}
-            activeFile=${activeFile}
-            onSelect=${onSelect}
-            commentsPulse=${commentsPulse}
-          />
-        `)}
+        ${sortByRisk
+          ? html`<${TreeFiles} files=${files} activeFile=${activeFile} onSelect=${onSelect} commentsPulse=${commentsPulse} />`
+          : groupEntries(files, groupMode).map(([name, group]) => html`
+            <${TreeDir}
+              key=${name}
+              name=${name}
+              files=${group}
+              activeFile=${activeFile}
+              onSelect=${onSelect}
+              commentsPulse=${commentsPulse}
+            />
+          `)}
       </div>
       <div class="file-tree-resize" onMouseDown=${onResizeStart}></div>
     </div>

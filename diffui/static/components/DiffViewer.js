@@ -64,7 +64,6 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor,
     add: 'add',
     remove: 'remove',
     context: '',
-    hunk: 'hunk-line',
     meta: 'meta',
   }[line.type] || '';
 
@@ -104,7 +103,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor,
         <span class="gutter-sep">│</span>
       </div>
       <div class="diff-code" dangerouslySetInnerHTML=${{ __html: lineHtml }}></div>
-      ${line.type !== 'meta' && line.type !== 'hunk' && html`
+      ${line.type !== 'meta' && html`
         <${LineActions}
           onComment=${() => onRightClick(line)}
           onOpenInEditor=${onOpenInEditor && line.new_num ? () => onCtrlClick(parseInt(line.new_num) || 1) : null}
@@ -190,9 +189,8 @@ function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onOpenInEdi
   `;
 }
 
-export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, onOpenInEditor, onExpandContext, contextLines, onLineHover, reviewed, containerRef, collapseAll, onBulkResolve }) {
+export function DiffViewer({ data, comments, searchTerm, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, onOpenInEditor, onLineHover, showBlame, containerRef, collapseAll }) {
   const [commentingLine, setCommentingLine] = useState(null);
-  const [showBlame, setShowBlame] = useState(false);
   const [blameData, setBlameData] = useState(null);
   const blameCache = useRef(new Map());
   const hoveredLineRef = useRef(null);
@@ -246,8 +244,6 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
     return html`<div class="empty-state"><span class="empty-state-title">No diff data</span></div>`;
   }
 
-  const fileCommentCount = (comments[data.file_path] || []).filter(c => (c.status || 'open') !== 'resolved').length;
-
   return html`
     <div class="diff-container" ref=${mergeRef(containerRef, localContainerRef)}>
       ${selMenu && html`
@@ -256,38 +252,9 @@ export function DiffViewer({ data, comments, searchTerm, onToggleReview, onAddCo
           style=${{ left: selMenu.x + 'px', top: selMenu.y + 'px' }}
           onMouseDown=${(e) => e.preventDefault()}
           onClick=${handleCommentSelection}
-        >💬 Comment</button>
+        >Comment</button>
       `}
-      <div class="diff-file-header">
-        <div>
-          <span class="diff-file-path">${data.file_path}</span>
-          <span class="diff-stat-add">+${data.adds}</span>
-          <span class="diff-stat-del">-${data.dels}</span>
-        </div>
-        <div class="diff-header-actions">
-          <button class=${'expand-ctx-btn' + (showBlame ? ' active' : '')} onClick=${() => setShowBlame(v => !v)} title="Toggle git blame annotations">
-            ${showBlame ? 'Hide blame' : 'Blame'}
-          </button>
-          ${onExpandContext && contextLines > 3 && html`
-            <button class="expand-ctx-btn" onClick=${() => onExpandContext('collapse')} title="Show fewer context lines around changes">
-              Less context
-            </button>
-          `}
-          ${onExpandContext && contextLines < 9999 && html`
-            <button class="expand-ctx-btn" onClick=${() => onExpandContext('expand')} title="Show more context lines around changes">
-              More context
-            </button>
-          `}
-          ${onBulkResolve && fileCommentCount > 0 && html`
-            <button class="expand-ctx-btn" onClick=${onBulkResolve} title="Resolve all open comments in this file">
-              Resolve all (${fileCommentCount})
-            </button>
-          `}
-          <button class=${'review-btn' + (reviewed ? ' reviewed' : '')} onClick=${onToggleReview} title="Toggle reviewed status (r)">
-            ${reviewed ? 'Mark unreviewed' : 'Mark reviewed'}
-          </button>
-        </div>
-      </div>
+      ${data.file_note && html`<div class="diff-file-note">${data.file_note}</div>`}
       ${data.hunks.map((hunk, i) => html`
         <${Hunk}
           key=${i}

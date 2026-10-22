@@ -92,8 +92,8 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
             onKeyDown=${handleKeyDown(handleEditSubmit)}
           >${comment.comment}</textarea>
           <div class="comment-box-actions">
-            <button class="comment-submit-btn" onClick=${handleEditSubmit}>Save</button>
-            <button class="comment-cancel-btn" onClick=${() => setEditing(false)}>Cancel</button>
+            <button class="btn btn-primary" onClick=${handleEditSubmit}>Save</button>
+            <button class="btn" onClick=${() => setEditing(false)}>Cancel</button>
           </div>
         </div>
       ` : html`
@@ -150,8 +150,8 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
             onKeyDown=${handleKeyDown(handleReplySubmit)}
           ></textarea>
           <div class="comment-box-actions">
-            <button class="comment-submit-btn" onClick=${handleReplySubmit}>Reply</button>
-            <button class="comment-cancel-btn" onClick=${() => setShowReply(false)}>Cancel</button>
+            <button class="btn btn-primary" onClick=${handleReplySubmit}>Reply</button>
+            <button class="btn" onClick=${() => setShowReply(false)}>Cancel</button>
           </div>
         </div>
       `}

@@ -6,6 +6,7 @@ from pygments import lex
 
 from diffui.diff import (
     classify_line,
+    file_change_note,
     get_lexer,
     pair_diff_lines,
     parse_line_numbers,
@@ -93,7 +94,7 @@ def _apply_word_highlights(code_html: str, ranges: list[tuple[int, int]], code_p
 def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme) -> dict:
     lines = diff_text.splitlines()
     if not lines:
-        return {"file_path": file_path, "adds": 0, "dels": 0, "hunks": []}
+        return {"file_path": file_path, "adds": 0, "dels": 0, "file_note": "", "hunks": []}
 
     adds, dels = diff_stat(diff_text)
     numbers = parse_line_numbers(diff_text)
@@ -102,13 +103,24 @@ def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme) -> dict:
     lexer = get_lexer(file_path)
 
     result_hunks: list[dict] = []
+    file_note = ""
     global_idx = 0
 
     for hunk_header, hunk_lines in hunks:
+        # Comments anchor on line index, so the header and `@@` lines are skipped
+        # but still counted.
+        if not hunk_header.startswith("@@"):
+            file_note = file_change_note(hunk_lines)
+            global_idx += len(hunk_lines)
+            continue
+
         result_lines: list[dict] = []
         for line in hunk_lines:
             i = global_idx
+            global_idx += 1
             line_type = classify_line(line)
+            if line_type == "hunk":
+                continue
             old_num, new_num = numbers[i] if i < len(numbers) else (None, None)
 
             if line_type in ("add", "remove", "context"):
@@ -119,8 +131,6 @@ def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme) -> dict:
                 if i in word_highlights:
                     code_html = _apply_word_highlights(code_html, word_highlights[i], code)
                 line_html = f'<span class="diff-prefix">{prefix_html}</span>{code_html}'
-            elif line_type == "hunk":
-                line_html = f'<span class="hunk-text">{html.escape(line)}</span>'
             else:
                 line_html = html.escape(line)
 
@@ -134,16 +144,15 @@ def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme) -> dict:
                     "text": line,
                 }
             )
-            global_idx += 1
 
         result_hunks.append({"header": hunk_header[:80], "lines": result_lines})
 
-    return {"file_path": file_path, "adds": adds, "dels": dels, "hunks": result_hunks}
+    return {"file_path": file_path, "adds": adds, "dels": dels, "file_note": file_note, "hunks": result_hunks}
 
 
 def highlight_file_to_json(content: str, diff_text: str, file_path: str, theme: Theme) -> dict:
     if not content:
-        return {"file_path": file_path, "lines": [], "total_lines": 0, "adds": 0, "dels": 0}
+        return {"file_path": file_path, "lines": []}
 
     lexer = get_lexer(file_path)
     file_lines = content.splitlines()
@@ -159,7 +168,6 @@ def highlight_file_to_json(content: str, diff_text: str, file_path: str, theme: 
                 if new_num and line_type == "add":
                     changed_lines[int(new_num)] = "add"
 
-    adds, dels = diff_stat(diff_text) if diff_text else (0, 0)
     result_lines: list[dict] = []
     for i, line in enumerate(file_lines):
         line_num = i + 1
@@ -173,10 +181,4 @@ def highlight_file_to_json(content: str, diff_text: str, file_path: str, theme: 
             }
         )
 
-    return {
-        "file_path": file_path,
-        "lines": result_lines,
-        "total_lines": len(file_lines),
-        "adds": adds,
-        "dels": dels,
-    }
+    return {"file_path": file_path, "lines": result_lines}
