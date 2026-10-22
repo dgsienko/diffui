@@ -518,8 +518,7 @@ function App() {
     setShowAgentConfirm(data);
   }, []);
 
-  const handleConfirmAgent = useCallback(async () => {
-    const herdrAgent = showAgentConfirm?.herdr_agent;
+  const handleConfirmAgent = useCallback(async (herdrAgent) => {
     setShowAgentConfirm(null);
     if (herdrAgent) {
       const r = await safeFetch('/api/agent/paste', { method: 'POST' });
@@ -533,7 +532,7 @@ function App() {
     setAgentCliName(data.agent || 'agent');
     setAgentRunning(true);
     setShowAgentTerminal(true);
-  }, [showAgentConfirm]);
+  }, []);
 
   const handleCloseTerminal = useCallback(() => {
     setShowAgentTerminal(false);

@@ -24,7 +24,7 @@ export function AgentConfirmDialog({ agentCli, herdrAgent, commentCount, onConfi
         </div>
         <div class="agent-confirm-actions">
           <button class="comment-cancel-btn" onClick=${onCancel}>Cancel</button>
-          <button class="comment-submit-btn" onClick=${onConfirm}>${herdrAgent ? 'Paste into pane' : 'Start agent'}</button>
+          <button class="comment-submit-btn" onClick=${() => onConfirm(herdrAgent)}>${herdrAgent ? 'Paste into pane' : 'Start agent'}</button>
         </div>
       </div>
     </div>

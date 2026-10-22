@@ -56,38 +56,24 @@ def paste_to_agent(text: str, repo_root: Path) -> dict:
     return {"ok": True, "agent": agent["agent"]}
 
 
-def report_status() -> None:
+def _report_metadata(*flags: str) -> None:
     workspace = _workspace()
-    if not workspace:
-        return
+    if workspace:
+        _herdr("workspace", "report-metadata", workspace, "--source", _SOURCE, *flags)
+
+
+def report_status() -> None:
     open_count = sum(1 for cs in app_state.comments.values() for c in cs if is_comment_open(c))
     files = set(app_state.all_files) | set(app_state.working_files)
-    total = len(files)
     reviewed = sum(1 for f in files if f in app_state.reviewed)
-    _herdr(
-        "workspace",
-        "report-metadata",
-        workspace,
-        "--source",
-        _SOURCE,
+    # An empty token value clears it, which hides it from the sidebar row.
+    _report_metadata(
         "--token",
         f"comments={open_count} open" if open_count else "comments=",
         "--token",
-        f"reviewed={reviewed}/{total} reviewed" if total else "reviewed=",
+        f"reviewed={reviewed}/{len(files)} reviewed" if files else "reviewed=",
     )
 
 
 def clear_status() -> None:
-    workspace = _workspace()
-    if workspace:
-        _herdr(
-            "workspace",
-            "report-metadata",
-            workspace,
-            "--source",
-            _SOURCE,
-            "--clear-token",
-            "comments",
-            "--clear-token",
-            "reviewed",
-        )
+    _report_metadata("--clear-token", "comments", "--clear-token", "reviewed")

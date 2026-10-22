@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter
 
 from diffui.git_utils import get_file_mtime, repo_relative, save_reviewed
-from diffui.server.herdr import find_agent, paste_to_agent, report_status
+from diffui.server.herdr import find_agent, paste_to_agent
 from diffui.server.state import app_state
 
 _agent_process: subprocess.Popen | None = None
@@ -56,11 +56,9 @@ def toggle_reviewed(path: str):
     if path in app_state.reviewed:
         del app_state.reviewed[path]
         save_reviewed(app_state.reviewed)
-        report_status()
         return {"reviewed": False}
     app_state.reviewed[path] = get_file_mtime(path)
     save_reviewed(app_state.reviewed)
-    report_status()
     return {"reviewed": True}
 
 
