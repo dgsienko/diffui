@@ -56,6 +56,20 @@ def _number(line: dict) -> str:
     return str(line["new_num"] or line["old_num"])
 
 
+_NOT_IN_DIFF = "Not in this diff · o opens in browser"
+
+
+def _file_as_diff(data: dict) -> dict:
+    """A whole file from `/api/file` in the shape of a diff with one hunk of context lines."""
+    lines = [
+        {"index": i, "type": "context", "old_num": None, "new_num": ln["num"], "text": " " + ln["text"]}
+        for i, ln in enumerate(data["lines"])
+    ]
+    if not lines:
+        return {"file_note": f"{_NOT_IN_DIFF}. Empty or binary file.", "hunks": []}
+    return {"file_note": _NOT_IN_DIFF, "hunks": [{"header": "", "lines": lines}]}
+
+
 class ContextFooter(Footer):
     """The footer, with the range hint naming how many lines `c` will comment on."""
 
@@ -116,6 +130,8 @@ class DiffuiApp(App[None]):
         self.files: list[dict] = []
         self.comments: dict[str, list[dict]] = {}
         self.active: str | None = None
+        # The active file is outside the diff and shown read-only.
+        self.browsing = False
         self.order = "tree"
         self.view = "all"
         self.diff_theme = DEFAULT_THEME
@@ -141,6 +157,8 @@ class DiffuiApp(App[None]):
     def check_action(self, action: str, parameters: tuple) -> bool | None:
         if isinstance(self.screen, ModalScreen):
             return action == "quit"
+        if action in ("review", "hunk"):
+            return not self.browsing
         views = self.query(DiffView)
         context = views.first().context if views else "none"
         if action in ("comment", "resolve") and parameters:
@@ -216,7 +234,8 @@ class DiffuiApp(App[None]):
         """Reloads the list. Returns True when the active file changed and its diff was loaded."""
         self.files = await self.client.files(self.order, self.view)
         paths = [f["path"] for f in self.files]
-        opening = self.active not in paths
+        self.browsing = self.browsing and self.active not in paths
+        opening = self.active not in paths and not self.browsing
         if opening:
             self.active = await self.client.next_unreviewed(self.order, self.view) or (paths[0] if paths else None)
         self.query_one(FileList).set_files(self.files, self.active, flat=self.order == "risk")
@@ -241,6 +260,8 @@ class DiffuiApp(App[None]):
         if self.view not in {v for _k, _n, v in _SCOPES}:
             bar.append(f" commit {self.view[:8]} ", style="reverse")
         bar.append(f"   {reviewed}/{len(self.files)} reviewed   {open_comments} open comments", style="dim")
+        if self.browsing:
+            bar.append(f"   {_NOT_IN_DIFF}", style="bold")
         if self.order == "risk":
             bar.append("   sorted by risk", style="dim")
         if self.query_one(DiffView).split_active:
@@ -253,17 +274,23 @@ class DiffuiApp(App[None]):
     async def _load_diff(self, path: str, line: int | None = None) -> None:
         self._diff_seq += 1
         seq = self._diff_seq
-        data = await self.client.diff(path, self.view)
+        browsing = self.browsing
+        if browsing:
+            data = _file_as_diff(await self.client.file(path, self.view))
+        else:
+            data = await self.client.diff(path, self.view)
         if seq == self._diff_seq and path == self.active:
             view = self.query_one(DiffView)
-            view.set_diff(path, data, self.comments.get(path, []))
+            view.set_diff(path, data, [] if browsing else self.comments.get(path, []), readonly=browsing)
             if line is not None and not view.goto_line(line):
                 self.notify(f"Line {line} is outside the diff, showing the nearest line", timeout=3)
             self._update_find()
 
     async def _open_file(self, path: str, line: int | None = None) -> None:
         self.active = path
+        self.browsing = path not in {f["path"] for f in self.files}
         self.query_one(FileList).set_active(path)
+        self._update_bar()
         await self._safely(self._load_diff(path, line))
 
     def on_file_list_picked(self, event: FileList.Picked) -> None:
@@ -309,7 +336,7 @@ class DiffuiApp(App[None]):
             await self._set_view(view)
 
     async def _set_view(self, view: str) -> None:
-        self.view, self.active = view, None
+        self.view, self.active, self.browsing = view, None, False
         await self._safely(self._refresh_files())
 
     async def action_commits(self) -> None:
@@ -370,6 +397,9 @@ class DiffuiApp(App[None]):
         view = self.query_one(DiffView)
         row = view.current
         if row is None or not self.active:
+            return
+        if view.readonly:
+            self.notify("Not in this diff, so there is nothing to comment on", timeout=2)
             return
         path = self.active
         lines = view.selected_lines() or ([view.target(row)] if row.kind == "line" else [])

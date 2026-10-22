@@ -14,6 +14,7 @@ no build step required, plus a Textual terminal client of the same API.
 - Git operations via `subprocess` (no gitpython dependency)
 - PTY-based agent process management (`pty` + `select` stdlib)
 - Textual + httpx for the terminal UI (`diffui --tui`)
+- fff-search (Rust file finder) for whole-repo search
 - Installed globally via `pipx install -e .`
 
 ## Architecture
@@ -38,7 +39,8 @@ diffui/
 │   │                       #   orchestration (thread-safe process management)
 │   ├── routes_agent_terminal.py # PTY-based interactive agent terminal,
 │   │                       #   WebSocket streaming, idle detection
-│   ├── routes_search.py    # /api/search: file names and content in a view
+│   ├── fff_index.py        # Resident fff index of the active repo behind /api/search
+│   ├── routes_search.py    # /api/search: file names and content, in a view or the whole repo
 │   ├── routes_settings.py  # Settings, editor open, session persistence
 │   ├── models.py       # Pydantic request models for all endpoints
 │   ├── state.py        # AppState singleton: shared server state
@@ -53,7 +55,7 @@ diffui/
 │   ├── split.py        # Strip for one split line row
 │   ├── style.py        # Style cache, tints, code segments with find highlights
 │   ├── find.py         # Find (matches over rows) and the FindBar widget
-│   ├── search.py       # SearchScreen: names and content across the scope
+│   ├── search.py       # SearchScreen: names and content, Changed or All files
 │   ├── filelist.py     # FileList: tree or risk-ordered files
 │   └── screens.py      # Help, comment composer, agent prompt and commit picker
 ├── static/             # Preact frontend (no build step, ESM imports via importmap)
@@ -184,11 +186,30 @@ diffui/
   Limits: herdr flips to `working` a moment after the agent starts writing, and
   the poll adds up to a second, so those first writes sit in the base tree and
   do not show. A turn that changes nothing still replaces the previous base.
-- Search: `GET /api/search?q=&view=` returns `files` (names matching `q` as a
+- Search: `GET /api/search?q=&view=&scope=` returns `files` (names matching `q` as a
   substring or in-order letters, best first), `hits` (`path`, `line`, `text`,
   read from the working tree, case-insensitive, at most `MAX_HITS` = 200) and
   `truncated`. It covers the files `view_files(view)` lists, minus
-  `.diffuiignore` matches, and skips binary and over 1 MB files.
+  `.diffuiignore` matches, and skips binary and over 1 MB files. Names also match
+  fuzzily through fff, so a typo still finds its file, in the order fff ranks them.
+  `scope=all` searches the whole repo through fff, and `files` are then
+  `{path, changed}` and each hit carries `changed`, whether `view` lists the file.
+  `scope=changed`, the default, keeps the plain shape. fff skips `.gitignore`d
+  and binary files and does not apply `.diffuiignore`.
+- fff index: `fff_index.finder()` hands out one `FileFinder` for the active repo
+  under a lock, since sync routes run in a threadpool. It is built on the first
+  search that needs it, never at startup, with `watch=False`, because `events.py`
+  already watches the tree. `_apply_state_updates` calls `mark_stale()` on
+  `files_changed` and `git_changed`, and the next `finder()` runs `scan_files()`
+  before it hands the index out, so an idle repo costs no rescans. The index is
+  dropped when the repo changes (`switch_repo`, or a different `get_repo_root()`)
+  and closed in the lifespan shutdown. A write is missed by a search that arrives
+  inside the 400 ms debounce before the event, and the next keystroke finds it.
+  A lowercase query matches case-insensitively under fff's smart case, so
+  `/api/search` lowercases it, and `multi_grep` takes it as plain text where
+  `grep` would read a `*.py` word as a path filter. fff's fuzzy name match
+  returns something for almost any query, so `_fuzzy_names` keeps only scores
+  within 75% of the best and above 8 per character of the longest word.
 - Markdown is sanitized: `renderMd` in `lib/markdown.js` runs marked's output
   through an allowlist of tags, attributes and URL schemes before it reaches
   `dangerouslySetInnerHTML`. marked emits raw HTML, and comment bodies, agent
@@ -303,8 +324,18 @@ diffui/
   `check_action` enables them only while matches show, so `n` is next thread
   otherwise. Search is `SearchScreen`, which calls `/api/search` 150 ms after the
   last keystroke. A hit opens the file and `DiffView.goto_line` moves to the
-  nearest new-side line when the diff does not show the hit's line.
-- Hover and drag state live in `DiffView` (`hover`, `anchor`). Hover changes
+  nearest new-side line when the diff does not show the hit's line. `tab` in the
+  overlay switches `scope` between `changed` and `all`.
+- Files outside the diff: a result whose path is not in the view's file list
+  sets `DiffuiApp.browsing`, and `_load_diff` takes the file from `/api/file`
+  (its `text` per line, since `html` is for the web UI) and wraps it as one hunk
+  of context lines. `DiffView.readonly` then has `context` return `readonly`,
+  which matches no `c`, `x` or `v` binding, and turns off hover, gutter presses,
+  range selection and split. `check_action` hides Reviewed and Hunks.
+  `_refresh_files` leaves a browsed file open on file events and stops browsing
+  once the file joins the diff. A scope change, or `left` / `right`, returns to
+  the diff's files.
+- Hover and drag state live in `DiffView` (`hover`, `range_start`). Hover changes
   refresh only the affected rows. A press on the number column captures the
   mouse so the drag keeps tracking outside the widget, and the `Click` that
   follows the release is swallowed so it cannot open a second composer.
@@ -415,7 +446,9 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
   whitespace, pydantic validation, font/wrap/keybinding settings,
   _build_agent_context, _process_status, explain view with temp files,
   repo switch, working files view, diff context/whitespace params,
-  editor open endpoint, `/api/search` (names, content, view scope, cap),
+  editor open endpoint, `/api/search` (names, content, view scope, cap, typo
+  names, whole-repo scope with `changed` marks, a file written after the first
+  search),
   `TurnTracker` edges, and last-turn (start snapshot through `poll_once`, only
   later changes listed, the real index untouched)
 - `tests/test_tui.py`: runs the real `DiffuiApp` under `App.run_test()` against
@@ -424,7 +457,7 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
   advancing to the next unreviewed file, an external `comments.json` write
   refreshing the view, `_order_files` for tree and risk order, the file list
   right of the diff, scope keys, search opening a file at a hit, find stepping
-  matches, and split view pairing lines and storing comments from either side. Tests drive
+  matches, search over all files opening a file outside the diff read-only, and split view pairing lines and storing comments from either side. Tests drive
   the app with `asyncio.run` and poll with `until()`, since the server reaches
   the view through the watcher and SSE.
 - `tests/test_themes.py`: all themes have valid hex colors,

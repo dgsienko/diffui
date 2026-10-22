@@ -39,6 +39,9 @@ class DiffView(ScrollView, can_focus=True):
         Binding("shift+down", "extend(1)", show=False),
         Binding("shift+up", "extend(-1)", show=False),
         Binding("tab", "swap_side", show=False),
+        # ScrollView binds the arrows to horizontal scroll, which swallows them once a scrollbar shows.
+        Binding("left", "app.file(-1)", show=False),
+        Binding("right", "app.file(1)", show=False),
     ]
 
     class Activated(Message):
@@ -49,7 +52,7 @@ class DiffView(ScrollView, can_focus=True):
         self.palette: Theme = DEFAULT_THEME
         self.rows: list[Row] = []
         self.cursor = 0
-        self.anchor: int | None = None
+        self.range_start: int | None = None
         self.hover: int | None = None
         # Split view: which side of a remove and add pair the cursor, the pointer and a range follow.
         self.side: str | None = None
@@ -57,6 +60,8 @@ class DiffView(ScrollView, can_focus=True):
         self.split_wanted = False
         self.find = Find()
         self.path = ""
+        # A file shown whole because it is not in the diff: nothing to comment on, no split.
+        self.readonly = False
         self.lexer = None
         self.digits = 1
         self._split = False
@@ -77,7 +82,7 @@ class DiffView(ScrollView, can_focus=True):
 
     @property
     def split_active(self) -> bool:
-        return self.split_wanted and self.size.width >= SPLIT_MIN_WIDTH
+        return self.split_wanted and not self.readonly and self.size.width >= SPLIT_MIN_WIDTH
 
     @property
     def number_width(self) -> int:
@@ -87,9 +92,9 @@ class DiffView(ScrollView, can_focus=True):
         left = (self.size.width - 2) // 2
         return left, self.size.width - 2 - left
 
-    def set_diff(self, path: str, data: dict, comments: list[dict]) -> None:
-        same_file = path == self.path
-        self.path, self._data = path, data
+    def set_diff(self, path: str, data: dict, comments: list[dict], readonly: bool = False) -> None:
+        same_file = path == self.path and readonly == self.readonly
+        self.path, self._data, self.readonly = path, data, readonly
         self.lexer = get_lexer(path)
         lines = [ln for h in data.get("hunks", []) for ln in h["lines"]]
         self.digits = max((len(str(n)) for ln in lines for n in (ln["old_num"], ln["new_num"]) if n), default=1)
@@ -97,7 +102,7 @@ class DiffView(ScrollView, can_focus=True):
         self._code_w = max((len(ln["text"]) for ln in lines), default=0)
         self._nums = {ln["index"]: str(ln["new_num"] or ln["old_num"] or "") for ln in lines}
         if not same_file:
-            self.anchor = None
+            self.range_start = None
         self._rebuild(comments, keep=same_file)
 
     def set_comments(self, comments: list[dict]) -> None:
@@ -114,12 +119,16 @@ class DiffView(ScrollView, can_focus=True):
 
     def _rebuild(self, comments: list[dict], keep: bool) -> None:
         old_key = self.current.key() if keep and self.current else None
-        anchor_key = self.rows[self.anchor].key() if self.anchor is not None and self.anchor < len(self.rows) else None
+        range_start_key = (
+            self.rows[self.range_start].key()
+            if self.range_start is not None and self.range_start < len(self.rows)
+            else None
+        )
         old_cursor, old_scroll = self.cursor, self.scroll_offset.y
         found = self.find.identity(self.rows)
         self._comments, self._split = comments, self.split_active
         self.rows = build_rows(self._data, comments, self._split)
-        self.anchor = self._row_for(anchor_key)
+        self.range_start = self._row_for(range_start_key)
         self.hover = None
         self._wrap_w = 0
         self._layout()
@@ -171,6 +180,8 @@ class DiffView(ScrollView, can_focus=True):
 
     def toggle_split(self) -> str:
         """Flips unified and split. Returns a notice when the pane is too narrow to show split."""
+        if self.readonly:
+            return "Split view is for diff files"
         self.split_wanted = not self.split_wanted
         self.side = None
         if self.split_active != self._split:
@@ -212,8 +223,8 @@ class DiffView(ScrollView, can_focus=True):
         self._set_cursor(len(self.rows) - 1 if end else 0)
 
     def action_extend(self, delta: int) -> None:
-        if self.anchor is None and self.current and self.current.kind == "line":
-            self.anchor = self.cursor
+        if self.range_start is None and not self.readonly and self.current and self.current.kind == "line":
+            self.range_start = self.cursor
         self._set_cursor(self.cursor + delta, side=self.side)
 
     def action_swap_side(self) -> None:
@@ -237,32 +248,36 @@ class DiffView(ScrollView, can_focus=True):
 
     def start_selection(self) -> None:
         if self.current and self.current.kind == "line":
-            self.anchor = self.cursor
+            self.range_start = self.cursor
             self.refresh()
             self._sync_hints()
 
     def clear_selection(self) -> None:
-        if self.anchor is not None:
-            self.anchor = None
+        if self.range_start is not None:
+            self.range_start = None
             self.refresh()
             self._sync_hints()
 
     def is_selected(self, index: int) -> bool:
-        return self.anchor is not None and min(self.anchor, self.cursor) <= index <= max(self.anchor, self.cursor)
+        return self.range_start is not None and min(self.range_start, self.cursor) <= index <= max(
+            self.range_start, self.cursor
+        )
 
     def selected_lines(self) -> list[dict]:
-        """The diff lines between the anchor and the cursor, or none without a selection."""
-        if self.anchor is None:
+        """The diff lines between the range start and the cursor, or none without a selection."""
+        if self.range_start is None:
             return []
-        lo, hi = sorted((self.anchor, self.cursor))
+        lo, hi = sorted((self.range_start, self.cursor))
         lines = [self.target(r) for r in self.rows[lo : hi + 1] if r.kind == "line"]
         # Split rows pair a remove with an add, so row order is not diff order.
         return sorted(lines, key=lambda ln: ln["index"])
 
     @property
     def context(self) -> str:
-        """What the user can do next: range, thread, line or none."""
-        if self.anchor is not None:
+        """What the user can do next: range, thread, line, none, or readonly for a file outside the diff."""
+        if self.readonly:
+            return "readonly"
+        if self.range_start is not None:
             return "range"
         return {"line": "line", "thread": "thread"}.get(self.current.kind if self.current else "", "none")
 
@@ -350,7 +365,7 @@ class DiffView(ScrollView, can_focus=True):
         self.refresh(*[r for r in regions if r])
 
     def _hoverable(self, index: int | None) -> int | None:
-        return index if index is not None and self.rows[index].kind == "line" else None
+        return index if index is not None and not self.readonly and self.rows[index].kind == "line" else None
 
     def _set_hover(self, index: int | None, side: str | None = None) -> None:
         index = self._hoverable(index)
@@ -373,7 +388,7 @@ class DiffView(ScrollView, can_focus=True):
         if self._press is not None:
             index = self._row_under(max(0, min(event.y, self.size.height - 1)))
             index = len(self.rows) - 1 if index is None else index
-            self.anchor = self._press if index != self._press else None
+            self.range_start = self._press if index != self._press else None
             self._set_cursor(index, side=self._side_at(event.x))
         else:
             self._set_hover(self._row_under(event.y), self._side_at(event.x))
@@ -384,7 +399,13 @@ class DiffView(ScrollView, can_focus=True):
     def on_mouse_down(self, event: events.MouseDown) -> None:
         self._swallow_click = False
         index = self._row_under(event.y)
-        if event.button == 1 and index is not None and self.rows[index].kind == "line" and self._in_gutter(event.x):
+        if (
+            event.button == 1
+            and not self.readonly
+            and index is not None
+            and self.rows[index].kind == "line"
+            and self._in_gutter(event.x)
+        ):
             self._press = index
             self.side = self._side_at(event.x)
             self.capture_mouse()
@@ -396,7 +417,7 @@ class DiffView(ScrollView, can_focus=True):
             return
         self.release_mouse()
         self._swallow_click = True
-        if self.anchor is None:
+        if self.range_start is None:
             self._set_cursor(press, side=self.side)
         self.post_message(self.Activated())
 
@@ -407,7 +428,7 @@ class DiffView(ScrollView, can_focus=True):
         index = self._row_at(event.y + self.scroll_offset.y)
         again = index == self.cursor
         self._set_cursor(index, side=self._side_at(event.x))
-        if again and self.rows[index].kind in ("line", "thread"):
+        if again and not self.readonly and self.rows[index].kind in ("line", "thread"):
             self.post_message(self.Activated())
 
     def render_line(self, y: int) -> Strip:

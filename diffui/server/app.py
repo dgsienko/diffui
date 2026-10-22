@@ -10,6 +10,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocketClose
 
 from diffui.git_utils import PathOutsideRepo
+from diffui.server import fff_index
 from diffui.server.events import router as events_router
 from diffui.server.events import start_poller
 from diffui.server.herdr import clear_status, report_status
@@ -65,6 +66,7 @@ async def _lifespan(_app: FastAPI):
     if turn_poller:
         turn_poller.cancel()
     review_shutdown()
+    fff_index.close()
     clear_status()
 
 

@@ -100,8 +100,11 @@ class ApiClient:
     async def diff(self, path: str, view: str) -> dict:
         return _json(await self._get(f"/api/diff/{quote(path)}", view=view))
 
-    async def search(self, query: str, view: str) -> dict:
-        return _json(await self._get("/api/search", q=query, view=view))
+    async def search(self, query: str, view: str, scope: str) -> dict:
+        return _json(await self._get("/api/search", q=query, view=view, scope=scope))
+
+    async def file(self, path: str, view: str) -> dict:
+        return _json(await self._get(f"/api/file/{quote(path)}", view=view))
 
     async def commits(self) -> list[dict]:
         return _json(await self._get("/api/commits"))

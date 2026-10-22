@@ -176,6 +176,7 @@ def highlight_file_to_json(content: str, diff_text: str, file_path: str, theme: 
         result_lines.append(
             {
                 "num": line_num,
+                "text": line,
                 "html": code_html,
                 "type": line_type,
             }

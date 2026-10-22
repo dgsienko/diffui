@@ -114,7 +114,7 @@ The TUI covers the file list, a unified or split diff with syntax highlighting, 
 | `s` | Sort files by risk |
 | `u` / `b` / `t` | Scope: uncommitted changes / everything on the branch / the agent's last turn |
 | `C` | Pick one commit as the scope |
-| `/` | Search file names and text in the scope's files |
+| `/` | Search file names and text, in the scope's files or the whole repo (`tab` switches) |
 | `ctrl+f` | Find in this file |
 | `n` / `N` | Next / previous find match, while matches are showing |
 | `\|` | Switch between unified and split diff |
@@ -145,7 +145,9 @@ The header shows the current scope. The browser has the same choices in its view
 
 ### Search and find
 
-`/` opens a search over the files in the current scope. Names match as a substring or as the query's letters in order. Text matches lines of the files as they are on disk, ignoring case, grouped by file with line numbers, up to 200 lines. Enter opens the file at that line. When the diff does not show the line, the cursor goes to the nearest one that it does.
+`/` opens a search over the files in the current scope. Names match as a substring or as the query's letters in order, and a name with a typo still finds its file, so `rendrer` finds `renderer.py`. Text matches lines of the files as they are on disk, ignoring case, grouped by file with line numbers, up to 200 lines. Enter opens the file at that line. When the diff does not show the line, the cursor goes to the nearest one that it does.
+
+`tab` in the search switches between Changed and All files, and the header shows which is active. All files searches the whole repo through [fff](https://github.com/dmtrKovalenko/fff), which skips `.gitignore`d and binary files and ranks names by fuzzy match. Files that are not in the diff are dimmed and marked "not in diff". Opening one shows it read-only, highlighted and scrolled to the line, with a note at the top. You cannot comment on it or mark it reviewed. `left` / `right` or a pick from the file list returns to the diff's files, and `o` opens it in the browser.
 
 `ctrl+f` finds text in the open file's diff and highlights every match as you type. `enter` and `shift+enter`, or `down` and `up`, step through the matches while the bar is open. `esc` closes the bar and keeps the highlights, and `n` / `N` keep stepping. A second `esc` clears them. Comment threads keep `n` / `p` whenever no matches are showing.
 
@@ -209,6 +211,7 @@ All state lives in `~/.config/diffui/`. Nothing is written to repo directories.
 ## Other features
 
 - `.diffuiignore` file to hide files from review (still visible to agents)
+- Whole-repo file and text search in the terminal UI, built on the fff index
 - `diffui --json` for programmatic agent workflows
 - Auto-refresh via WebSocket (SSE fallback) powered by watchfiles; the terminal UI uses the SSE stream
 - Virtual scrolling for large files

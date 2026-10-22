@@ -108,7 +108,8 @@ def build_rows(data: dict, comments: list[dict], split: bool = False) -> list[Ro
     if data.get("file_note"):
         rows.append(Row("note", text=data["file_note"]))
     for hunk in data.get("hunks", []):
-        rows.append(Row("hunk", text=hunk["header"]))
+        if hunk["header"]:
+            rows.append(Row("hunk", text=hunk["header"]))
         if split:
             for old, new in split_pairs(hunk["lines"]):
                 add_line(Row("line", line=new or old, old=old, new=new))

@@ -18,13 +18,16 @@ from diffui.tui.client import ApiClient
 
 Target = tuple[str, int | None]
 _DEBOUNCE = 0.15
+_SCOPES = (("changed", "Changed"), ("all", "All files"))
+_NOT_IN_DIFF = "  not in diff"
 
 
 class SearchScreen(ModalScreen[Target | None]):
-    """Search the files in the current scope by name and content. Enter opens the file, at the line for a content hit."""
+    """Search the files in the current view, or the whole repo, by name and content. Enter opens the file, at the line for a content hit."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "dismiss_search", show=False),
+        Binding("tab", "toggle_scope", show=False),
         Binding("down", "move(1)", show=False),
         Binding("up", "move(-1)", show=False),
         Binding("pagedown", "move(10)", show=False),
@@ -34,24 +37,41 @@ class SearchScreen(ModalScreen[Target | None]):
     def __init__(self, client: ApiClient, view: str, palette: Theme) -> None:
         super().__init__()
         self._client, self._view, self._palette = client, view, palette
+        self._scope = "changed"
         self._targets: dict[str, Target] = {}
         self._timer: Timer | None = None
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
-            yield Static("Search changed files", classes="dialog-title")
+            yield Static(self._title(), classes="dialog-title", id="search-title")
             yield Input(id="search-input", placeholder="file name or text")
             yield OptionList(id="search-results")
-            yield Static("enter opens, esc closes. Matches are case-insensitive.", classes="hint")
+            yield Static(
+                "enter opens, tab switches Changed and All files, esc closes. Text matches ignore case.", classes="hint"
+            )
 
     def on_mount(self) -> None:
         self.query_one(Input).focus()
 
+    def _title(self) -> Text:
+        title = Text("Search ", style="bold")
+        for scope, name in _SCOPES:
+            title.append(f" {name} ", style="reverse" if scope == self._scope else "dim")
+        return title
+
     def on_input_changed(self, event: Input.Changed) -> None:
         event.stop()
+        self._schedule(event.value, _DEBOUNCE)
+
+    def _schedule(self, query: str, delay: float) -> None:
         if self._timer:
             self._timer.stop()
-        self._timer = self.set_timer(_DEBOUNCE, lambda: self.run_worker(self._search(event.value), exclusive=True))
+        self._timer = self.set_timer(delay, lambda: self.run_worker(self._search(query), exclusive=True))
+
+    def action_toggle_scope(self) -> None:
+        self._scope = "all" if self._scope == "changed" else "changed"
+        self.query_one("#search-title", Static).update(self._title())
+        self._schedule(self.query_one(Input).value, 0)
 
     async def _search(self, query: str) -> None:
         results = self.query_one(OptionList)
@@ -59,7 +79,7 @@ class SearchScreen(ModalScreen[Target | None]):
             results.clear_options()
             return
         try:
-            data = await self._client.search(query, self._view)
+            data = await self._client.search(query, self._view, self._scope)
         except httpx.HTTPError as e:
             results.clear_options()
             results.add_option(Option(Text(f"Search failed: {e}"), disabled=True))
@@ -77,22 +97,30 @@ class SearchScreen(ModalScreen[Target | None]):
             self._targets[key] = target
             options.append(Option(text, id=key))
 
-        def heading(text: str) -> None:
-            options.append(Option(Text(text, style=f"bold {p.accent}", no_wrap=True), disabled=True))
+        def heading(text: str, changed: bool = True) -> None:
+            label = Text(text, style=f"bold {p.accent}", no_wrap=True)
+            if not changed:
+                label.append(_NOT_IN_DIFF, style=f"not bold {p.fg_muted}")
+            options.append(Option(label, disabled=True))
 
-        if data["files"]:
-            heading(f"Files ({len(data['files'])})")
-            for path in data["files"]:
-                label = Text(path, style=p.fg, no_wrap=True, overflow="ellipsis")
+        # The changed scope lists plain paths, since every file in it is in the diff.
+        files = [f if isinstance(f, dict) else {"path": f, "changed": True} for f in data["files"]]
+        if files:
+            heading(f"Files ({len(files)})")
+            for f in files:
+                label = Text(f["path"], style=p.fg if f["changed"] else p.fg_muted, no_wrap=True, overflow="ellipsis")
                 label.highlight_regex(mark, f"bold {p.warn_fg}")
-                add(label, (path, None))
+                if not f["changed"]:
+                    label.append(_NOT_IN_DIFF, style=p.gutter_fg)
+                add(label, (f["path"], None))
         current = None
         for hit in data["hits"]:
+            changed = hit.get("changed", True)
             if hit["path"] != current:
                 current = hit["path"]
-                heading(current)
+                heading(current, changed)
             label = Text(f"{hit['line']:>6}  ", style=p.gutter_fg, no_wrap=True, overflow="ellipsis")
-            label.append(hit["text"].strip(), style=p.fg)
+            label.append(hit["text"].strip(), style=p.fg if changed else p.fg_muted)
             label.highlight_regex(mark, f"bold {p.warn_fg}")
             add(label, (hit["path"], hit["line"]))
         if data["truncated"]:

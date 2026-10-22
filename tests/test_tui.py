@@ -56,6 +56,17 @@ async def open_next(app, view, pilot, key: str) -> None:
     await until(pilot, lambda: app.active != before and view.path == app.active)
 
 
+def test_arrow_keys_switch_files_when_the_diff_scrolls(server):
+    async def scenario(app, view, pilot):
+        assert view.virtual_size.height > view.size.height
+        first = app.active
+        await open_next(app, view, pilot, "right")
+        await open_next(app, view, pilot, "left")
+        assert app.active == first
+
+    run_tui(server, scenario, size=(120, 12))
+
+
 def test_file_keys_follow_tree_order(server):
     async def scenario(app, view, pilot):
         order = [f["path"] for f in app.files]
@@ -192,7 +203,7 @@ def test_dragging_across_the_gutter_comments_on_the_range(server):
         assert comment["sel_end_index"] == last.line["index"]
         assert (comment["sel_start"], comment["sel_end"]) == (0, len(last.line["text"]))
         assert comment["selected_text"] == "\n".join(r.line["text"] for r in (first, middle, last))
-        assert view.anchor is None
+        assert view.range_start is None
         thread_y = row_y(view, next(r for r in view.rows if r.thread))
         assert f"lines {a}\N{EN DASH}{b}" in view.render_line(thread_y).text
 
@@ -210,7 +221,7 @@ def test_keyboard_range_comment_with_a_footer_that_follows_the_cursor(server):
         assert hints(app).startswith("c Comment on 2 lines · esc Clear")
         await pilot.press("escape", "up")
         await pilot.pause()
-        assert view.anchor is None
+        assert view.range_start is None
         assert hints(app).startswith("c Comment · v Select range")
 
         await pilot.press("v", "down", "down")
@@ -298,6 +309,32 @@ def test_search_opens_the_file_at_the_matching_line(server):
         await until(pilot, lambda: app.active == "extra.py" and view.path == "extra.py")
         assert view.current.line["text"] == "+VALUE = 1"
         assert not isinstance(app.screen, SearchScreen)
+
+    run_tui(server, scenario)
+
+
+def test_search_all_files_opens_a_file_outside_the_diff_read_only(server):
+    async def scenario(app, view, pilot):
+        await pilot.press("slash")
+        await pilot.press("tab")
+        assert "All files" in heading(app)
+        await type_text(pilot, "render_25")
+        results = app.screen.query_one(OptionList)
+        await until(pilot, lambda: results.option_count > 1)
+        assert "not in diff" in str(results.get_option_at_index(0).prompt)
+        await pilot.press("enter")
+        await until(pilot, lambda: app.active == "renderer.py" and view.path == "renderer.py")
+
+        assert view.readonly
+        assert view.rows[0].text.startswith("Not in this diff")
+        assert "Not in this diff" in str(app.query_one("#bar").render())
+        assert view.current.line["new_num"] == 25
+        assert not hints(app).startswith("c ")
+        await pilot.press("c")
+        assert not isinstance(app.screen, ComposeScreen)
+
+        await pilot.press("right")
+        await until(pilot, lambda: not view.readonly and view.path == app.active != "renderer.py")
 
     run_tui(server, scenario)
 

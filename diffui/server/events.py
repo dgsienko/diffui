@@ -15,6 +15,7 @@ from diffui.git_utils import (
     get_repo_root,
     load_comments,
 )
+from diffui.server import fff_index
 from diffui.server.herdr import report_status
 from diffui.server.state import app_state
 
@@ -76,6 +77,8 @@ def _invalidate_stale_reviews() -> None:
 
 
 def _apply_state_updates(events: list[str]) -> list[str]:
+    if "git_changed" in events or "files_changed" in events:
+        fff_index.mark_stale()
     if "git_changed" in events:
         prev_branch = app_state.branch_name
         prev_comments = app_state.comments
