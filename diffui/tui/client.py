@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import threading
 import time
 from collections.abc import AsyncIterator
@@ -13,6 +14,25 @@ import uvicorn
 
 from diffui.cli import _find_free_port
 from diffui.server.app import create_app
+
+# Diff text and comments come from the branch under review. Escape sequences in them
+# would reach the terminal as commands (title, clipboard), so strip control characters
+# from everything the server returns.
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def _clean(value):
+    if isinstance(value, str):
+        return _CONTROL.sub("", value)
+    if isinstance(value, list):
+        return [_clean(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _clean(v) for k, v in value.items()}
+    return value
+
+
+def _json(response: httpx.Response):
+    return _clean(response.json())
 
 
 class LocalServer:
@@ -66,25 +86,25 @@ class ApiClient:
         return r
 
     async def settings(self) -> dict:
-        return (await self._get("/api/settings")).json()
+        return _json(await self._get("/api/settings"))
 
     async def branch(self) -> dict:
-        return (await self._get("/api/branch")).json()
+        return _json(await self._get("/api/branch"))
 
     async def files(self, order: str) -> list[dict]:
-        return (await self._get("/api/files", order=order, hide_ignored="true")).json()
+        return _json(await self._get("/api/files", order=order, hide_ignored="true"))
 
     async def next_unreviewed(self, order: str) -> str | None:
-        return (await self._get("/api/files/next-unreviewed", order=order)).json()["path"]
+        return _json(await self._get("/api/files/next-unreviewed", order=order))["path"]
 
     async def diff(self, path: str) -> dict:
-        return (await self._get(f"/api/diff/{quote(path)}")).json()
+        return _json(await self._get(f"/api/diff/{quote(path)}"))
 
     async def comments(self) -> dict[str, list[dict]]:
-        return (await self._get("/api/comments")).json()
+        return _json(await self._get("/api/comments"))
 
     async def toggle_reviewed(self, path: str) -> bool:
-        return (await self._post(f"/api/reviewed/{quote(path)}")).json()["reviewed"]
+        return _json(await self._post(f"/api/reviewed/{quote(path)}"))["reviewed"]
 
     async def add_comment(self, path: str, line: dict, text: str) -> None:
         await self._post(
@@ -105,10 +125,10 @@ class ApiClient:
         await self._post(f"/api/comments/{quote(path)}/{comment_id}/resolve")
 
     async def agent_prompt(self) -> dict:
-        return (await self._post("/api/agent/prompt")).json()
+        return _json(await self._post("/api/agent/prompt"))
 
     async def agent_paste(self) -> dict:
-        return (await self._post("/api/agent/paste")).json()
+        return _json(await self._post("/api/agent/paste"))
 
     async def set_active_file(self, path: str) -> None:
         await self._http.put("/api/session", json={"activeFile": path})

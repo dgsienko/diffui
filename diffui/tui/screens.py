@@ -69,7 +69,7 @@ class ComposeScreen(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
-            yield Static(self._heading, classes="dialog-title")
+            yield Static(self._heading, classes="dialog-title", markup=False)
             if self._quote:
                 yield Static(self._quote, classes="hint", markup=False)
             yield TextArea(id="compose-text")

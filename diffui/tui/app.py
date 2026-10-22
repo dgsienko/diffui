@@ -99,7 +99,7 @@ class DiffuiApp(App[None]):
         try:
             await work
         except httpx.HTTPError as e:
-            self.notify(f"Request failed: {e}", severity="error")
+            self.notify(f"Request failed: {e}", severity="error", markup=False)
 
     async def _apply_theme(self) -> None:
         name = (await self.client.settings())["theme"]
@@ -268,7 +268,7 @@ class DiffuiApp(App[None]):
     async def action_agent(self) -> None:
         data = await self.client.agent_prompt()
         if not data["ok"]:
-            self.notify(data["error"], severity="warning")
+            self.notify(data["error"], severity="warning", markup=False)
             return
         self.push_screen(AgentScreen(data), self._paste)
 
@@ -277,9 +277,9 @@ class DiffuiApp(App[None]):
             return
         result = await self.client.agent_paste()
         if result["ok"]:
-            self.notify(f"Pasted into {result['agent']}. Press Enter there to send.")
+            self.notify(f"Pasted into {result['agent']}. Press Enter there to send.", markup=False)
         else:
-            self.notify(result["error"], severity="error")
+            self.notify(result["error"], severity="error", markup=False)
 
     async def action_browser(self) -> None:
         if not self.active:

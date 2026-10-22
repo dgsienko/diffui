@@ -130,3 +130,24 @@ def test_order_files_mirrors_the_web_tree():
     files = [_entry("a/z.py"), _entry("b/y.py", 5), _entry("top.py", 3), _entry("a/b/x.py")]
     assert [f["path"] for f in _order_files(files, "tree")] == ["top.py", "a/z.py", "a/b/x.py", "b/y.py"]
     assert [f["path"] for f in _order_files(files, "risk")] == ["b/y.py", "top.py", "a/z.py", "a/b/x.py"]
+
+
+def test_escape_sequences_in_the_diff_never_reach_the_terminal(server, temp_repo):
+    app_py = temp_repo / "app.py"
+    original = app_py.read_text()
+    app_py.write_text(original + "title \x1b]0;pwned\x07 end\n")
+
+    async def fetch():
+        client = ApiClient(server.url)
+        try:
+            return await client.diff("app.py")
+        finally:
+            await client.aclose()
+
+    try:
+        data = asyncio.run(fetch())
+    finally:
+        app_py.write_text(original)
+    texts = [line["text"] for hunk in data["hunks"] for line in hunk["lines"]]
+    assert any("pwned" in t for t in texts)
+    assert not any("\x1b" in t or "\x07" in t for t in texts)
