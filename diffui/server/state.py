@@ -10,6 +10,7 @@ from diffui.git_utils import (
     get_changed_files,
     get_main_branch,
     get_merge_base,
+    is_comment_open,
     load_comments,
     load_reviewed,
     load_settings,
@@ -72,6 +73,17 @@ class AppState:
             ]
         else:
             self.ignore_patterns = []
+
+    @property
+    def review_files(self) -> list[str]:
+        return sorted(set(self.all_files) | set(self.working_files))
+
+    @property
+    def reviewed_count(self) -> int:
+        return sum(1 for f in self.review_files if f in self.reviewed)
+
+    def open_comments(self) -> list[dict]:
+        return [{**c, "_file": f} for f, cs in self.comments.items() for c in cs if is_comment_open(c)]
 
     def reload_branch_name(self) -> str:
         self.branch_name = current_branch()

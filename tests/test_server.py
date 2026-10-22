@@ -49,7 +49,7 @@ def _server_app(temp_repo):
 
     from fastapi.testclient import TestClient
 
-    return TestClient(app)
+    return TestClient(app, base_url="http://localhost")
 
 
 class TestServerRoutes:
@@ -406,7 +406,8 @@ class TestServerRoutes:
         assert r.status_code == 200
         md = r.json()["markdown"]
         assert "# Review Summary:" in md
-        assert "**Files:**" in md
+        total = len(_server_app.get("/api/files").json())
+        assert f"/{total} reviewed" in md
 
     def test_session_get_returns_dict(self, _server_app):
         r = _server_app.get("/api/session")
@@ -428,14 +429,14 @@ class TestServerRoutes:
     def test_websocket_connected_event(self, _server_app):
         import json
 
-        with _server_app.websocket_connect("/api/ws") as ws:
+        with _server_app.websocket_connect("ws://localhost/api/ws") as ws:
             data = json.loads(ws.receive_text())
             assert data == {"events": ["connected"]}
 
     def test_websocket_ping_pong(self, _server_app):
         import json
 
-        with _server_app.websocket_connect("/api/ws") as ws:
+        with _server_app.websocket_connect("ws://localhost/api/ws") as ws:
             ws.receive_text()  # consume connected
             ws.send_text(json.dumps({"type": "ping"}))
             data = json.loads(ws.receive_text())
@@ -1065,6 +1066,15 @@ class TestExportJson:
             assert "comments" in f
             assert "open_comment_count" in f
 
+    def test_export_lists_the_files_the_ui_lists(self, _server_app, temp_repo, capsys):
+        from diffui.cli import export_json
+        from diffui.git_utils import set_active_repo
+
+        set_active_repo(temp_repo)
+        export_json()
+        exported = [f["path"] for f in json.loads(capsys.readouterr().out)["files"]]
+        assert exported == [f["path"] for f in _server_app.get("/api/files").json()]
+
     def test_agent_start_no_comments(self, _server_app):
         r = _server_app.post("/api/agent/start")
         assert r.status_code == 200
@@ -1073,7 +1083,7 @@ class TestExportJson:
         assert "No open comments" in data["error"]
 
     def test_agent_ws_no_process(self, _server_app):
-        with _server_app.websocket_connect("/api/agent/ws") as ws:
+        with _server_app.websocket_connect("ws://localhost/api/agent/ws") as ws:
             msg = ws.receive_json()
             assert msg["type"] == "error"
             assert "No agent running" in msg["message"]
@@ -1354,3 +1364,27 @@ class TestHerdr:
         finally:
             _server_app.post("/api/reviewed/app.py")
             _delete_app_py_comments(_server_app)
+
+
+class TestLocalOriginOnly:
+    @pytest.mark.parametrize(
+        ("headers", "status"),
+        [
+            pytest.param({"origin": "https://evil.example"}, 403, id="foreign-origin"),
+            pytest.param({"host": "evil.example"}, 403, id="rebound-host"),
+            pytest.param({"origin": "http://localhost"}, 200, id="same-origin"),
+        ],
+    )
+    def test_requests_from_other_sites_are_rejected(self, _server_app, headers, status):
+        assert _server_app.get("/api/files", headers=headers).status_code == status
+
+    def test_foreign_websocket_is_rejected(self, _server_app):
+        from starlette.websockets import WebSocketDisconnect
+
+        with (
+            pytest.raises(WebSocketDisconnect),
+            _server_app.websocket_connect(
+                "ws://localhost/api/agent/ws", headers={"origin": "https://evil.example"}
+            ) as ws,
+        ):
+            ws.receive_json()

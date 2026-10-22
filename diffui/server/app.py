@@ -4,8 +4,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from starlette.datastructures import Headers
 from starlette.staticfiles import StaticFiles
+from starlette.websockets import WebSocketClose
 
 from diffui.git_utils import PathOutsideRepo
 from diffui.server.events import router as events_router
@@ -30,6 +32,25 @@ class _NoCacheStaticFiles(StaticFiles):
 
 
 _STATIC_DIR = Path(__file__).parent.parent / "static"
+_LOCAL_HOSTS = {"localhost", "127.0.0.1"}
+
+
+class _LocalOriginOnly:
+    # Any page open in the browser can send requests to a localhost port. Checking Host stops DNS
+    # rebinding, and checking Origin stops cross-site form posts and WebSocket connections.
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] in ("http", "websocket"):
+            headers = Headers(scope=scope)
+            host = headers.get("host", "")
+            origin = headers.get("origin", "")
+            if host.rsplit(":", 1)[0] not in _LOCAL_HOSTS or (origin and origin.split("://", 1)[-1] != host):
+                reject = WebSocketClose(1008) if scope["type"] == "websocket" else PlainTextResponse("Forbidden", 403)
+                await reject(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
 
 
 @asynccontextmanager
@@ -47,6 +68,7 @@ def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:
     app_state.reload_repo_state()
 
     app = FastAPI(title="diffui", lifespan=_lifespan)
+    app.add_middleware(_LocalOriginOnly)
     app.include_router(repo_router)
     app.include_router(diff_router)
     app.include_router(comments_router)

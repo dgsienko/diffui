@@ -245,6 +245,29 @@ class TestRepoHasChanges:
         assert repo_has_changes(repo) is True
 
 
+class TestMergeBase:
+    def test_stale_local_main_does_not_count_merged_commits(self, tmp_path):
+        from diffui.git_utils import get_changed_files, get_merge_base, set_active_repo
+        from tests.conftest import _git
+
+        repo = tmp_path / "stale-main"
+        repo.mkdir()
+        _git(repo, "init", "-q", "-b", "main")
+        _git(repo, "commit", "-qm", "init", "--allow-empty")
+        (repo / "merged.py").write_text("x = 1\n")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-qm", "merged on origin")
+        _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+        _git(repo, "reset", "-q", "--hard", "HEAD~1")
+        _git(repo, "checkout", "-qb", "feature", "origin/main")
+        (repo / "feature.py").write_text("y = 2\n")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-qm", "feature work")
+
+        set_active_repo(repo)
+        assert get_changed_files(get_merge_base("main")) == ["feature.py"]
+
+
 class TestGetFileMtime:
     def test_missing_file_returns_zero(self):
         from diffui.git_utils import get_file_mtime, set_active_repo

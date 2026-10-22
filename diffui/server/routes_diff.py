@@ -111,7 +111,7 @@ def _is_ignored(path: str) -> bool:
 @router.get("/files")
 def list_files(view: str = "all"):
     if view == "all":
-        files = sorted(set(app_state.all_files) | set(app_state.working_files))
+        files = app_state.review_files
     elif view == "working":
         files = list(app_state.working_files)
     else:

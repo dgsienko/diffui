@@ -30,7 +30,7 @@ pipx install -e .
 diffui
 ```
 
-This starts a local server and prints the URL. Open that URL via an external browser or within your terminal application (if supported). You'll see every file changed on the current branch (vs the merge base with main/master) in a tabbed, syntax-highlighted diff viewer.
+This starts a local server and prints the URL. Open that URL via an external browser or within your terminal application (if supported). You'll see every file changed on the current branch (vs the merge base with `origin/main` or `origin/master`, falling back to the local branch when there's no remote) in a tabbed, syntax-highlighted diff viewer.
 
 Sibling repos in the same parent directory are auto-discovered and available via a dropdown for easy repository switching.
 

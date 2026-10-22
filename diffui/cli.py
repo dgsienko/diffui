@@ -9,6 +9,7 @@ from diffui.git_utils import (
     get_changed_files,
     get_main_branch,
     get_merge_base,
+    get_working_changed_files,
     is_comment_open,
     load_comments,
     load_reviewed,
@@ -51,7 +52,7 @@ def export_json() -> None:
     branch_name = current_branch()
     main_branch = get_main_branch()
     merge_base = get_merge_base(main_branch)
-    all_files = get_changed_files(merge_base)
+    all_files = sorted(set(get_changed_files(merge_base)) | set(get_working_changed_files()))
     reviewed = load_reviewed()
     comments = load_comments()
 
