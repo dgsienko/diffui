@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import functools
 import json
+import os
+import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -92,12 +95,12 @@ def repo_has_changes(repo_root: Path) -> bool:
     return bool(_git_at(repo_root, "ls-files", "--others", "--exclude-standard").stdout.strip())
 
 
-def _git(*args: str) -> subprocess.CompletedProcess[str]:
+def _git(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     cmd = ["git"]
     if _active_repo_root:
         cmd.extend(["-C", str(_active_repo_root)])
     cmd.extend(args)
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=GIT_TIMEOUT)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=GIT_TIMEOUT, env=env)
 
 
 def get_git_dir() -> Path:
@@ -257,6 +260,48 @@ def get_working_changed_files() -> list[str]:
             if f:
                 files.add(f)
     return sorted(files)
+
+
+# Per-worktree, so two linked worktrees of one repo keep separate baselines.
+TURN_REF = "refs/worktree/diffui/last-turn"
+
+
+def snapshot_worktree() -> str:
+    """The worktree as a git tree, untracked files included, built in a copy of the index so the real one is untouched."""
+    index = _git("rev-parse", "--git-path", "index").stdout.strip()
+    with tempfile.TemporaryDirectory(prefix="diffui-index-") as tmp:
+        temp_index = Path(tmp) / "index"
+        if index and (real := get_repo_root() / index).exists():
+            shutil.copyfile(real, temp_index)
+        env = {**os.environ, "GIT_INDEX_FILE": str(temp_index)}
+        for args in (("add", "-A"), ("write-tree",)):
+            result = _git(*args, env=env)
+            if result.returncode != 0:
+                raise RuntimeError(f"git {args[0]} failed: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+def read_turn_tree() -> str | None:
+    result = _git("rev-parse", "--verify", "--quiet", f"{TURN_REF}^{{tree}}")
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def write_turn_tree(tree: str) -> None:
+    _git("update-ref", TURN_REF, tree)
+
+
+def get_tree_numstat(base: str, now: str) -> dict[str, tuple[int, int]]:
+    result = _git("diff", "--numstat", "--no-renames", base, now)
+    stats: dict[str, tuple[int, int]] = {}
+    for line in result.stdout.splitlines():
+        adds, dels, path = line.split("\t", 2)
+        stats[path] = (int(adds) if adds != "-" else 0, int(dels) if dels != "-" else 0)
+    return stats
+
+
+def get_tree_diff(base: str, now: str, path: str, context: int = 3, *, ignore_whitespace: bool = False) -> str:
+    ws = ["-w"] if ignore_whitespace else []
+    return _git("diff", f"-U{context}", *ws, "--no-renames", base, now, "--", path).stdout
 
 
 class PathOutsideRepo(ValueError):

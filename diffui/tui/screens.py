@@ -7,7 +7,8 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static, TextArea
+from textual.widgets import Button, OptionList, Static, TextArea
+from textual.widgets.option_list import Option
 
 KEYS: list[tuple[str, list[tuple[str, str]]]] = [
     (
@@ -21,7 +22,26 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
             ("k / j", "Previous / next hunk"),
             ("p / n", "Previous / next comment thread"),
             ("]", "Next unreviewed file"),
-            ("b", "Show or hide the file list"),
+            ("z", "Show or hide the file list"),
+        ],
+    ),
+    (
+        "Scope",
+        [
+            ("u", "Uncommitted changes"),
+            ("b", "Everything on the branch"),
+            ("t", "Changes since the agent's last turn started (needs herdr)"),
+            ("C", "Pick one commit"),
+        ],
+    ),
+    (
+        "View and search",
+        [
+            ("|", "Switch between unified and split diff"),
+            ("tab", "Split view: move between the old and new line of a replaced pair"),
+            ("/", "Search file names and text in the scope's files"),
+            ("ctrl+f", "Find in this file. enter and shift+enter, or down and up, step through the matches"),
+            ("n / N", "After closing the find bar: next / previous match. esc clears the matches"),
         ],
     ),
     (
@@ -141,3 +161,23 @@ class AgentScreen(ModalScreen[bool]):
 
     def action_cancel(self) -> None:
         self.dismiss(False)
+
+
+class CommitsScreen(ModalScreen[str | None]):
+    """The branch's commits, newest first. Choosing one scopes the review to that commit."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape,q,C", "dismiss", show=False)]
+
+    def __init__(self, commits: list[dict]) -> None:
+        super().__init__()
+        self._commits = commits
+
+    def compose(self) -> ComposeResult:
+        options = [Option(f"{c['sha'][:8]}  {c['message']}", id=c["sha"]) for c in reversed(self._commits)]
+        with Vertical(classes="dialog"):
+            yield Static("Commits on this branch", classes="dialog-title")
+            yield OptionList(*options)
+            yield Static("enter shows that commit's changes. Esc closes.", classes="hint")
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        self.dismiss(event.option.id)

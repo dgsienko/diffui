@@ -1366,6 +1366,96 @@ class TestHerdr:
             _delete_app_py_comments(_server_app)
 
 
+class TestSearch:
+    def test_matches_file_names_and_content_of_the_view(self, _server_app):
+        r = _server_app.get("/api/search", params={"q": "EXTRA"}).json()
+        assert r["files"] == ["extra.py"]
+        assert r["hits"] == []
+
+        r = _server_app.get("/api/search", params={"q": "line five"}).json()
+        assert r["hits"] == [{"path": "app.py", "line": 5, "text": "line five"}]
+
+        # Content comes from the working tree, so an untracked file is searched too.
+        r = _server_app.get("/api/search", params={"q": "never committed"}).json()
+        assert [(h["path"], h["line"]) for h in r["hits"]] == [("untracked.txt", 1)]
+
+    def test_search_is_scoped_to_the_view(self, _server_app):
+        r = _server_app.get("/api/search", params={"q": "value", "view": "working"}).json()
+        assert r["hits"] == []
+        assert _server_app.get("/api/search", params={"q": "value"}).json()["hits"][0]["path"] == "extra.py"
+
+    def test_hits_are_capped(self, _server_app, monkeypatch):
+        monkeypatch.setattr("diffui.server.routes_search.MAX_HITS", 3)
+        r = _server_app.get("/api/search", params={"q": "line"}).json()
+        assert len(r["hits"]) == 3
+        assert r["truncated"] is True
+
+    def test_empty_query_finds_nothing(self, _server_app):
+        assert _server_app.get("/api/search", params={"q": ""}).json() == {"files": [], "hits": [], "truncated": False}
+
+
+@pytest.mark.parametrize(
+    ("samples", "starts"),
+    [
+        pytest.param([["idle"], ["working"]], [1], id="rest-to-work"),
+        pytest.param([[], ["working"]], [1], id="no-agent-then-work"),
+        pytest.param([["working"], ["working"], ["idle"], ["working"]], [3], id="already-working-when-first-seen"),
+        pytest.param([["idle"], ["blocked"], ["working"]], [], id="work-after-a-prompt-is-the-same-turn"),
+        pytest.param([["idle", "working"], ["idle", "working"]], [], id="two-agents-one-turn"),
+    ],
+)
+def test_turn_tracker_starts_on_the_rest_to_work_edge(samples, starts):
+    from diffui.server.turns import TurnTracker
+
+    tracker = TurnTracker()
+    assert [i for i, statuses in enumerate(samples) if tracker.observe(statuses)] == starts
+
+
+class TestLastTurn:
+    def _git(self, repo, *args):
+        import subprocess
+
+        return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
+
+    def test_lists_only_files_changed_since_the_turn_started(self, _server_app, temp_repo, fake_herdr, monkeypatch):
+        from diffui.server.events import _apply_state_updates
+        from diffui.server.turns import TurnTracker, poll_once
+
+        reason = _server_app.get("/api/last-turn").json()["reason"]
+        assert reason.startswith("No agent turn seen yet")
+        assert _server_app.get("/api/files?view=last-turn").json() == []
+
+        tracker = TurnTracker()
+        index_before = self._git(temp_repo, "ls-files", "--stage")
+        staged_before = self._git(temp_repo, "diff", "--cached")
+        for status in ("idle", "working"):
+            monkeypatch.setenv("HERDR_AGENTS", json.dumps([_agent("w1:p2", temp_repo, status)]))
+            started = poll_once(tracker)
+        assert started is True
+        assert _server_app.get("/api/last-turn").json()["reason"] == "Nothing has changed since the last turn started"
+
+        extra, fresh = temp_repo / "extra.py", temp_repo / "fresh.txt"
+        try:
+            extra.write_text("VALUE = 1\nVALUE = 2\n")
+            fresh.write_text("brand new\n")
+            _apply_state_updates(["files_changed"])
+
+            files = _server_app.get("/api/files?view=last-turn").json()
+            assert [(f["path"], f["adds"], f["dels"]) for f in files] == [("extra.py", 1, 0), ("fresh.txt", 1, 0)]
+            assert _server_app.get("/api/last-turn").json()["reason"] is None
+            diff = _server_app.get("/api/diff/extra.py?view=last-turn").json()
+            assert [ln["text"] for h in diff["hunks"] for ln in h["lines"] if ln["type"] == "add"] == ["+VALUE = 2"]
+            assert _server_app.get("/api/files/next-unreviewed?view=last-turn").json()["path"] == "extra.py"
+            assert self._git(temp_repo, "ls-files", "--stage") == index_before
+            assert self._git(temp_repo, "diff", "--cached") == staged_before
+        finally:
+            extra.write_text("VALUE = 1\n")
+            fresh.unlink(missing_ok=True)
+            self._git(temp_repo, "update-ref", "-d", "refs/worktree/diffui/last-turn")
+            _apply_state_updates(["files_changed"])
+        assert _server_app.get("/api/files?view=last-turn").json() == []
+
+
 class TestLocalOriginOnly:
     @pytest.mark.parametrize(
         ("headers", "status"),

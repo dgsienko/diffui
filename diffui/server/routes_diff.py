@@ -10,6 +10,7 @@ from diffui.git_utils import (
     get_file_mtime,
     get_full_diff,
     get_repo_root,
+    get_tree_diff,
     get_working_diff,
     is_comment_open,
     repo_relative,
@@ -17,6 +18,8 @@ from diffui.git_utils import (
 )
 from diffui.server.highlight import parse_diff_to_json
 from diffui.server.state import app_state
+
+LAST_TURN = "last-turn"
 
 router = APIRouter(prefix="/api")
 
@@ -39,7 +42,9 @@ def _get_diff(path: str, view: str, context: int = 3, ignore_whitespace: bool = 
     merge_base = app_state.merge_base
     mtime = get_file_mtime(path)
     ws_flag = "w" if ignore_whitespace else ""
-    cache_key = (repo_id, merge_base, path, f"{view}:c{context}:{ws_flag}", mtime)
+    turn = app_state.last_turn if view == LAST_TURN else None
+    cache_view = f"{view}@{turn.base}" if turn else view
+    cache_key = (repo_id, merge_base, path, f"{cache_view}:c{context}:{ws_flag}", mtime)
 
     with _cache_lock:
         if cache_key in _diff_cache:
@@ -49,6 +54,8 @@ def _get_diff(path: str, view: str, context: int = 3, ignore_whitespace: bool = 
         result = get_full_diff(merge_base, path, context, ignore_whitespace=ignore_whitespace)
     elif view == "working":
         result = get_working_diff(path, context, ignore_whitespace=ignore_whitespace)
+    elif view == LAST_TURN:
+        result = get_tree_diff(turn.base, turn.now, path, context, ignore_whitespace=ignore_whitespace) if turn else ""
     elif (commit := _find_commit(view)) is not None:
         result = get_commit_diff(commit.sha, path, context, ignore_whitespace=ignore_whitespace)
     else:
@@ -58,7 +65,7 @@ def _get_diff(path: str, view: str, context: int = 3, ignore_whitespace: bool = 
     with _cache_lock:
         if cache_key in _diff_cache:
             return _diff_cache[cache_key]
-        stale = next((k for k in _diff_cache if k[2] == path and k[3] == f"{view}:c{context}:{ws_flag}"), None)
+        stale = next((k for k in _diff_cache if k[2] == path and k[3] == f"{cache_view}:c{context}:{ws_flag}"), None)
         if stale is not None:
             del _diff_cache[stale]
         if len(_diff_cache) >= _MAX_CACHE:
@@ -118,17 +125,21 @@ def _order_files(entries: list[dict], order: str) -> list[dict]:
     return entries
 
 
-def _file_entries(view: str, order: str, hide_ignored: bool) -> list[dict]:
+def view_files(view: str) -> tuple[list[str], dict[str, tuple[int, int]]]:
+    """The paths a view lists, with the add and delete counts it has for them."""
     if view == "all":
-        files = app_state.review_files
-    elif view == "working":
-        files = list(app_state.working_files)
-    else:
-        commit = _find_commit(view)
-        files = commit.files if commit else []
+        return app_state.review_files, app_state.numstat
+    if view == "working":
+        return list(app_state.working_files), {}
+    if view == LAST_TURN:
+        turn = app_state.last_turn
+        return (sorted(turn.stats), turn.stats) if turn else ([], {})
+    commit = _find_commit(view)
+    return (commit.files if commit else []), {}
 
-    numstat = app_state.numstat if view == "all" else {}
 
+def _file_entries(view: str, order: str, hide_ignored: bool) -> list[dict]:
+    files, numstat = view_files(view)
     result = []
     for f in files:
         adds, dels = numstat.get(f, (0, 0))
@@ -164,8 +175,8 @@ def list_files(view: str = "all", order: str = "", hide_ignored: bool = False):
 
 
 @router.get("/files/next-unreviewed")
-def next_unreviewed(order: str = "tree"):
-    entries = _file_entries("all", order, hide_ignored=True)
+def next_unreviewed(order: str = "tree", view: str = "all"):
+    entries = _file_entries(view, order, hide_ignored=True)
     return {"path": next((f["path"] for f in entries if not f["reviewed"]), None)}
 
 

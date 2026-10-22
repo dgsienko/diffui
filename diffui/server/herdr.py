@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -24,6 +25,21 @@ def _herdr(*args: str) -> dict | None:
     if result.returncode != 0:
         return None
     return json.loads(result.stdout) if result.stdout.strip() else {}
+
+
+def available() -> bool:
+    return bool(_workspace()) and shutil.which("herdr") is not None
+
+
+def repo_agents(repo_root: Path) -> list[dict] | None:
+    """Every herdr agent working inside the repo, in any workspace. None when herdr could not answer."""
+    listing = _herdr("agent", "list")
+    if listing is None:
+        return None
+    root = repo_root.resolve()
+    agents = listing.get("result", {}).get("agents", [])
+    # foreground_cwd is where the agent is now. cwd is where its pane started.
+    return [a for a in agents if Path(a.get("foreground_cwd") or a.get("cwd") or "/").resolve().is_relative_to(root)]
 
 
 def find_agent(repo_root: Path) -> dict | None:

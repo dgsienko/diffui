@@ -98,6 +98,7 @@ def _apply_state_updates(events: list[str]) -> list[str]:
 
         app_state.numstat = get_diff_numstat(app_state.merge_base)
         app_state.working_files = get_working_changed_files()
+        app_state.reload_last_turn()
         _invalidate_stale_reviews()
 
     # reload_repo_state() already re-read them, so only load on the standalone path.

@@ -11,6 +11,7 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
   const viewOptions = [
     { value: 'all', label: 'All changes' },
     { value: 'working', label: 'Working changes (uncommitted)' },
+    { value: 'last-turn', label: 'Last turn (agent)' },
     ...(commits || []).map(c => ({
       value: c.sha,
       label: c.message.slice(0, 50),

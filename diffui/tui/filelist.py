@@ -8,7 +8,7 @@ from textual.widgets.option_list import Option, OptionDoesNotExist
 
 from diffui.themes import DEFAULT_THEME
 from diffui.themes.theme import Theme
-from diffui.tui.diffview import add_fg
+from diffui.tui.style import add_fg
 
 
 class FileList(OptionList, can_focus=False):

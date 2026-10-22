@@ -91,14 +91,23 @@ class ApiClient:
     async def branch(self) -> dict:
         return _json(await self._get("/api/branch"))
 
-    async def files(self, order: str) -> list[dict]:
-        return _json(await self._get("/api/files", order=order, hide_ignored="true"))
+    async def files(self, order: str, view: str) -> list[dict]:
+        return _json(await self._get("/api/files", order=order, view=view, hide_ignored="true"))
 
-    async def next_unreviewed(self, order: str) -> str | None:
-        return _json(await self._get("/api/files/next-unreviewed", order=order))["path"]
+    async def next_unreviewed(self, order: str, view: str) -> str | None:
+        return _json(await self._get("/api/files/next-unreviewed", order=order, view=view))["path"]
 
-    async def diff(self, path: str) -> dict:
-        return _json(await self._get(f"/api/diff/{quote(path)}"))
+    async def diff(self, path: str, view: str) -> dict:
+        return _json(await self._get(f"/api/diff/{quote(path)}", view=view))
+
+    async def search(self, query: str, view: str) -> dict:
+        return _json(await self._get("/api/search", q=query, view=view))
+
+    async def commits(self) -> list[dict]:
+        return _json(await self._get("/api/commits"))
+
+    async def last_turn_reason(self) -> str | None:
+        return _json(await self._get("/api/last-turn"))["reason"]
 
     async def comments(self) -> dict[str, list[dict]]:
         return _json(await self._get("/api/comments"))

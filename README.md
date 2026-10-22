@@ -47,7 +47,7 @@ diffui --tui         # Review in the terminal instead of the browser
 
 - Navigation: the explorer sidebar lists the changed files, grouped by directory, file type, or change status. Click a file or use the arrow keys to move through them in the order the sidebar shows. The Explorer button in the top bar hides and shows it. `]` jumps to the next unreviewed file.
 - Diff modes: toggle between unified diff, side-by-side split, or full file view using the segmented control in the file header above the diff. Whitespace, Hide reviewed, Blame, More context and Mark reviewed sit next to it.
-- View filter: a dropdown in the top bar switches between all branch changes, individual commits (most recent first), or uncommitted working changes.
+- View filter: a dropdown in the top bar switches between all branch changes, uncommitted working changes, the agent's last turn (see [Last turn](#last-turn)), or individual commits (most recent first).
 - Reviewing: press `r` or use the dedicated button to mark a file as reviewed. The top bar shows how many files you've reviewed next to the total added and removed lines. If a reviewed file changes on disk, it's automatically unmarked. When everything is reviewed, a completion screen appears with stats.
 - Hunk navigation: `j`/`k` to jump between hunks. Hunk headers show their own +/- counts and can be collapsed by clicking. The raw `diff --git`/`index`/`---`/`+++` lines are hidden. A rename, mode change, new or deleted file, or binary file gets one short line instead.
 - Search: `ctrl+f` to search within the current diff with match highlighting and navigation. `ctrl+g` to jump to a specific line. `ctrl+shift+f` (or the "Search files" button) to filter the file list.
@@ -84,6 +84,8 @@ Configure your preferred agent CLI in Settings (gear icon).
 
 When you start the `diffui` server in a [herdr](https://herdr.dev) pane, Send to agent in the browser pastes the prompt into the agent already running in that workspace, so you keep its session and context. It picks the agent working in the same repo, or the first agent in the workspace if none is. herdr then focuses that pane, and you can add to the prompt before pressing Enter. diffui won't paste while the agent is sitting at a permission prompt, because Claude Code throws the paste away there.
 
+Inside herdr, diffui also tracks agent turns for the [Last turn](#last-turn) scope.
+
 diffui also reports two values for the workspace's row in herdr's sidebar: `$comments` (like `3 open`) and `$reviewed` (like `12/20 reviewed`). Add them to your herdr config to show them:
 
 ```toml
@@ -99,7 +101,7 @@ rows = [
 
 `diffui --tui` runs the review loop in the terminal, so it fits in a herdr split next to the coding agent. It starts the same server on a free port and talks to it over HTTP, which means comments, reviewed state and risk scores are the ones the browser shows. Press `o` to open the web UI at the current file.
 
-The TUI covers the file list, a unified diff with syntax highlighting, comment threads, reviewed state, and Send to agent. Inside herdr, Send to agent pastes the prompt into the workspace's agent pane. Anywhere else it shows the prompt so you can copy it with `c`. Explain changes, markdown and mermaid preview, blame, split view and the agent terminal stay in the browser.
+The TUI covers the file list, a unified or split diff with syntax highlighting, comment threads, reviewed state, diff scopes, search, find in file, and Send to agent. The file list sits on the right of the diff. Inside herdr, Send to agent pastes the prompt into the workspace's agent pane. Anywhere else it shows the prompt so you can copy it with `c`. Explain changes, markdown and mermaid preview, blame and the agent terminal stay in the browser.
 
 | Key | Action |
 | --- | --- |
@@ -110,20 +112,52 @@ The TUI covers the file list, a unified diff with syntax highlighting, comment t
 | `r` | Mark the file reviewed or unreviewed, then open the next unreviewed file |
 | `]` | Next unreviewed file |
 | `s` | Sort files by risk |
+| `u` / `b` / `t` | Scope: uncommitted changes / everything on the branch / the agent's last turn |
+| `C` | Pick one commit as the scope |
+| `/` | Search file names and text in the scope's files |
+| `ctrl+f` | Find in this file |
+| `n` / `N` | Next / previous find match, while matches are showing |
+| `\|` | Switch between unified and split diff |
+| `tab` | Split view: move between the old and new line of a replaced pair |
 | `c` or `enter` | Comment on the line or range, or reply to the thread |
 | `v` | Start a line range at the cursor, then extend it with `up` / `down` |
 | `shift+up` / `shift+down` | Start or extend a line range |
-| `esc` | Clear the range |
+| `esc` | Clear the range, then the find matches |
 | `x` | Resolve or reopen the thread |
 | `A` | Send open comments to the agent |
 | `o` | Open this file in the browser |
-| `b` | Show or hide the file list |
+| `z` | Show or hide the file list |
 | `?` | Help |
 | `q` | Quit |
 
 The footer's first hints follow the cursor: `c` Comment and `v` Select range on a line, `c` Comment on N lines and `esc` Clear with a range, `c` Reply and `x` Resolve on a thread.
 
 Clicking a file opens it, and clicking a diff row selects it. Hovering a row swaps its line number for a `[+]`. Clicking the number column opens the comment box for that line in one click, and dragging down it comments on the range. `ctrl+s` saves the comment. A range comment is stored the way a multi-line text selection is in the browser, so the web UI highlights the same lines.
+
+### Scopes
+
+The header shows the current scope. The browser has the same choices in its view dropdown.
+
+- Uncommitted (`u`): staged and unstaged changes plus new files.
+- Branch (`b`): everything since the branch left its base, commits included. This is the default.
+- Last turn (`t`): changes since the agent's latest turn started. See [Last turn](#last-turn).
+- Commit (`C`): the changes of one commit.
+
+### Search and find
+
+`/` opens a search over the files in the current scope. Names match as a substring or as the query's letters in order. Text matches lines of the files as they are on disk, ignoring case, grouped by file with line numbers, up to 200 lines. Enter opens the file at that line. When the diff does not show the line, the cursor goes to the nearest one that it does.
+
+`ctrl+f` finds text in the open file's diff and highlights every match as you type. `enter` and `shift+enter`, or `down` and `up`, step through the matches while the bar is open. `esc` closes the bar and keeps the highlights, and `n` / `N` keep stepping. A second `esc` clears them. Comment threads keep `n` / `p` whenever no matches are showing.
+
+### Split view
+
+`|` puts the old file on the left and the new one on the right, with their own line numbers and tints. It needs a diff pane 100 columns wide. In a narrower pane the TUI stays unified and says so, and hiding the file list with `z` often makes room. A comment on a row goes against the new line, or the old line when it was removed, which is what the browser's split view stores. On a row that replaces one line with another, click the left or right number column, or press `tab`, to choose the side.
+
+### Last turn
+
+Last turn needs diffui to run in a herdr pane and an agent to work in the same repo in any herdr workspace. The server polls `herdr agent list` every second. When an agent inside the repo goes from idle or done to working, it saves the worktree as a git tree, untracked files included, built in a temporary index so your index and files are untouched. The tree is stored under `refs/worktree/diffui/last-turn`, so it survives a restart, and each linked worktree keeps its own. The scope diffs that tree against the worktree as it is now.
+
+Without herdr, or before an agent has started a turn, the scope says "No agent turn seen yet". herdr reports `working` a moment after the agent starts writing, so a change in that gap is already in the saved tree and does not show. A turn that changes nothing still replaces the previous baseline.
 
 ## Display
 

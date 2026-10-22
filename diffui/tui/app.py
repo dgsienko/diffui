@@ -9,16 +9,19 @@ import httpx
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.theme import Theme as TextualTheme
 from textual.widgets import Footer, Static
 
-from diffui.themes import ALL_THEMES
+from diffui.themes import ALL_THEMES, DEFAULT_THEME
 from diffui.tui.client import ApiClient, LocalServer
-from diffui.tui.diffview import DiffView, span
+from diffui.tui.diffview import DiffView
 from diffui.tui.filelist import FileList
-from diffui.tui.screens import AgentScreen, ComposeScreen, HelpScreen
+from diffui.tui.find import FindBar, FindClose, FindQuery, FindStep
+from diffui.tui.screens import AgentScreen, CommitsScreen, ComposeScreen, HelpScreen
+from diffui.tui.search import SearchScreen
+from diffui.tui.style import span
 
 _CSS = """
 #bar { dock: top; height: 1; padding: 0 1; background: $panel; color: $foreground; }
@@ -26,7 +29,14 @@ _CSS = """
 FileList { width: 30%; min-width: 28; max-width: 48; border: none; padding: 0; background: $surface; }
 FileList > .option-list--option-highlighted { background: $primary 30%; text-style: none; }
 FileList > .option-list--option-hover { background: $primary 15%; }
-DiffView { width: 1fr; background: $background; }
+#diff-col { width: 1fr; }
+DiffView { height: 1fr; background: $background; }
+FindBar { display: none; height: 1; background: $panel; }
+FindBar.-open { display: block; }
+#find-label { width: auto; padding: 0 1; color: $text-muted; }
+#find-input { border: none; height: 1; width: 1fr; max-width: 60; padding: 0; background: $panel; }
+#find-count { width: auto; padding: 0 1; color: $text-muted; }
+.dialog OptionList { height: auto; max-height: 24; border: none; padding: 0; background: $surface; }
 ModalScreen { align: center middle; background: $background 60%; }
 .dialog { width: 90%; max-width: 110; height: auto; max-height: 90%; padding: 1 2; background: $surface; border: round $primary; }
 .dialog-title { text-style: bold; margin-bottom: 1; }
@@ -39,6 +49,7 @@ ModalScreen { align: center middle; background: $background 60%; }
 
 
 _NEEDS = {"select_range": "line", "clear_selection": "range"}
+_SCOPES = (("u", "uncommitted", "working"), ("b", "branch", "all"), ("t", "last turn", "last-turn"))
 
 
 def _number(line: dict) -> str:
@@ -49,7 +60,8 @@ class ContextFooter(Footer):
     """The footer, with the range hint naming how many lines `c` will comment on."""
 
     def compose(self) -> ComposeResult:
-        count = len(self.app.query_one(DiffView).selected_lines())
+        views = self.app.query(DiffView)
+        count = len(views.first().selected_lines()) if views else 0
         for widget in super().compose():
             if getattr(widget, "action", "") == "comment('range')":
                 widget.description = f"Comment on {count} line{'s' * (count != 1)}"
@@ -64,6 +76,9 @@ class DiffuiApp(App[None]):
         # The first bindings hint what the cursor can do now; check_action shows the one that fits.
         Binding("c", "comment('range')", "Comment"),
         Binding("escape", "clear_selection", "Clear"),
+        Binding("escape", "clear_find", "Clear find"),
+        Binding("n", "find_step(1)", "Next match"),
+        Binding("N", "find_step(-1)", show=False),
         Binding("c", "comment('thread')", "Reply"),
         Binding("x", "resolve('thread')", "Resolve"),
         Binding("c", "comment('line')", "Comment"),
@@ -79,11 +94,18 @@ class DiffuiApp(App[None]):
         Binding("x", "resolve('none')", "Resolve"),
         Binding("enter", "comment", show=False),
         Binding("x", "resolve", show=False),
+        Binding("slash", "search", "Search", key_display="/"),
+        Binding("ctrl+f", "find", "Find", priority=True),
+        Binding("u", "scope('working')", "Scope", key_display="u/b/t"),
+        Binding("b", "scope('all')", show=False),
+        Binding("t", "scope('last-turn')", show=False),
+        Binding("C", "commits", show=False),
+        Binding("vertical_line", "split", "Split", key_display="|"),
         Binding("r", "review", "Reviewed"),
-        Binding("s", "sort", "Risk sort"),
+        Binding("s", "sort", show=False),
         Binding("A", "agent", "Agent", key_display="A"),
-        Binding("o", "browser", "Browser"),
-        Binding("b", "toggle_files", show=False),
+        Binding("o", "browser", show=False),
+        Binding("z", "toggle_files", show=False),
         Binding("question_mark", "help", "Help", key_display="?"),
         Binding("q", "quit", "Quit"),
     ]
@@ -95,14 +117,18 @@ class DiffuiApp(App[None]):
         self.comments: dict[str, list[dict]] = {}
         self.active: str | None = None
         self.order = "tree"
+        self.view = "all"
+        self.diff_theme = DEFAULT_THEME
         self._branch: dict = {}
         self._diff_seq = 0
 
     def compose(self) -> ComposeResult:
         yield Static(id="bar")
         with Horizontal(id="body"):
+            with Vertical(id="diff-col"):
+                yield DiffView()
+                yield FindBar()
             yield FileList()
-            yield DiffView()
         yield ContextFooter()
 
     async def on_unmount(self) -> None:
@@ -121,6 +147,8 @@ class DiffuiApp(App[None]):
             return parameters[0] == context
         if action in _NEEDS:
             return _NEEDS[action] == context
+        if action in ("find_step", "clear_find"):
+            return bool(views.first().find.query) if views else False
         return True
 
     def push_screen(self, *args, **kwargs):
@@ -158,7 +186,7 @@ class DiffuiApp(App[None]):
         )
         self.theme = "diffui"
         view, files = self.query_one(DiffView), self.query_one(FileList)
-        view.palette = files.palette = theme
+        view.palette = files.palette = self.diff_theme = theme
         view.refresh()
 
     async def _listen(self) -> None:
@@ -186,39 +214,57 @@ class DiffuiApp(App[None]):
 
     async def _refresh_files(self) -> bool:
         """Reloads the list. Returns True when the active file changed and its diff was loaded."""
-        self.files = await self.client.files(self.order)
+        self.files = await self.client.files(self.order, self.view)
         paths = [f["path"] for f in self.files]
         opening = self.active not in paths
         if opening:
-            self.active = await self.client.next_unreviewed(self.order) or (paths[0] if paths else None)
+            self.active = await self.client.next_unreviewed(self.order, self.view) or (paths[0] if paths else None)
         self.query_one(FileList).set_files(self.files, self.active, flat=self.order == "risk")
         self._update_bar()
         if opening and self.active:
             await self._load_diff(self.active)
         elif not self.active:
-            self.query_one(DiffView).set_diff("", {"file_note": "No changes to review.", "hunks": []}, [])
+            note = "No changes to review."
+            if self.view == "last-turn":
+                note = await self.client.last_turn_reason() or note
+            self.query_one(DiffView).set_diff("", {"file_note": note, "hunks": []}, [])
+            self._update_find()
         return opening
 
     def _update_bar(self) -> None:
         reviewed = sum(1 for f in self.files if f["reviewed"])
         open_comments = sum(f["open_comment_count"] for f in self.files)
         bar = Text(f"{self._branch.get('repo_name', '')}  {self._branch.get('name', '')}", style="bold")
+        bar.append("   ")
+        for _key, name, view in _SCOPES:
+            bar.append(f" {name} ", style="reverse" if view == self.view else "dim")
+        if self.view not in {v for _k, _n, v in _SCOPES}:
+            bar.append(f" commit {self.view[:8]} ", style="reverse")
         bar.append(f"   {reviewed}/{len(self.files)} reviewed   {open_comments} open comments", style="dim")
         if self.order == "risk":
             bar.append("   sorted by risk", style="dim")
+        if self.query_one(DiffView).split_active:
+            bar.append("   split", style="dim")
         self.query_one("#bar", Static).update(bar)
 
-    async def _load_diff(self, path: str) -> None:
+    def on_resize(self, _event) -> None:
+        self.call_after_refresh(self._update_bar)
+
+    async def _load_diff(self, path: str, line: int | None = None) -> None:
         self._diff_seq += 1
         seq = self._diff_seq
-        data = await self.client.diff(path)
+        data = await self.client.diff(path, self.view)
         if seq == self._diff_seq and path == self.active:
-            self.query_one(DiffView).set_diff(path, data, self.comments.get(path, []))
+            view = self.query_one(DiffView)
+            view.set_diff(path, data, self.comments.get(path, []))
+            if line is not None and not view.goto_line(line):
+                self.notify(f"Line {line} is outside the diff, showing the nearest line", timeout=3)
+            self._update_find()
 
-    async def _open_file(self, path: str) -> None:
+    async def _open_file(self, path: str, line: int | None = None) -> None:
         self.active = path
         self.query_one(FileList).set_active(path)
-        await self._safely(self._load_diff(path))
+        await self._safely(self._load_diff(path, line))
 
     def on_file_list_picked(self, event: FileList.Picked) -> None:
         self.run_worker(self._open_file(event.path))
@@ -231,7 +277,7 @@ class DiffuiApp(App[None]):
             await self._open_file(paths[(index + step) % len(paths)])
 
     async def action_next_unreviewed(self) -> None:
-        path = await self.client.next_unreviewed(self.order)
+        path = await self.client.next_unreviewed(self.order, self.view)
         if path:
             await self._open_file(path)
         else:
@@ -258,6 +304,64 @@ class DiffuiApp(App[None]):
         await self._refresh_files()
         self.notify("Sorted by risk" if self.order == "risk" else "Default file order", timeout=2)
 
+    async def action_scope(self, view: str) -> None:
+        if view != self.view:
+            await self._set_view(view)
+
+    async def _set_view(self, view: str) -> None:
+        self.view, self.active = view, None
+        await self._safely(self._refresh_files())
+
+    async def action_commits(self) -> None:
+        commits = await self.client.commits()
+        if commits:
+            self.push_screen(CommitsScreen(commits), self._pick_commit)
+        else:
+            self.notify("No commits on this branch", timeout=2)
+
+    async def _pick_commit(self, sha: str | None) -> None:
+        if sha:
+            await self._set_view(sha)
+
+    def action_split(self) -> None:
+        self.notify(self.query_one(DiffView).toggle_split(), timeout=2)
+        self._update_bar()
+
+    def action_search(self) -> None:
+        self.push_screen(SearchScreen(self.client, self.view, self.diff_theme), self._open_hit)
+
+    async def _open_hit(self, target: tuple[str, int | None] | None) -> None:
+        if target:
+            await self._open_file(*target)
+
+    def action_find(self) -> None:
+        self.query_one(FindBar).open()
+
+    def on_find_query(self, event: FindQuery) -> None:
+        self.query_one(DiffView).set_find(event.query)
+        self._update_find()
+
+    def on_find_step(self, event: FindStep) -> None:
+        self.action_find_step(event.direction)
+
+    def on_find_close(self, _event: FindClose) -> None:
+        self.query_one(FindBar).close()
+        self.query_one(DiffView).focus()
+        self._update_find()
+
+    def action_find_step(self, direction: int) -> None:
+        self.query_one(DiffView).step_find(direction)
+        self._update_find()
+
+    def action_clear_find(self) -> None:
+        self.query_one(FindBar).input.value = ""
+        self.query_one(DiffView).set_find("")
+        self._update_find()
+
+    def _update_find(self) -> None:
+        self.query_one(FindBar).set_status(self.query_one(DiffView).find.status())
+        self.refresh_bindings()
+
     def action_toggle_files(self) -> None:
         files = self.query_one(FileList)
         files.display = not files.display
@@ -268,7 +372,7 @@ class DiffuiApp(App[None]):
         if row is None or not self.active:
             return
         path = self.active
-        lines = view.selected_lines() or ([row.line] if row.kind == "line" else [])
+        lines = view.selected_lines() or ([view.target(row)] if row.kind == "line" else [])
         if lines:
             first, last = lines[0], lines[-1]
             where = (
