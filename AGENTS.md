@@ -234,6 +234,8 @@ After making changes, always:
 - `get_branch_commits` gets every commit's file list from one
   `git log --name-only` call, avoiding an N+1 of `git diff-tree`
   subprocesses.
+- The merge base comes from `origin/<main>` when that ref exists. Local main
+  goes stale between pulls, and a stale base shows already-merged files.
 
 ## Commands
 

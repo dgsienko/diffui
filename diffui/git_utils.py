@@ -74,9 +74,17 @@ def _detect_main_branch(repo_root: Path) -> str:
     return "main"
 
 
+def _base_ref(repo_root: Path, branch: str) -> str:
+    # Local main goes stale between pulls, and a stale base counts already-merged commits as branch changes.
+    remote = f"origin/{branch}"
+    if _git_at(repo_root, "rev-parse", "--verify", "--quiet", f"refs/remotes/{remote}").returncode == 0:
+        return remote
+    return branch
+
+
 def repo_has_changes(repo_root: Path) -> bool:
     main = _detect_main_branch(repo_root)
-    base = _git_at(repo_root, "merge-base", main, "HEAD")
+    base = _git_at(repo_root, "merge-base", _base_ref(repo_root, main), "HEAD")
     if base.returncode != 0:
         return False
     if _git_at(repo_root, "diff", "--quiet", base.stdout.strip()).returncode != 0:
@@ -141,7 +149,7 @@ def get_main_branch() -> str:
 
 
 def get_merge_base(main_branch: str) -> str:
-    result = _git("merge-base", main_branch, "HEAD")
+    result = _git("merge-base", _base_ref(get_repo_root(), main_branch), "HEAD")
     if result.returncode != 0:
         raise RuntimeError(f"Could not find merge base with {main_branch}")
     return result.stdout.strip()
