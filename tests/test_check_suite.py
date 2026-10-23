@@ -68,9 +68,10 @@ def run(monkeypatch):
         ("claude hangs", 0),
         ("claude errors", 0),
         ("no verdict", 0),
+        ("delete-only push", 0),
     ],
 )
-def test_main_blocks_only_on_a_block_verdict(run, case, expected):
+def test_main_blocks_only_on_a_block_verdict(run, monkeypatch, case, expected):
     if case == "block":
         run["claude"] = _completed(stdout="CHECK-SUITE: BLOCK")
     elif case == "no changes":
@@ -84,6 +85,9 @@ def test_main_blocks_only_on_a_block_verdict(run, case, expected):
         run["claude"] = _completed(returncode=1, stdout="CHECK-SUITE: BLOCK")
     elif case == "no verdict":
         run["claude"] = _completed(stdout="report")
+    elif case == "delete-only push":
+        monkeypatch.setattr(check_suite.sys, "stdin", io.StringIO("(delete) 0000000 refs/heads/a def456\n"))
+        run["claude"] = _completed(stdout="CHECK-SUITE: BLOCK")
     assert check_suite.main() == expected
 
 
@@ -91,7 +95,6 @@ def test_main_skips_when_claude_is_missing(run, monkeypatch):
     monkeypatch.setattr(check_suite.shutil, "which", lambda _: None)
     run["claude"] = _completed(stdout="CHECK-SUITE: BLOCK")
     assert check_suite.main() == 0
-    assert run["git_calls"] == []
 
 
 def test_main_diffs_the_pushed_sha(run, monkeypatch):

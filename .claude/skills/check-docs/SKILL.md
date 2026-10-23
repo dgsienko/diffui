@@ -13,7 +13,7 @@ Where facts live:
 
 ## What to check
 
-Ask these in order. Check 1 blocks. The rest are suggestions, except a banned tell in check 4, which blocks.
+Ask these in order. Check 1 blocks. The rest are suggestions, except a banned tell in check 5, which blocks.
 
 1. Does the diff make an existing doc claim false? Search README.md and AGENTS.md for the names, paths, flags, keybindings, state-file fields and counts (themes, scopes, routes) the diff changes. Check the architecture tree in AGENTS.md for added, moved or deleted files, and the Testing section for added or removed test files. A claim the diff breaks must be fixed or deleted in the same branch.
 2. Did the diff change a decision a doc explains? If a page gives the reason for a design choice and the branch changes the choice, update the reason. Changed mechanics under an unchanged decision need nothing.

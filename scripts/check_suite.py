@@ -60,7 +60,11 @@ def main() -> int:
         print("check-suite: claude is not installed, skipping.")
         return 0
     hook_input = "" if sys.stdin.isatty() else sys.stdin.read()
-    diff_range = f"origin/main...{pushed_sha(hook_input) or 'HEAD'}"
+    sha = pushed_sha(hook_input)
+    if hook_input.strip() and sha is None:
+        print("check-suite: the push only deletes refs, skipping.")
+        return 0
+    diff_range = f"origin/main...{sha or 'HEAD'}"
     diff = git("diff", "-M", diff_range)
     stat = git("diff", "--stat", "-M", diff_range)
     if diff.returncode != 0 or stat.returncode != 0:

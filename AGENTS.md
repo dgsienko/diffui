@@ -154,7 +154,7 @@ git config core.hooksPath .githooks  # Once per clone: enables the pre-push hook
 
 CI (`.github/workflows/ci.yml`) runs `ruff check`, `ruff format --check` and `pytest` on Ubuntu and macOS, Python 3.10 and 3.13. The checkout is full-depth because some tests diff the repo against `origin/main`.
 
-`.githooks/pre-push` runs the same three checks, then `scripts/check_suite.py`. That script sends the diff of `origin/main...<pushed sha>` to one headless `claude -p` session that follows `.claude/skills/check-docs`, `check-scope` and `check-tests`, and it blocks the push on a `CHECK-SUITE: BLOCK` line. It skips when `claude` is missing, errors, times out or prints no verdict. `SKIP=check-suite git push` bypasses it. Fix a `:warning:` finding with a new commit and push again. Change what the review looks for in the skills, not in the script.
+`.githooks/pre-push` runs the same three checks, then `scripts/check_suite.py` (the README's Development section describes it). Fix a `:warning:` finding with a new commit and push again. Change what the review looks for in the skills, not in the script.
 
 ## Testing
 
