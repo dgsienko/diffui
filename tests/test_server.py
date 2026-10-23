@@ -6,6 +6,7 @@ import pathlib
 
 import pytest
 
+from diffui.server.routes_diff import _order_files
 from diffui.server.theme_css import generate_css_vars
 from diffui.themes.definitions import ALL_THEMES, CATPPUCCIN_MOCHA, GITHUB_DARK
 
@@ -770,6 +771,17 @@ class TestServerRoutes:
         second = _server_app.get(f"/api/diff/{path}?view=all").json()
         assert first == second
 
+    @pytest.mark.parametrize("route", ["diff", "file"])
+    def test_html_off_drops_only_the_html(self, _server_app, route):
+        def lines(data):
+            return data["lines"] if route == "file" else [ln for h in data["hunks"] for ln in h["lines"]]
+
+        with_html = lines(_server_app.get(f"/api/{route}/app.py?view=all").json())
+        without = lines(_server_app.get(f"/api/{route}/app.py?view=all&html=0").json())
+        assert with_html and all("html" in ln for ln in with_html)
+        assert not any("html" in ln for ln in without)
+        assert [{k: v for k, v in ln.items() if k != "html"} for ln in with_html] == without
+
     def test_clear_diff_cache_empties_cache(self, _server_app):
         from diffui.server.routes_diff import _diff_cache, clear_diff_cache
 
@@ -1366,14 +1378,24 @@ class TestHerdr:
             _delete_app_py_comments(_server_app)
 
 
+def _entry(path: str, risk: int = 0) -> dict:
+    return {"path": path, "dir": path.rpartition("/")[0] or ".", "risk_score": risk}
+
+
+def test_order_files_mirrors_the_web_tree():
+    files = [_entry("a/z.py"), _entry("b/y.py", 5), _entry("top.py", 3), _entry("a/b/x.py")]
+    assert [f["path"] for f in _order_files(files, "tree")] == ["top.py", "a/z.py", "a/b/x.py", "b/y.py"]
+    assert [f["path"] for f in _order_files(files, "risk")] == ["b/y.py", "top.py", "a/z.py", "a/b/x.py"]
+
+
 class TestSearch:
     def test_matches_file_names_and_content_of_the_view(self, _server_app):
         r = _server_app.get("/api/search", params={"q": "EXTRA"}).json()
-        assert r["files"] == ["extra.py"]
+        assert r["files"] == [{"path": "extra.py", "changed": True}]
         assert r["hits"] == []
 
         r = _server_app.get("/api/search", params={"q": "line five"}).json()
-        assert r["hits"] == [{"path": "app.py", "line": 5, "text": "line five"}]
+        assert r["hits"] == [{"path": "app.py", "line": 5, "text": "line five", "changed": True}]
 
         # Content comes from the working tree, so an untracked file is searched too.
         r = _server_app.get("/api/search", params={"q": "never committed"}).json()
@@ -1384,9 +1406,10 @@ class TestSearch:
         assert r["hits"] == []
         assert _server_app.get("/api/search", params={"q": "value"}).json()["hits"][0]["path"] == "extra.py"
 
-    def test_hits_are_capped(self, _server_app, monkeypatch):
+    @pytest.mark.parametrize(("scope", "query"), [("changed", "line"), ("all", "render")])
+    def test_hits_are_capped(self, _server_app, monkeypatch, scope, query):
         monkeypatch.setattr("diffui.server.routes_search.MAX_HITS", 3)
-        r = _server_app.get("/api/search", params={"q": "line"}).json()
+        r = _server_app.get("/api/search", params={"q": query, "scope": scope}).json()
         assert len(r["hits"]) == 3
         assert r["truncated"] is True
 
@@ -1407,13 +1430,7 @@ class TestWholeRepoSearch:
         assert [(h["path"], h["changed"]) for h in search("line five")["hits"]] == [("app.py", True)]
 
         assert search("rendrer", scope="changed")["files"] == []
-        assert search("extrra", scope="changed")["files"] == ["extra.py"]
-
-    def test_all_scope_caps_hits(self, _server_app, monkeypatch):
-        monkeypatch.setattr("diffui.server.routes_search.MAX_HITS", 5)
-        r = _server_app.get("/api/search", params={"q": "render", "scope": "all"}).json()
-        assert len(r["hits"]) == 5
-        assert r["truncated"] is True
+        assert search("extrra", scope="changed")["files"] == [{"path": "extra.py", "changed": True}]
 
     @pytest.fixture
     def own_repo(self, tmp_path, temp_repo):
@@ -1506,7 +1523,6 @@ class TestLastTurn:
             assert _server_app.get("/api/last-turn").json()["reason"] is None
             diff = _server_app.get("/api/diff/extra.py?view=last-turn").json()
             assert [ln["text"] for h in diff["hunks"] for ln in h["lines"] if ln["type"] == "add"] == ["+VALUE = 2"]
-            assert _server_app.get("/api/files/next-unreviewed?view=last-turn").json()["path"] == "extra.py"
             assert self._git(temp_repo, "ls-files", "--stage") == index_before
             assert self._git(temp_repo, "diff", "--cached") == staged_before
         finally:

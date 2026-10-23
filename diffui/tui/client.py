@@ -13,6 +13,7 @@ import httpx
 import uvicorn
 
 from diffui.cli import _find_free_port
+from diffui.diff import resolve_line_num
 from diffui.server.app import create_app
 
 # Diff text and comments come from the branch under review. Escape sequences in them
@@ -94,17 +95,14 @@ class ApiClient:
     async def files(self, order: str, view: str) -> list[dict]:
         return _json(await self._get("/api/files", order=order, view=view, hide_ignored="true"))
 
-    async def next_unreviewed(self, order: str, view: str) -> str | None:
-        return _json(await self._get("/api/files/next-unreviewed", order=order, view=view))["path"]
-
     async def diff(self, path: str, view: str) -> dict:
-        return _json(await self._get(f"/api/diff/{quote(path)}", view=view))
+        return _json(await self._get(f"/api/diff/{quote(path)}", view=view, html=0))
 
     async def search(self, query: str, view: str, scope: str) -> dict:
         return _json(await self._get("/api/search", q=query, view=view, scope=scope))
 
     async def file(self, path: str, view: str) -> dict:
-        return _json(await self._get(f"/api/file/{quote(path)}", view=view))
+        return _json(await self._get(f"/api/file/{quote(path)}", view=view, html=0))
 
     async def commits(self) -> list[dict]:
         return _json(await self._get("/api/commits"))
@@ -124,7 +122,7 @@ class ApiClient:
             "file_path": path,
             "line_index": line["index"],
             "line_text": line["text"],
-            "file_line_num": int(line["new_num"] or line["old_num"] or 0) or None,
+            "file_line_num": resolve_line_num(line["old_num"], line["new_num"]),
             "comment": text,
         }
         if covered and len(covered) > 1:

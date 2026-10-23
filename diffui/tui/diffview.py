@@ -68,7 +68,6 @@ class DiffView(ScrollView, can_focus=True):
         self._data: dict = {}
         self._comments: list[dict] = []
         self._tops: list[int] = []
-        self._gutter_w = 5
         self._wrap_w = 0
         self._code_w = 0
         self._nums: dict[int, str] = {}
@@ -85,6 +84,13 @@ class DiffView(ScrollView, can_focus=True):
         return self.split_wanted and not self.readonly and self.size.width >= SPLIT_MIN_WIDTH
 
     @property
+    def _gutter_w(self) -> int:
+        return 2 * self.digits + 4
+
+    def _wrap_width(self, width: int) -> int:
+        return max(width - self._gutter_w - 4, 24)
+
+    @property
     def number_width(self) -> int:
         return max(self.digits, 3)
 
@@ -98,12 +104,14 @@ class DiffView(ScrollView, can_focus=True):
         self.lexer = get_lexer(path)
         lines = [ln for h in data.get("hunks", []) for ln in h["lines"]]
         self.digits = max((len(str(n)) for ln in lines for n in (ln["old_num"], ln["new_num"]) if n), default=1)
-        self._gutter_w = 2 * self.digits + 4
         self._code_w = max((len(ln["text"]) for ln in lines), default=0)
         self._nums = {ln["index"]: str(ln["new_num"] or ln["old_num"] or "") for ln in lines}
         if not same_file:
             self.range_start = None
         self._rebuild(comments, keep=same_file)
+
+    def shows(self, path: str, data: dict, comments: list[dict], readonly: bool) -> bool:
+        return (path, data, comments, readonly) == (self.path, self._data, self._comments, self.readonly)
 
     def set_comments(self, comments: list[dict]) -> None:
         self._rebuild(comments, keep=True)
@@ -148,7 +156,7 @@ class DiffView(ScrollView, can_focus=True):
         return next((i for i, r in enumerate(self.rows) if r.kind == "line"), 0)
 
     def _layout(self) -> None:
-        wrap_w = max(self.size.width - self._gutter_w - 4, 24)
+        wrap_w = self._wrap_width(self.size.width)
         top = 0
         tops = []
         for row in self.rows:
@@ -174,7 +182,7 @@ class DiffView(ScrollView, can_focus=True):
                 self.app.notify(f"Pane too narrow for split view (needs {SPLIT_MIN_WIDTH} columns), showing unified")
         elif self._split:
             self._layout()
-        elif max(event.size.width - self._gutter_w - 4, 24) != self._wrap_w:
+        elif self._wrap_width(event.size.width) != self._wrap_w:
             self._layout()
             self._reveal(self.cursor)
 
@@ -228,7 +236,6 @@ class DiffView(ScrollView, can_focus=True):
         self._set_cursor(self.cursor + delta, side=self.side)
 
     def action_swap_side(self) -> None:
-        """Split view: moves the cursor between the old and new line of a replaced pair."""
         if self.current and self.current.paired():
             self.side = "old" if self.side_of(self.current, self.side) == "new" else "new"
             self.refresh()
@@ -241,7 +248,6 @@ class DiffView(ScrollView, can_focus=True):
         return wanted if wanted and row.paired() else "new"
 
     def target(self, row: Row) -> dict | None:
-        """The line a comment on this row is stored against."""
         if row.old is None and row.new is None:
             return row.line
         return row.old if self.side_of(row, self.side) == "old" else row.new
@@ -264,7 +270,6 @@ class DiffView(ScrollView, can_focus=True):
         )
 
     def selected_lines(self) -> list[dict]:
-        """The diff lines between the range start and the cursor, or none without a selection."""
         if self.range_start is None:
             return []
         lo, hi = sorted((self.range_start, self.cursor))
@@ -354,7 +359,6 @@ class DiffView(ScrollView, can_focus=True):
         return x < nw + 2 or 1 + left <= x < 3 + left + nw
 
     def _row_under(self, y: int) -> int | None:
-        """The row at a widget-relative y, or None below the last row."""
         y += self.scroll_offset.y
         return self._row_at(y) if self.rows and 0 <= y < self.virtual_size.height else None
 
@@ -455,9 +459,9 @@ class DiffView(ScrollView, can_focus=True):
     def _flat_strip(self, index: int, row: Row, active: bool) -> tuple[Strip, str]:
         p = self.palette
         lit = active or self.is_selected(index)
-        mark = "▸" if active else "▌" if row.kind == "line" and lit else " "
         base = p.hover_bg if lit else p.hunk_bg if row.kind == "hunk" else p.bg
         fg = p.hunk_fg if row.kind == "hunk" else p.fg_muted
+        mark = "▸" if active else " "
         return Strip([Segment(f"{mark}{row.text}", style(fg, base))]), base
 
     def _thread_strips(self, row: Row, active: bool, wrap_w: int) -> list[Strip]:

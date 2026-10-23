@@ -62,7 +62,7 @@ def _search_changed(query: str, view: str) -> dict:
     with fff_index.finder() as finder:
         fuzzy = _fuzzy_names(finder, query, set(paths))
     names = [p for _, p in ranked]
-    files = names + [p for p in fuzzy if p not in names]
+    files = [{"path": p, "changed": True} for p in names + [p for p in fuzzy if p not in names]]
     hits: list[dict] = []
     truncated = False
     for path in paths:
@@ -71,7 +71,7 @@ def _search_changed(query: str, view: str) -> dict:
                 if len(hits) == MAX_HITS:
                     truncated = True
                     break
-                hits.append({"path": path, "line": number, "text": line[:_MAX_TEXT]})
+                hits.append({"path": path, "line": number, "text": line[:_MAX_TEXT], "changed": True})
         if truncated:
             break
     return {"files": files, "hits": hits, "truncated": truncated}

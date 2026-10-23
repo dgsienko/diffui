@@ -174,28 +174,22 @@ def list_files(view: str = "all", order: str = "", hide_ignored: bool = False):
     return _file_entries(view, order, hide_ignored)
 
 
-@router.get("/files/next-unreviewed")
-def next_unreviewed(order: str = "tree", view: str = "all"):
-    entries = _file_entries(view, order, hide_ignored=True)
-    return {"path": next((f["path"] for f in entries if not f["reviewed"]), None)}
-
-
 @router.get("/diff/{path:path}")
-def get_diff(path: str, view: str = "all", context: int = 3, ignore_whitespace: bool = False):
+def get_diff(path: str, view: str = "all", context: int = 3, ignore_whitespace: bool = False, html: bool = True):
     path = repo_relative(path)
     diff_text = _get_diff(path, view, context, ignore_whitespace=ignore_whitespace)
-    return parse_diff_to_json(diff_text, path, app_state.theme)
+    return parse_diff_to_json(diff_text, path, app_state.theme, with_html=html)
 
 
 @router.get("/file/{path:path}")
-def get_file(path: str, view: str = "all"):
+def get_file(path: str, view: str = "all", html: bool = True):
     from diffui.git_utils import get_file_content
     from diffui.server.highlight import highlight_file_to_json
 
     path = repo_relative(path)
     content = get_file_content(path)
     diff_text = _get_diff(path, view)
-    return highlight_file_to_json(content, diff_text, path, app_state.theme)
+    return highlight_file_to_json(content, diff_text, path, app_state.theme, with_html=html)
 
 
 @router.get("/blame/{path:path}")

@@ -23,9 +23,13 @@ class FileList(OptionList, can_focus=False):
         self._files: list[dict] = []
         self._active: str | None = None
         self._flat = False
-        self._width, self._adds_w, self._dels_w = 20, 2, 2
+        self._width: int
+        self._adds_w: int
+        self._dels_w: int
 
     def set_files(self, files: list[dict], active: str | None, flat: bool) -> None:
+        if (files, active, flat) == (self._files, self._active, self._flat):
+            return
         self._files, self._active, self._flat = files, active, flat
         self._rebuild()
 
@@ -37,7 +41,7 @@ class FileList(OptionList, can_focus=False):
         self._highlight()
 
     def on_resize(self, event: events.Resize) -> None:
-        if self._files:
+        if self._files and max(self.size.width - 2, 20) != self._width:
             self._rebuild()
 
     def _rebuild(self) -> None:

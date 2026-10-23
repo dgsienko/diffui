@@ -164,8 +164,6 @@ class AgentScreen(ModalScreen[bool]):
 
 
 class CommitsScreen(ModalScreen[str | None]):
-    """The branch's commits, newest first. Choosing one scopes the review to that commit."""
-
     BINDINGS: ClassVar[list[BindingType]] = [Binding("escape,q,C", "dismiss", show=False)]
 
     def __init__(self, commits: list[dict]) -> None:

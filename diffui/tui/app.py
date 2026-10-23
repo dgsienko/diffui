@@ -7,18 +7,19 @@ from typing import ClassVar
 
 import httpx
 from rich.text import Text
+from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.theme import Theme as TextualTheme
-from textual.widgets import Footer, Static
+from textual.widgets import Footer, Input, Static
 
 from diffui.themes import ALL_THEMES, DEFAULT_THEME
 from diffui.tui.client import ApiClient, LocalServer
 from diffui.tui.diffview import DiffView
 from diffui.tui.filelist import FileList
-from diffui.tui.find import FindBar, FindClose, FindQuery, FindStep
+from diffui.tui.find import FindBar
 from diffui.tui.screens import AgentScreen, CommitsScreen, ComposeScreen, HelpScreen
 from diffui.tui.search import SearchScreen
 from diffui.tui.style import span
@@ -49,7 +50,7 @@ ModalScreen { align: center middle; background: $background 60%; }
 
 
 _NEEDS = {"select_range": "line", "clear_selection": "range"}
-_SCOPES = (("u", "uncommitted", "working"), ("b", "branch", "all"), ("t", "last turn", "last-turn"))
+_SCOPES = (("uncommitted", "working"), ("branch", "all"), ("last turn", "last-turn"))
 
 
 def _number(line: dict) -> str:
@@ -226,7 +227,10 @@ class DiffuiApp(App[None]):
             await self._load_diff(self.active)
 
     async def _refresh_comments(self) -> None:
-        self.comments = await self.client.comments()
+        comments = await self.client.comments()
+        if comments == self.comments:
+            return
+        self.comments = comments
         await self._refresh_files()
         self.query_one(DiffView).set_comments(self.comments.get(self.active or "", []))
 
@@ -237,7 +241,7 @@ class DiffuiApp(App[None]):
         self.browsing = self.browsing and self.active not in paths
         opening = self.active not in paths and not self.browsing
         if opening:
-            self.active = await self.client.next_unreviewed(self.order, self.view) or (paths[0] if paths else None)
+            self.active = self._next_unreviewed() or (paths[0] if paths else None)
         self.query_one(FileList).set_files(self.files, self.active, flat=self.order == "risk")
         self._update_bar()
         if opening and self.active:
@@ -246,7 +250,7 @@ class DiffuiApp(App[None]):
             note = "No changes to review."
             if self.view == "last-turn":
                 note = await self.client.last_turn_reason() or note
-            self.query_one(DiffView).set_diff("", {"file_note": note, "hunks": []}, [])
+            self._show("", {"file_note": note, "hunks": []}, [])
             self._update_find()
         return opening
 
@@ -255,9 +259,9 @@ class DiffuiApp(App[None]):
         open_comments = sum(f["open_comment_count"] for f in self.files)
         bar = Text(f"{self._branch.get('repo_name', '')}  {self._branch.get('name', '')}", style="bold")
         bar.append("   ")
-        for _key, name, view in _SCOPES:
+        for name, view in _SCOPES:
             bar.append(f" {name} ", style="reverse" if view == self.view else "dim")
-        if self.view not in {v for _k, _n, v in _SCOPES}:
+        if self.view not in {v for _n, v in _SCOPES}:
             bar.append(f" commit {self.view[:8]} ", style="reverse")
         bar.append(f"   {reviewed}/{len(self.files)} reviewed   {open_comments} open comments", style="dim")
         if self.browsing:
@@ -271,6 +275,12 @@ class DiffuiApp(App[None]):
     def on_resize(self, _event) -> None:
         self.call_after_refresh(self._update_bar)
 
+    def _show(self, path: str, data: dict, comments: list[dict], readonly: bool = False) -> DiffView:
+        view = self.query_one(DiffView)
+        if not view.shows(path, data, comments, readonly):
+            view.set_diff(path, data, comments, readonly=readonly)
+        return view
+
     async def _load_diff(self, path: str, line: int | None = None) -> None:
         self._diff_seq += 1
         seq = self._diff_seq
@@ -280,8 +290,7 @@ class DiffuiApp(App[None]):
         else:
             data = await self.client.diff(path, self.view)
         if seq == self._diff_seq and path == self.active:
-            view = self.query_one(DiffView)
-            view.set_diff(path, data, [] if browsing else self.comments.get(path, []), readonly=browsing)
+            view = self._show(path, data, [] if browsing else self.comments.get(path, []), browsing)
             if line is not None and not view.goto_line(line):
                 self.notify(f"Line {line} is outside the diff, showing the nearest line", timeout=3)
             self._update_find()
@@ -303,8 +312,11 @@ class DiffuiApp(App[None]):
             index = paths.index(self.active) if self.active in paths else -step
             await self._open_file(paths[(index + step) % len(paths)])
 
+    def _next_unreviewed(self) -> str | None:
+        return next((f["path"] for f in self.files if not f["reviewed"]), None)
+
     async def action_next_unreviewed(self) -> None:
-        path = await self.client.next_unreviewed(self.order, self.view)
+        path = self._next_unreviewed()
         if path:
             await self._open_file(path)
         else:
@@ -364,14 +376,18 @@ class DiffuiApp(App[None]):
     def action_find(self) -> None:
         self.query_one(FindBar).open()
 
-    def on_find_query(self, event: FindQuery) -> None:
-        self.query_one(DiffView).set_find(event.query)
+    @on(Input.Changed, "#find-input")
+    def _find_changed(self, event: Input.Changed) -> None:
+        event.stop()
+        self.query_one(DiffView).set_find(event.value)
         self._update_find()
 
-    def on_find_step(self, event: FindStep) -> None:
-        self.action_find_step(event.direction)
+    @on(Input.Submitted, "#find-input")
+    def _find_submitted(self, event: Input.Submitted) -> None:
+        event.stop()
+        self.action_find_step(1)
 
-    def on_find_close(self, _event: FindClose) -> None:
+    def action_close_find(self) -> None:
         self.query_one(FindBar).close()
         self.query_one(DiffView).focus()
         self._update_find()

@@ -224,12 +224,18 @@ def _diff_untracked(path: str) -> str:
     return header + body
 
 
-def get_commit_diff(commit_sha: str, path: str, context: int = 3, *, ignore_whitespace: bool = False) -> str:
+def _path_diff(
+    a: str, b: str, path: str, context: int, ignore_whitespace: bool, *flags: str
+) -> subprocess.CompletedProcess[str]:
     ws = ["-w"] if ignore_whitespace else []
-    result = _git("diff", f"-U{context}", *ws, f"{commit_sha}~1", commit_sha, "--", path)
+    return _git("diff", f"-U{context}", *ws, *flags, a, b, "--", path)
+
+
+def get_commit_diff(commit_sha: str, path: str, context: int = 3, *, ignore_whitespace: bool = False) -> str:
+    result = _path_diff(f"{commit_sha}~1", commit_sha, path, context, ignore_whitespace)
     if result.returncode != 0:
         empty_tree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-        return _git("diff", f"-U{context}", *ws, empty_tree, commit_sha, "--", path).stdout
+        return _path_diff(empty_tree, commit_sha, path, context, ignore_whitespace).stdout
     return result.stdout
 
 
@@ -238,16 +244,19 @@ def get_changed_files(merge_base: str) -> list[str]:
     return [f for f in result.stdout.strip().splitlines() if f]
 
 
-def get_diff_numstat(merge_base: str) -> dict[str, tuple[int, int]]:
-    result = _git("diff", "--numstat", merge_base)
+def _parse_numstat(stdout: str) -> dict[str, tuple[int, int]]:
     stats: dict[str, tuple[int, int]] = {}
-    for line in result.stdout.strip().splitlines():
+    for line in stdout.strip().splitlines():
         parts = line.split("\t", 2)
         if len(parts) == 3:
             adds = int(parts[0]) if parts[0] != "-" else 0
             dels = int(parts[1]) if parts[1] != "-" else 0
             stats[parts[2]] = (adds, dels)
     return stats
+
+
+def get_diff_numstat(merge_base: str) -> dict[str, tuple[int, int]]:
+    return _parse_numstat(_git("diff", "--numstat", merge_base).stdout)
 
 
 def get_working_changed_files() -> list[str]:
@@ -291,17 +300,11 @@ def write_turn_tree(tree: str) -> None:
 
 
 def get_tree_numstat(base: str, now: str) -> dict[str, tuple[int, int]]:
-    result = _git("diff", "--numstat", "--no-renames", base, now)
-    stats: dict[str, tuple[int, int]] = {}
-    for line in result.stdout.splitlines():
-        adds, dels, path = line.split("\t", 2)
-        stats[path] = (int(adds) if adds != "-" else 0, int(dels) if dels != "-" else 0)
-    return stats
+    return _parse_numstat(_git("diff", "--numstat", "--no-renames", base, now).stdout)
 
 
 def get_tree_diff(base: str, now: str, path: str, context: int = 3, *, ignore_whitespace: bool = False) -> str:
-    ws = ["-w"] if ignore_whitespace else []
-    return _git("diff", f"-U{context}", *ws, "--no-renames", base, now, "--", path).stdout
+    return _path_diff(base, now, path, context, ignore_whitespace, "--no-renames").stdout
 
 
 class PathOutsideRepo(ValueError):

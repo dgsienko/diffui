@@ -446,7 +446,7 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
   whitespace, pydantic validation, font/wrap/keybinding settings,
   _build_agent_context, _process_status, explain view with temp files,
   repo switch, working files view, diff context/whitespace params,
-  editor open endpoint, `/api/search` (names, content, view scope, cap, typo
+  editor open endpoint, `_order_files` for tree and risk order, `/api/search` (names, content, view scope, cap, typo
   names, whole-repo scope with `changed` marks, a file written after the first
   search),
   `TurnTracker` edges, and last-turn (start snapshot through `poll_once`, only
@@ -455,9 +455,9 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
   a `LocalServer` on the `temp_repo` fixture. Covers file keys in tree order,
   a comment added from the keyboard stored at the right line, Mark reviewed
   advancing to the next unreviewed file, an external `comments.json` write
-  refreshing the view, `_order_files` for tree and risk order, the file list
-  right of the diff, scope keys, search opening a file at a hit, find stepping
-  matches, search over all files opening a file outside the diff read-only, and split view pairing lines and storing comments from either side. Tests drive
+  refreshing the view, scope keys, search opening a file at a hit, find stepping
+  matches, search over all files opening a file outside the diff read-only, and
+  split view pairing lines and storing comments from either side. Tests drive
   the app with `asyncio.run` and poll with `until()`, since the server reaches
   the view through the watcher and SSE.
 - `tests/test_themes.py`: all themes have valid hex colors,

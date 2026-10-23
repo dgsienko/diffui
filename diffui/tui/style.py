@@ -27,8 +27,15 @@ def add_fg(theme: Theme) -> str:
     return token_color(Token.Literal.String, theme.syntax) or theme.fg
 
 
+def marker(active: bool, selected: bool) -> str:
+    return "▸" if active else "▌" if selected else " "
+
+
+def prefix_fg(p: Theme, kind: str) -> str:
+    return {"add": add_fg(p), "remove": p.delete_fg}.get(kind, p.gutter_fg)
+
+
 def tint(p: Theme, kind: str, lit: bool) -> str:
-    """The row background for a line type, brighter while the cursor or a range is on it."""
     if kind == "add":
         return p.add_hover if lit else p.add_bg
     if kind == "remove":

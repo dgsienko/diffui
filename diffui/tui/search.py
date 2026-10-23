@@ -44,8 +44,8 @@ class SearchScreen(ModalScreen[Target | None]):
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
             yield Static(self._title(), classes="dialog-title", id="search-title")
-            yield Input(id="search-input", placeholder="file name or text")
-            yield OptionList(id="search-results")
+            yield Input(placeholder="file name or text")
+            yield OptionList()
             yield Static(
                 "enter opens, tab switches Changed and All files, esc closes. Text matches ignore case.", classes="hint"
             )
@@ -103,8 +103,7 @@ class SearchScreen(ModalScreen[Target | None]):
                 label.append(_NOT_IN_DIFF, style=f"not bold {p.fg_muted}")
             options.append(Option(label, disabled=True))
 
-        # The changed scope lists plain paths, since every file in it is in the diff.
-        files = [f if isinstance(f, dict) else {"path": f, "changed": True} for f in data["files"]]
+        files = data["files"]
         if files:
             heading(f"Files ({len(files)})")
             for f in files:
@@ -115,7 +114,7 @@ class SearchScreen(ModalScreen[Target | None]):
                 add(label, (f["path"], None))
         current = None
         for hit in data["hits"]:
-            changed = hit.get("changed", True)
+            changed = hit["changed"]
             if hit["path"] != current:
                 current = hit["path"]
                 heading(current, changed)
@@ -151,8 +150,7 @@ class SearchScreen(ModalScreen[Target | None]):
         self._pick(event.option)
 
     def _pick(self, option: Option) -> None:
-        if option.id in self._targets:
-            self.dismiss(self._targets[option.id])
+        self.dismiss(self._targets[option.id])
 
     def action_dismiss_search(self) -> None:
         self.dismiss(None)

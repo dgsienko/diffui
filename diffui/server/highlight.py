@@ -91,14 +91,14 @@ def _apply_word_highlights(code_html: str, ranges: list[tuple[int, int]], code_p
     return "".join(result)
 
 
-def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme) -> dict:
+def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme, with_html: bool = True) -> dict:
     lines = diff_text.splitlines()
     if not lines:
         return {"file_path": file_path, "adds": 0, "dels": 0, "file_note": "", "hunks": []}
 
     adds, dels = diff_stat(diff_text)
     numbers = parse_line_numbers(diff_text)
-    word_highlights = pair_diff_lines(lines)
+    word_highlights = pair_diff_lines(lines) if with_html else {}
     hunks = split_into_hunks(lines)
     lexer = get_lexer(file_path)
 
@@ -123,34 +123,26 @@ def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme) -> dict:
                 continue
             old_num, new_num = numbers[i] if i < len(numbers) else (None, None)
 
-            if line_type in ("add", "remove", "context"):
-                code = strip_diff_prefix(line)
-                prefix = line[0] if line else " "
-                code_html = highlight_line_html(code, lexer, theme.syntax)
-                prefix_html = html.escape(prefix)
-                if i in word_highlights:
-                    code_html = _apply_word_highlights(code_html, word_highlights[i], code)
-                line_html = f'<span class="diff-prefix">{prefix_html}</span>{code_html}'
-            else:
-                line_html = html.escape(line)
-
-            result_lines.append(
-                {
-                    "index": i,
-                    "type": line_type,
-                    "old_num": old_num,
-                    "new_num": new_num,
-                    "html": line_html,
-                    "text": line,
-                }
-            )
+            entry = {"index": i, "type": line_type, "old_num": old_num, "new_num": new_num, "text": line}
+            if with_html:
+                if line_type in ("add", "remove", "context"):
+                    code = strip_diff_prefix(line)
+                    prefix = line[0] if line else " "
+                    code_html = highlight_line_html(code, lexer, theme.syntax)
+                    prefix_html = html.escape(prefix)
+                    if i in word_highlights:
+                        code_html = _apply_word_highlights(code_html, word_highlights[i], code)
+                    entry["html"] = f'<span class="diff-prefix">{prefix_html}</span>{code_html}'
+                else:
+                    entry["html"] = html.escape(line)
+            result_lines.append(entry)
 
         result_hunks.append({"header": hunk_header[:80], "lines": result_lines})
 
     return {"file_path": file_path, "adds": adds, "dels": dels, "file_note": file_note, "hunks": result_hunks}
 
 
-def highlight_file_to_json(content: str, diff_text: str, file_path: str, theme: Theme) -> dict:
+def highlight_file_to_json(content: str, diff_text: str, file_path: str, theme: Theme, with_html: bool = True) -> dict:
     if not content:
         return {"file_path": file_path, "lines": []}
 
@@ -171,15 +163,10 @@ def highlight_file_to_json(content: str, diff_text: str, file_path: str, theme: 
     result_lines: list[dict] = []
     for i, line in enumerate(file_lines):
         line_num = i + 1
-        code_html = highlight_line_html(line, lexer, theme.syntax)
         line_type = changed_lines.get(line_num, "context")
-        result_lines.append(
-            {
-                "num": line_num,
-                "text": line,
-                "html": code_html,
-                "type": line_type,
-            }
-        )
+        entry = {"num": line_num, "text": line, "type": line_type}
+        if with_html:
+            entry["html"] = highlight_line_html(line, lexer, theme.syntax)
+        result_lines.append(entry)
 
     return {"file_path": file_path, "lines": result_lines}

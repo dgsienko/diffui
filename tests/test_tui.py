@@ -9,7 +9,6 @@ from rich.color import Color
 from textual.widgets import Footer, OptionList
 
 from diffui.git_utils import _comments_path, save_comments, save_reviewed, set_active_repo
-from diffui.server.routes_diff import _order_files
 from diffui.tui.app import DiffuiApp
 from diffui.tui.client import ApiClient, LocalServer
 from diffui.tui.diffview import DiffView
@@ -274,13 +273,6 @@ def test_external_comment_write_refreshes_the_view(server):
     run_tui(server, scenario)
 
 
-def test_file_list_sits_right_of_the_diff(server):
-    async def scenario(app, view, pilot):
-        assert app.query_one(FileList).region.x > view.region.x
-
-    run_tui(server, scenario)
-
-
 def test_scope_keys_switch_the_files_listed(server):
     async def scenario(app, view, pilot):
         assert [f["path"] for f in app.files] == ["app.py", "extra.py", "untracked.txt"]
@@ -432,16 +424,6 @@ def test_split_view_falls_back_to_unified_in_a_narrow_pane(server):
         assert not any(r.old for r in view.rows)
 
     run_tui(server, scenario)
-
-
-def _entry(path: str, risk: int = 0) -> dict:
-    return {"path": path, "dir": path.rpartition("/")[0] or ".", "risk_score": risk}
-
-
-def test_order_files_mirrors_the_web_tree():
-    files = [_entry("a/z.py"), _entry("b/y.py", 5), _entry("top.py", 3), _entry("a/b/x.py")]
-    assert [f["path"] for f in _order_files(files, "tree")] == ["top.py", "a/z.py", "a/b/x.py", "b/y.py"]
-    assert [f["path"] for f in _order_files(files, "risk")] == ["b/y.py", "top.py", "a/z.py", "a/b/x.py"]
 
 
 def test_escape_sequences_in_the_diff_never_reach_the_terminal(server, temp_repo):

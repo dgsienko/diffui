@@ -6,7 +6,6 @@ from typing import ClassVar
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal
-from textual.message import Message
 from textual.widgets import Input, Static
 
 from diffui.tui.rows import Row, code_of
@@ -65,34 +64,12 @@ class Find:
         return f"{self.current + 1}/{len(self.matches)}" if self.matches else "no matches"
 
 
-class FindQuery(Message):
-    def __init__(self, query: str) -> None:
-        super().__init__()
-        self.query = query
-
-
-class FindStep(Message):
-    def __init__(self, direction: int) -> None:
-        super().__init__()
-        self.direction = direction
-
-
-class FindClose(Message):
-    pass
-
-
 class _FindInput(Input):
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("escape", "close", "Close"),
-        Binding("down", "step(1)", "Next", key_display="↓/enter"),
-        Binding("up,shift+enter", "step(-1)", "Previous", key_display="↑"),
+        Binding("escape", "app.close_find", "Close"),
+        Binding("down", "app.find_step(1)", "Next", key_display="↓/enter"),
+        Binding("up,shift+enter", "app.find_step(-1)", "Previous", key_display="↑"),
     ]
-
-    def action_close(self) -> None:
-        self.post_message(FindClose())
-
-    def action_step(self, direction: int) -> None:
-        self.post_message(FindStep(direction))
 
 
 class FindBar(Horizontal):
@@ -117,11 +94,3 @@ class FindBar(Horizontal):
 
     def set_status(self, text: str) -> None:
         self.query_one("#find-count", Static).update(text)
-
-    def on_input_changed(self, event: Input.Changed) -> None:
-        event.stop()
-        self.post_message(FindQuery(event.value))
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        event.stop()
-        self.post_message(FindStep(1))
