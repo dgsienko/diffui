@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "diffui"
-version = "1.0.1"
+version = "0.10.0"
 description = "UI for reviewing AI agent diffs"
 license = "MIT"
 license-files = ["LICENSE"]
