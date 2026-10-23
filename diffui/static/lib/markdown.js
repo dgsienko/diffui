@@ -1,6 +1,6 @@
-import { marked } from 'marked';
+import { Marked } from 'marked';
 
-marked.setOptions({ breaks: true, gfm: true });
+const MD_OPTIONS = { breaks: true, gfm: true };
 
 const KROKI_BASE = [
   'mermaid', 'plantuml', 'graphviz', 'dot', 'd2', 'excalidraw',
@@ -25,7 +25,10 @@ const renderer = {
   }
 };
 
-marked.use({ renderer });
+// Only previews render diagrams. Comment bodies use plain marked, so a diagram fence stays a code block
+// and its source never goes to kroki.io.
+const diagramMarked = new Marked(MD_OPTIONS, { renderer });
+const plainMarked = new Marked(MD_OPTIONS);
 
 const ALLOWED_TAGS = new Set([
   'p', 'br', 'hr', 'em', 'strong', 'del', 's', 'code', 'pre', 'blockquote',
@@ -77,8 +80,8 @@ function sanitize(html) {
   return doc.body.innerHTML;
 }
 
-export function renderMd(text) {
-  return { __html: sanitize(marked.parse(text || '')) };
+export function renderMd(text, { diagrams = false } = {}) {
+  return { __html: sanitize((diagrams ? diagramMarked : plainMarked).parse(text || '')) };
 }
 
 export function renderDiagrams() {

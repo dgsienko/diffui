@@ -187,7 +187,7 @@ def get_full_diff(merge_base: str, path: str, context: int = 3, *, ignore_whites
         args.append("-w")
     args.extend([merge_base, "--", path])
     result = _git(*args).stdout
-    if result.strip():
+    if result.strip() or _is_tracked(path):
         return result
     return _diff_untracked(path)
 
@@ -201,9 +201,13 @@ def get_working_diff(path: str, context: int = 3, *, ignore_whitespace: bool = F
         parts.append(staged)
     if unstaged.strip():
         parts.append(unstaged)
-    if parts:
+    if parts or _is_tracked(path):
         return "".join(parts)
     return _diff_untracked(path)
+
+
+def _is_tracked(path: str) -> bool:
+    return bool(_git("ls-files", "--", path).stdout.strip())
 
 
 def _diff_untracked(path: str) -> str:

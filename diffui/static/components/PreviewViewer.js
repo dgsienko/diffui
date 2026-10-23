@@ -52,7 +52,7 @@ export function PreviewViewer({ filePath, containerRef }) {
           }
         </div>
       ` : MD_EXTS.has(ext) && preview?.content ? html`
-        <div class="preview-markdown comment-md" dangerouslySetInnerHTML=${renderMd(preview.content)}></div>
+        <div class="preview-markdown comment-md" dangerouslySetInnerHTML=${renderMd(preview.content, { diagrams: true })}></div>
       ` : html`
         <div class="empty-state">No preview available</div>
       `}

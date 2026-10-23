@@ -170,10 +170,9 @@ function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onLineHover
   `;
 }
 
-export function DiffViewer({ data, comments, searchTerm, actions, onOpenInEditor, onLineHover, showBlame, containerRef, collapseAll }) {
+export function DiffViewer({ data, comments, searchTerm, actions, onOpenInEditor, onLineHover, showBlame, blameCache, containerRef, collapseAll }) {
   const [commentingLine, setCommentingLine] = useState(null);
   const [blameData, setBlameData] = useState(null);
-  const blameCache = useRef(new Map());
   const hoveredLineRef = useRef(null);
   const localContainerRef = useRef(null);
   const { selMenu, pendingSelection: commentingSelection, setPendingSelection, commentFromSelection } = useRangeSelection('.diff-code', localContainerRef);
@@ -186,7 +185,7 @@ export function DiffViewer({ data, comments, searchTerm, actions, onOpenInEditor
     const result = await res.json();
     blameCache.current.set(filePath, result);
     setBlameData(result);
-  }, []);
+  }, [blameCache]);
 
   useEffect(() => {
     if (showBlame && data?.file_path) {
@@ -194,7 +193,7 @@ export function DiffViewer({ data, comments, searchTerm, actions, onOpenInEditor
     } else {
       setBlameData(null);
     }
-  }, [showBlame, data?.file_path, fetchBlame]);
+  }, [showBlame, data, fetchBlame]);
 
   const handleRightClick = (line) => {
     setPendingSelection(null);

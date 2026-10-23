@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pty
 import signal
 import subprocess
 import sys
@@ -153,19 +154,34 @@ class TestSpawnAgent:
         assert result["ok"] is True
         assert output.decode().split() == ["True", "100", "30", "100", "30", "the-prompt"]
 
-    def test_spawn_closes_child_fd_on_popen_failure(self):
+    @pytest.mark.parametrize("failing", ["subprocess.Popen", "tty.setraw"])
+    def test_failed_spawn_closes_both_pty_fds(self, failing):
         rat._pending_start = {"prompt": "test", "repo_root": "/repo", "agent": "claude", "cmd": ["claude"]}
-        with (
-            patch.object(rat.pty, "openpty", return_value=(10, 11)),
-            patch.object(rat.os, "ttyname", return_value="/dev/pts/99"),
-            patch.object(rat.tty, "setraw"),
-            patch.object(rat.subprocess, "Popen", side_effect=OSError("no exec")),
-            patch.object(rat.os, "close") as mock_close,
-            pytest.raises(OSError),
-        ):
-            rat._spawn_agent(24, 80)
+        opened = []
+        real_openpty = pty.openpty
 
-        mock_close.assert_called_once_with(11)
+        def record_openpty():
+            opened.extend(real_openpty())
+            return tuple(opened)
+
+        try:
+            with (
+                patch.object(rat.pty, "openpty", side_effect=record_openpty),
+                patch(f"diffui.server.routes_agent_terminal.{failing}", side_effect=OSError("spawn failed")),
+                pytest.raises(OSError),
+            ):
+                rat._spawn_agent(24, 80)
+
+            assert len(opened) == 2
+            for fd in opened:
+                with pytest.raises(OSError):
+                    os.fstat(fd)
+        finally:
+            for fd in opened:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
 
 
 class TestAgentWebSocket:
@@ -177,6 +193,15 @@ class TestAgentWebSocket:
         ):
             msg = ws.receive_json()
         assert msg == {"type": "error", "message": "No agent running"}
+
+    def test_start_consumed_between_check_and_spawn_sends_error(self, _server_app):
+        with (
+            patch.object(rat, "_pending_is_stale", return_value=False),
+            _server_app.websocket_connect("ws://localhost/api/agent/ws") as ws,
+        ):
+            ws.send_json({"type": "init", "rows": 24, "cols": 80})
+            msg = ws.receive_json()
+        assert msg == {"type": "error", "message": "No pending agent start"}
 
     def test_replays_buffer_and_started_then_exit(self, _server_app):
         proc = MagicMock()
