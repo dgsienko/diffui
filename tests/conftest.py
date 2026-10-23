@@ -4,8 +4,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 import diffui.git_utils
+from diffui.server.app import create_app
 
 _APP_V1 = "\n".join(f"line {i}" for i in range(1, 21)) + "\n"
 _APP_V2 = _APP_V1.replace("line 5", "line five").replace("line 12", "line twelve")
@@ -34,6 +36,21 @@ def diffui_config_root(tmp_path_factory):
     mp.undo()
 
 
+@pytest.fixture(autouse=True)
+def _isolate_repo_state():
+    """Comments, reviewed marks and the active repo are process-wide, so one test's leftovers would reach the next."""
+    from diffui.server.state import app_state
+
+    active = diffui.git_utils._active_repo_root
+    yield
+    if active is not None:
+        diffui.git_utils.set_active_repo(active)
+    app_state.comments = {}
+    app_state.reviewed = {}
+    diffui.git_utils.save_comments({})
+    diffui.git_utils.save_reviewed({})
+
+
 @pytest.fixture(scope="session")
 def temp_repo(tmp_path_factory) -> Path:
     repo = tmp_path_factory.mktemp("diffui-repo")
@@ -55,3 +72,16 @@ def temp_repo(tmp_path_factory) -> Path:
     (repo / "app.py").write_text(_APP_DIRTY)
     (repo / "untracked.txt").write_text("never committed\n")
     return repo
+
+
+@pytest.fixture(scope="class")
+def _server_app(temp_repo) -> TestClient:
+    diffui.git_utils.set_active_repo(temp_repo)
+    return TestClient(create_app([temp_repo]), base_url="http://localhost")
+
+
+def post_comment(client: TestClient, **fields) -> str:
+    """Add a comment on app.py line 1 unless `fields` say otherwise, and return its id."""
+    payload = {"file_path": "app.py", "line_index": 1, "comment": "check", **fields}
+    client.post("/api/comments", json=payload)
+    return client.get("/api/comments").json()[payload["file_path"]][-1]["id"]

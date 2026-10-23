@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from diffui.diff import get_lexer
 from diffui.server.highlight import (
     _apply_word_highlights,
+    highlight_file_to_json,
     highlight_line_html,
     parse_diff_to_json,
 )
@@ -38,26 +41,28 @@ class TestHighlightLineHtml:
         assert result == ""
 
 
-class TestApplyWordHighlights:
-    def test_no_ranges_returns_unchanged(self):
-        html = '<span style="color:red">hello</span>'
-        assert _apply_word_highlights(html, [], "hello") == html
-
-    def test_marks_plain_text(self):
-        result = _apply_word_highlights("hello world", [(0, 5)], "hello world")
-        assert "<mark>" in result
-        assert "</mark>" in result
-        assert "hello" in result
-
-    def test_marks_inside_span(self):
-        html = '<span style="color:red">abc</span>'
-        result = _apply_word_highlights(html, [(0, 3)], "abc")
-        assert "<mark>" in result
-
-    def test_handles_html_entities(self):
-        html = "&lt;div&gt;"
-        result = _apply_word_highlights(html, [(0, 5)], "<div>")
-        assert "<mark>" in result
+@pytest.mark.parametrize(
+    ("code_html", "ranges", "plain", "marked"),
+    [
+        pytest.param(
+            '<span style="color:red">hello</span>', [], "hello", '<span style="color:red">hello</span>', id="no-ranges"
+        ),
+        pytest.param("hello world", [(0, 5)], "hello world", "<mark>hello</mark> world", id="plain-text"),
+        pytest.param(
+            '<span style="color:red">abc</span>',
+            [(0, 3)],
+            "abc",
+            '<span style="color:red"><mark>abc</mark></span>',
+            id="inside-span",
+        ),
+        pytest.param(
+            "&lt;div&gt;", [(0, 5)], "<div>", "<mark>&lt;div&gt;</mark>", id="entities-count-as-one-character"
+        ),
+        pytest.param("&lt;div&gt;", [(0, 1)], "<div>", "<mark>&lt;</mark>div&gt;", id="range-ends-inside-entities"),
+    ],
+)
+def test_apply_word_highlights(code_html, ranges, plain, marked):
+    assert _apply_word_highlights(code_html, ranges, plain) == marked
 
 
 class TestParseDiffToJson:
@@ -71,30 +76,19 @@ class TestParseDiffToJson:
     def test_simple_add(self):
         diff = "diff --git a/f.py b/f.py\n--- /dev/null\n+++ b/f.py\n@@ -0,0 +1,2 @@\n+line one\n+line two\n"
         result = parse_diff_to_json(diff, "f.py", CATPPUCCIN_MOCHA)
-        assert result["adds"] == 2
-        assert result["dels"] == 0
-        assert len(result["hunks"]) > 0
+        assert (result["adds"], result["dels"]) == (2, 0)
         lines = result["hunks"][-1]["lines"]
-        add_lines = [line for line in lines if line["type"] == "add"]
-        assert len(add_lines) == 2
-        assert all("html" in line for line in add_lines)
+        assert [(line["type"], line["new_num"]) for line in lines] == [("add", "1"), ("add", "2")]
+        assert all("html" in line for line in lines)
 
-    def test_line_numbers_present(self):
+    def test_line_numbers_track_both_sides(self):
         diff = "diff --git a/f.py b/f.py\n--- a/f.py\n+++ b/f.py\n@@ -1,2 +1,2 @@\n-old\n+new\n ctx\n"
-        result = parse_diff_to_json(diff, "f.py", CATPPUCCIN_MOCHA)
-        lines = result["hunks"][-1]["lines"]
-        remove_line = next(line for line in lines if line["type"] == "remove")
-        add_line = next(line for line in lines if line["type"] == "add")
-        assert remove_line["old_num"] is not None
-        assert add_line["new_num"] is not None
-
-    def test_each_line_has_index(self):
-        diff = "diff --git a/f.py b/f.py\n--- a/f.py\n+++ b/f.py\n@@ -1 +1 @@\n-old\n+new\n"
-        result = parse_diff_to_json(diff, "f.py", CATPPUCCIN_MOCHA)
-        for hunk in result["hunks"]:
-            for line in hunk["lines"]:
-                assert "index" in line
-                assert isinstance(line["index"], int)
+        lines = parse_diff_to_json(diff, "f.py", CATPPUCCIN_MOCHA)["hunks"][-1]["lines"]
+        assert [(ln["type"], ln["old_num"], ln["new_num"]) for ln in lines] == [
+            ("remove", "1", None),
+            ("add", None, "1"),
+            ("context", "2", "2"),
+        ]
 
     def test_header_and_hunk_lines_are_not_emitted(self):
         diff = "diff --git a/f.py b/f.py\nnew file mode 100644\n--- /dev/null\n+++ b/f.py\n@@ -0,0 +1 @@\n+x\n"
@@ -112,14 +106,10 @@ class TestParseDiffToJson:
 
 class TestHighlightFileToJson:
     def test_empty_content(self):
-        from diffui.server.highlight import highlight_file_to_json
-
         result = highlight_file_to_json("", "", "f.py", CATPPUCCIN_MOCHA)
         assert result["lines"] == []
 
     def test_basic_file(self):
-        from diffui.server.highlight import highlight_file_to_json
-
         content = "line one\nline two\nline three\n"
         result = highlight_file_to_json(content, "", "f.txt", CATPPUCCIN_MOCHA)
         assert len(result["lines"]) == 3
@@ -128,8 +118,6 @@ class TestHighlightFileToJson:
         assert all(line["type"] == "context" for line in result["lines"])
 
     def test_with_diff_marks_added_lines(self):
-        from diffui.server.highlight import highlight_file_to_json
-
         content = "old line\nnew line\n"
         diff = "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1,2 @@\n old line\n+new line\n"
         result = highlight_file_to_json(content, diff, "f.txt", CATPPUCCIN_MOCHA)

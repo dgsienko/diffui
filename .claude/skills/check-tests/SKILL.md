@@ -5,7 +5,7 @@ description: Check that a branch covers the behavior it changes, and that every 
 
 Review the behavior the non-test code changes and every test the diff adds or edits. Read each changed test next to the code it calls. Open an unchanged test only to confirm a redundant finding. Don't run the tests.
 
-A test earns its place by catching a named bug that no existing test catches. If you can't name the bug, it is a finding. Tests live in `tests/`: `test_server.py` drives the routes through a `TestClient`, `test_tui.py` drives the real `DiffuiApp` under `run_test()`, and the rest cover one module each.
+A test earns its place by catching a named bug that no existing test catches. If you can't name the bug, it is a finding. Tests live in `tests/`: `test_server.py`, `test_comments.py` and `test_search.py` drive the routes through a `TestClient`, `test_tui.py` drives the real `DiffuiApp` under `run_test()`, and the rest cover one module each.
 
 ## What to check
 

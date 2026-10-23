@@ -31,10 +31,10 @@ def server(temp_repo):
     save_reviewed({})
 
 
-async def until(pilot, condition, timeout: float = 10):
+async def until(pilot, condition, timeout: float = 10, state=lambda: ""):
     deadline = time.monotonic() + timeout
     while not condition():
-        assert time.monotonic() < deadline, "timed out waiting for the TUI"
+        assert time.monotonic() < deadline, f"timed out waiting for the TUI: {state()}"
         await pilot.pause(0.05)
 
 
@@ -122,6 +122,23 @@ def heading(app) -> str:
 
 def hints(app) -> str:
     return " · ".join(f"{k.key_display} {k.description}" for k in app.query_one(Footer).query("FooterKey"))
+
+
+async def until_search_picks(pilot, text: str) -> None:
+    """Wait until Enter would open the result containing `text`.
+
+    Typing searches on every pause longer than the debounce, so a row count or a matching row can come from
+    a half-typed query whose first result is another file.
+    """
+    results = pilot.app.screen.query_one(OptionList)
+
+    def rows() -> list[str]:
+        return [str(results.get_option_at_index(i).prompt) for i in range(results.option_count)]
+
+    def picked() -> str:
+        return rows()[results.highlighted] if results.highlighted is not None else ""
+
+    await until(pilot, lambda: text in picked(), state=lambda: f"highlighted {picked()!r} of {rows()}")
 
 
 async def type_text(pilot, text: str) -> None:
@@ -295,8 +312,7 @@ def test_search_opens_the_file_at_the_matching_line(server):
         await pilot.press("slash")
         assert isinstance(app.screen, SearchScreen)
         await type_text(pilot, "value")
-        results = app.screen.query_one(OptionList)
-        await until(pilot, lambda: results.option_count > 1)
+        await until_search_picks(pilot, "VALUE = 1")
         await pilot.press("enter")
         await until(pilot, lambda: app.active == "extra.py" and view.path == "extra.py")
         assert view.current.line["text"] == "+VALUE = 1"
@@ -311,8 +327,8 @@ def test_search_all_files_opens_a_file_outside_the_diff_read_only(server):
         await pilot.press("tab")
         assert "All files" in heading(app)
         await type_text(pilot, "render_25")
+        await until_search_picks(pilot, "render_25")
         results = app.screen.query_one(OptionList)
-        await until(pilot, lambda: results.option_count > 1)
         assert "not in diff" in str(results.get_option_at_index(0).prompt)
         await pilot.press("enter")
         await until(pilot, lambda: app.active == "renderer.py" and view.path == "renderer.py")

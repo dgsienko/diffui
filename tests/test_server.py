@@ -2,55 +2,22 @@ from __future__ import annotations
 
 import json
 import os
-import pathlib
+import subprocess
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
+from starlette.websockets import WebSocketDisconnect
 
-from diffui.server.routes_diff import _order_files
+from diffui.cli import export_json
+from diffui.server import routes_review
+from diffui.server.events import _apply_state_updates
+from diffui.server.routes_review import _process_status
 from diffui.server.theme_css import generate_css_vars
-from diffui.themes.definitions import ALL_THEMES, CATPPUCCIN_MOCHA, GITHUB_DARK
-
-
-class TestGenerateCssVars:
-    def test_contains_root(self):
-        result = generate_css_vars(CATPPUCCIN_MOCHA)
-        assert result.startswith(":root {")
-        assert result.endswith("}")
-
-    def test_contains_bg(self):
-        result = generate_css_vars(CATPPUCCIN_MOCHA)
-        assert f"--bg: {CATPPUCCIN_MOCHA.bg};" in result
-
-    def test_skips_name(self):
-        result = generate_css_vars(CATPPUCCIN_MOCHA)
-        assert "--name:" not in result
-
-    def test_skips_syntax(self):
-        result = generate_css_vars(CATPPUCCIN_MOCHA)
-        assert "--syntax:" not in result
-
-    def test_underscores_become_hyphens(self):
-        result = generate_css_vars(CATPPUCCIN_MOCHA)
-        assert "--bg-dark:" in result
-        assert "--bg_dark:" not in result
-
-    def test_different_themes_produce_different_css(self):
-        mocha = generate_css_vars(CATPPUCCIN_MOCHA)
-        github = generate_css_vars(GITHUB_DARK)
-        assert mocha != github
-
-
-@pytest.fixture(scope="class")
-def _server_app(temp_repo):
-    from diffui.git_utils import set_active_repo
-    from diffui.server.app import create_app
-
-    set_active_repo(temp_repo)
-    app = create_app([temp_repo])
-
-    from fastapi.testclient import TestClient
-
-    return TestClient(app, base_url="http://localhost")
+from diffui.server.turns import TurnTracker, poll_once
+from diffui.themes.definitions import ALL_THEMES
+from tests.conftest import post_comment
 
 
 class TestServerRoutes:
@@ -59,49 +26,33 @@ class TestServerRoutes:
         assert r.status_code == 200
         assert "diffui" in r.text
 
-    def test_repos(self, _server_app):
-        r = _server_app.get("/api/repos")
-        assert r.status_code == 200
-        data = r.json()
-        assert isinstance(data, list)
-        assert len(data) >= 1
-        assert "name" in data[0]
-        assert "has_changes" in data[0]
-
-    def test_branch(self, _server_app):
-        r = _server_app.get("/api/branch")
-        assert r.status_code == 200
-        data = r.json()
-        assert "name" in data
-        assert "main_branch" in data
+    def test_repos(self, _server_app, temp_repo):
+        repos = _server_app.get("/api/repos").json()
+        assert [(r["name"], r["has_changes"], r["active"]) for r in repos] == [(temp_repo.name, True, True)]
 
     def test_commits(self, _server_app):
-        r = _server_app.get("/api/commits")
-        assert r.status_code == 200
-        assert isinstance(r.json(), list)
+        commits = _server_app.get("/api/commits").json()
+        assert [(c["message"], c["files"]) for c in commits] == [
+            ("reword two lines", ["app.py"]),
+            ("add extra module", ["extra.py"]),
+        ]
 
     def test_files(self, _server_app):
-        r = _server_app.get("/api/files?view=all")
-        assert r.status_code == 200
-        data = r.json()
-        assert isinstance(data, list)
-        if data:
-            assert "path" in data[0]
-            assert "short_name" in data[0]
-            assert "reviewed" in data[0]
+        files = _server_app.get("/api/files?view=all").json()
+        assert [f["path"] for f in files] == ["app.py", "extra.py", "untracked.txt"]
+        assert {k: files[0][k] for k in ("short_name", "reviewed", "adds", "dels", "risk_level", "ignored")} == {
+            "short_name": "app.py",
+            "reviewed": False,
+            "adds": 3,
+            "dels": 2,
+            "risk_level": "low",
+            "ignored": False,
+        }
 
     def test_diff(self, _server_app):
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-        r = _server_app.get(f"/api/diff/{path}?view=all")
-        assert r.status_code == 200
-        data = r.json()
-        assert "file_path" in data
-        assert "hunks" in data
-        assert "adds" in data
-        assert "dels" in data
+        data = _server_app.get("/api/diff/app.py?view=all").json()
+        assert (data["file_path"], data["adds"], data["dels"]) == ("app.py", 3, 2)
+        assert data["hunks"]
 
     def test_themes(self, _server_app):
         r = _server_app.get("/api/themes")
@@ -109,11 +60,6 @@ class TestServerRoutes:
         data = r.json()
         assert len(data) == len(ALL_THEMES)
         assert all("name" in t for t in data)
-
-    def test_theme_css(self, _server_app):
-        r = _server_app.get("/api/theme/css")
-        assert r.status_code == 200
-        assert ":root {" in r.json()["css"]
 
     @pytest.mark.parametrize("requested, expected", [(1, 1), (len(ALL_THEMES), 0)])
     def test_settings_switches_theme(self, _server_app, requested, expected):
@@ -127,103 +73,27 @@ class TestServerRoutes:
         finally:
             _server_app.put("/api/settings", json={"theme_index": 0})
 
-    def test_settings_roundtrip(self, _server_app):
-        r = _server_app.get("/api/settings")
-        assert r.status_code == 200
-        original = r.json()
-        assert "editor" in original
-
+    @pytest.mark.parametrize(
+        ("key", "value"),
+        [
+            ("editor", "nvim"),
+            ("agent_cli", "codex"),
+            ("font_size", 16),
+            ("word_wrap", True),
+            ("keybindings", {"toggle-review": "R", "sort-risk": "x"}),
+        ],
+    )
+    def test_settings_roundtrip(self, _server_app, key, value):
+        original = _server_app.get("/api/settings").json()[key]
         try:
-            r = _server_app.put("/api/settings", json={"editor": "nvim"})
-            assert r.status_code == 200
-
-            r = _server_app.get("/api/settings")
-            assert r.json()["editor"] == "nvim"
+            assert _server_app.put("/api/settings", json={key: value}).status_code == 200
+            assert _server_app.get("/api/settings").json()[key] == value
         finally:
-            _server_app.put("/api/settings", json={"editor": original["editor"]})
-
-    def test_comment_crud(self, _server_app):
-        r = _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_.py",
-                "line_index": 1,
-                "comment": "test comment",
-            },
-        )
-        assert r.status_code == 200
-
-        try:
-            comments = _server_app.get("/api/comments").json()
-            assert "_test_.py" in comments
-            comment = comments["_test_.py"][0]
-            assert comment["comment"] == "test comment"
-            assert comment["status"] == "open"
-            assert "id" in comment
-            assert "timestamp" in comment
-            cid = comment["id"]
-
-            r = _server_app.put(f"/api/comments/_test_.py/{cid}", json={"comment": "edited"})
-            assert r.status_code == 200
-            assert _server_app.get("/api/comments").json()["_test_.py"][0]["comment"] == "edited"
-
-            r = _server_app.post(f"/api/comments/_test_.py/{cid}/reply", json={"text": "reply"})
-            assert r.status_code == 200
-            replies = _server_app.get("/api/comments").json()["_test_.py"][0]["replies"]
-            assert len(replies) == 1
-            assert replies[0]["text"] == "reply"
-
-            r = _server_app.delete(f"/api/comments/_test_.py/{cid}")
-            assert r.status_code == 200
-            comments = _server_app.get("/api/comments").json()
-            assert "_test_.py" not in comments or len(comments["_test_.py"]) == 0
-        finally:
-            comments = _server_app.get("/api/comments").json()
-            for c in comments.get("_test_.py", []):
-                _server_app.delete(f"/api/comments/_test_.py/{c['id']}")
-
-    def test_comment_resolve_toggle(self, _server_app):
-        r = _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_resolve_.py",
-                "line_index": 1,
-                "comment": "needs fix",
-            },
-        )
-        assert r.status_code == 200
-        try:
-            comments = _server_app.get("/api/comments").json()
-            c = comments["_test_resolve_.py"][0]
-            assert c.get("status") == "open"
-
-            r = _server_app.post(f"/api/comments/_test_resolve_.py/{c['id']}/resolve")
-            assert r.status_code == 200
-            comments = _server_app.get("/api/comments").json()
-            assert comments["_test_resolve_.py"][0]["status"] == "resolved"
-
-            r = _server_app.post(f"/api/comments/_test_resolve_.py/{c['id']}/resolve")
-            assert r.status_code == 200
-            comments = _server_app.get("/api/comments").json()
-            assert comments["_test_resolve_.py"][0]["status"] == "open"
-        finally:
-            comments = _server_app.get("/api/comments").json()
-            for c in comments.get("_test_resolve_.py", []):
-                _server_app.delete(f"/api/comments/_test_resolve_.py/{c['id']}")
+            _server_app.put("/api/settings", json={key: original})
 
     def test_review_toggle(self, _server_app):
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-
-        r = _server_app.post(f"/api/reviewed/{path}")
-        assert r.status_code == 200
-        assert r.json()["reviewed"] is True
-
-        r = _server_app.post(f"/api/reviewed/{path}")
-        assert r.status_code == 200
-        assert r.json()["reviewed"] is False
+        assert _server_app.post("/api/reviewed/app.py").json()["reviewed"] is True
+        assert _server_app.post("/api/reviewed/app.py").json()["reviewed"] is False
 
     def test_static_files(self, _server_app):
         r = _server_app.get("/static/app.js")
@@ -231,169 +101,13 @@ class TestServerRoutes:
         r = _server_app.get("/static/style.css")
         assert r.status_code == 200
 
-    def test_comment_category_stored(self, _server_app):
-        r = _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_cat_.py",
-                "line_index": 1,
-                "comment": "bug here",
-                "category": "bug",
-            },
-        )
-        assert r.status_code == 200
-        try:
-            c = _server_app.get("/api/comments").json()["_test_cat_.py"][0]
-            assert c["category"] == "bug"
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_cat_.py", []):
-                _server_app.delete(f"/api/comments/_test_cat_.py/{c['id']}")
-
-    def test_comment_category_defaults_empty(self, _server_app):
-        r = _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_cat2_.py",
-                "line_index": 1,
-                "comment": "no cat",
-            },
-        )
-        assert r.status_code == 200
-        try:
-            c = _server_app.get("/api/comments").json()["_test_cat2_.py"][0]
-            assert c["category"] == ""
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_cat2_.py", []):
-                _server_app.delete(f"/api/comments/_test_cat2_.py/{c['id']}")
-
-    def test_comment_suggestion_stored(self, _server_app):
-        r = _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_sug_.py",
-                "line_index": 1,
-                "comment": "fix this",
-                "suggestion": "x = 1\n",
-            },
-        )
-        assert r.status_code == 200
-        try:
-            c = _server_app.get("/api/comments").json()["_test_sug_.py"][0]
-            assert c["suggestion"] == "x = 1\n"
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_sug_.py", []):
-                _server_app.delete(f"/api/comments/_test_sug_.py/{c['id']}")
-
-    def test_comment_selection_stored(self, _server_app):
-        r = _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_sel_.py",
-                "line_index": 1,
-                "comment": "this call is redundant",
-                "selected_text": "bar.baz",
-                "sel_start": 12,
-                "sel_end": 19,
-            },
-        )
-        assert r.status_code == 200
-        try:
-            c = _server_app.get("/api/comments").json()["_test_sel_.py"][0]
-            assert c["selected_text"] == "bar.baz"
-            assert c["sel_start"] == 12
-            assert c["sel_end"] == 19
-            assert c["sel_end_index"] is None
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_sel_.py", []):
-                _server_app.delete(f"/api/comments/_test_sel_.py/{c['id']}")
-
-    def test_comment_multiline_selection_stored(self, _server_app):
-        r = _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_sel3_.py",
-                "line_index": 4,
-                "comment": "this block should be extracted",
-                "selected_text": "if x:\n    return y",
-                "sel_start": 4,
-                "sel_end": 12,
-                "sel_end_index": 6,
-            },
-        )
-        assert r.status_code == 200
-        try:
-            c = _server_app.get("/api/comments").json()["_test_sel3_.py"][0]
-            assert c["line_index"] == 4
-            assert c["sel_start"] == 4
-            assert c["sel_end"] == 12
-            assert c["sel_end_index"] == 6
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_sel3_.py", []):
-                _server_app.delete(f"/api/comments/_test_sel3_.py/{c['id']}")
-
-    def test_comment_selection_defaults_empty(self, _server_app):
-        r = _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_sel2_.py",
-                "line_index": 1,
-                "comment": "whole line",
-            },
-        )
-        assert r.status_code == 200
-        try:
-            c = _server_app.get("/api/comments").json()["_test_sel2_.py"][0]
-            assert c["selected_text"] == ""
-            assert c["sel_start"] is None
-            assert c["sel_end"] is None
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_sel2_.py", []):
-                _server_app.delete(f"/api/comments/_test_sel2_.py/{c['id']}")
-
-    def test_apply_suggestion_no_suggestion(self, _server_app):
-        _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_apply1_.py",
-                "line_index": 1,
-                "comment": "no suggestion",
-            },
-        )
-        try:
-            cid = _server_app.get("/api/comments").json()["_test_apply1_.py"][0]["id"]
-            r = _server_app.post(f"/api/comments/_test_apply1_.py/{cid}/apply")
-            assert r.status_code == 400
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_apply1_.py", []):
-                _server_app.delete(f"/api/comments/_test_apply1_.py/{c['id']}")
-
-    def test_apply_suggestion_no_line_num(self, _server_app):
-        _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_apply2_.py",
-                "line_index": 1,
-                "comment": "fix",
-                "suggestion": "x = 1\n",
-            },
-        )
-        try:
-            cid = _server_app.get("/api/comments").json()["_test_apply2_.py"][0]["id"]
-            r = _server_app.post(f"/api/comments/_test_apply2_.py/{cid}/apply")
-            assert r.status_code == 400
-            assert "line number" in r.json()["detail"].lower()
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_apply2_.py", []):
-                _server_app.delete(f"/api/comments/_test_apply2_.py/{c['id']}")
-
-    def test_apply_suggestion_missing_comment(self, _server_app):
-        r = _server_app.post("/api/comments/_test_apply3_.py/nonexistent-id/apply")
-        assert r.status_code == 400
-
-    def test_blame_returns_list(self, _server_app):
-        r = _server_app.get("/api/blame/diffui/__init__.py")
-        assert r.status_code == 200
-        assert isinstance(r.json(), list)
+    def test_blame_attributes_each_line_to_its_commit(self, _server_app):
+        blame = _server_app.get("/api/blame/app.py").json()
+        assert len(blame) == 21
+        assert all(len(entry["sha"]) == 8 for entry in blame)
+        assert blame[0]["author"] == "diffui test"
+        assert blame[4]["sha"] != blame[0]["sha"]
+        assert blame[20]["author"] == "Not Committed Yet"
 
     def test_blame_unknown_file(self, _server_app):
         r = _server_app.get("/api/blame/_nonexistent_path_.py")
@@ -401,11 +115,9 @@ class TestServerRoutes:
         assert r.json() == []
 
     def test_preview_text_file(self, _server_app):
-        r = _server_app.get("/api/preview/diffui/__init__.py")
-        assert r.status_code == 200
-        data = r.json()
+        data = _server_app.get("/api/preview/app.py").json()
         assert data["type"] == "text"
-        assert "content" in data
+        assert data["content"].startswith("line 1\nline 2\n")
 
     def test_preview_image_not_found(self, _server_app):
         r = _server_app.get("/api/preview/_fake_.png")
@@ -422,16 +134,6 @@ class TestServerRoutes:
         total = len(_server_app.get("/api/files").json())
         assert f"/{total} reviewed" in md
 
-    def test_session_get_returns_dict(self, _server_app):
-        r = _server_app.get("/api/session")
-        assert r.status_code == 200
-        assert isinstance(r.json(), dict)
-
-    def test_session_put_and_get_roundtrip(self, _server_app):
-        _server_app.put("/api/session", json={"activeFile": "test.py"})
-        r = _server_app.get("/api/session")
-        assert r.json().get("activeFile") == "test.py"
-
     def test_session_put_is_additive(self, _server_app):
         _server_app.put("/api/session", json={"activeFile": "a.py"})
         _server_app.put("/api/session", json={"diffMode": "split"})
@@ -440,348 +142,108 @@ class TestServerRoutes:
         assert session.get("diffMode") == "split"
 
     def test_websocket_connected_event(self, _server_app):
-        import json
-
         with _server_app.websocket_connect("ws://localhost/api/ws") as ws:
             data = json.loads(ws.receive_text())
             assert data == {"events": ["connected"]}
 
     def test_websocket_ping_pong(self, _server_app):
-        import json
-
         with _server_app.websocket_connect("ws://localhost/api/ws") as ws:
             ws.receive_text()  # consume connected
             ws.send_text(json.dumps({"type": "ping"}))
             data = json.loads(ws.receive_text())
             assert data == {"type": "pong"}
 
-    def test_files_include_risk_scoring(self, _server_app):
-        r = _server_app.get("/api/files?view=all")
-        assert r.status_code == 200
-        data = r.json()
-        if data:
-            f = data[0]
-            assert "risk_score" in f
-            assert "risk_level" in f
-            assert f["risk_level"] in ("low", "medium", "high")
-            assert "risk_reasons" in f
-            assert isinstance(f["risk_reasons"], list)
+    @pytest.mark.parametrize("route", ["agent", "explain"])
+    def test_status_reports_nothing_running(self, _server_app, route):
+        assert _server_app.get(f"/api/{route}/status").json()["running"] is False
 
-    def test_agent_status_not_running(self, _server_app):
-        r = _server_app.get("/api/agent/status")
-        assert r.status_code == 200
-        assert r.json()["running"] is False
-
-    def test_agent_run_no_comments(self, _server_app):
-        r = _server_app.post("/api/agent/run")
-        assert r.status_code == 200
-        data = r.json()
+    @pytest.mark.parametrize("route", ["run", "prompt"])
+    def test_agent_routes_refuse_without_open_comments(self, _server_app, route):
+        data = _server_app.post(f"/api/agent/{route}").json()
         assert data["ok"] is False
         assert "No open comments" in data["error"]
-
-    def test_explain_status_not_running(self, _server_app):
-        r = _server_app.get("/api/explain/status")
-        assert r.status_code == 200
-        assert r.json()["running"] is False
 
     def test_explain_view_placeholder(self, _server_app):
         r = _server_app.get("/api/explain/view")
         assert r.status_code == 200
         assert "No explanation generated yet" in r.text
 
-    def test_agent_prompt_no_comments(self, _server_app):
-        r = _server_app.post("/api/agent/prompt")
-        assert r.status_code == 200
-        data = r.json()
-        assert data["ok"] is False
-        assert "No open comments" in data["error"]
+    def test_diff_context_widens_the_hunks(self, _server_app):
+        def context_lines(**params):
+            hunks = _server_app.get("/api/diff/app.py", params={"view": "all", **params}).json()["hunks"]
+            return [ln for h in hunks for ln in h["lines"] if ln["type"] == "context"]
 
-    def test_settings_agent_cli_roundtrip(self, _server_app):
-        original = _server_app.get("/api/settings").json()
+        assert len(context_lines(context=10)) > len(context_lines())
+
+    def test_diff_ignore_whitespace_drops_whitespace_only_changes(self, _server_app, temp_repo):
+        app_py = temp_repo / "app.py"
+        original = app_py.read_text()
+        app_py.write_text(original.replace("line 1\n", "line 1  \n", 1))
         try:
-            r = _server_app.put("/api/settings", json={"agent_cli": "codex"})
-            assert r.status_code == 200
-            assert _server_app.get("/api/settings").json()["agent_cli"] == "codex"
+
+            def stats(**params):
+                data = _server_app.get("/api/diff/app.py", params={"view": "all", **params}).json()
+                return data["adds"], data["dels"]
+
+            assert stats() == (4, 3)
+            assert stats(ignore_whitespace="true") == (3, 2)
         finally:
-            _server_app.put("/api/settings", json={"agent_cli": original["agent_cli"]})
-
-    def test_settings_font_size(self, _server_app):
-        original = _server_app.get("/api/settings").json()
-        try:
-            r = _server_app.put("/api/settings", json={"font_size": 16})
-            assert r.status_code == 200
-            assert _server_app.get("/api/settings").json()["font_size"] == 16
-        finally:
-            _server_app.put("/api/settings", json={"font_size": original.get("font_size", 13)})
-
-    def test_settings_word_wrap(self, _server_app):
-        original = _server_app.get("/api/settings").json()
-        try:
-            r = _server_app.put("/api/settings", json={"word_wrap": True})
-            assert r.status_code == 200
-            assert _server_app.get("/api/settings").json()["word_wrap"] is True
-        finally:
-            _server_app.put("/api/settings", json={"word_wrap": original.get("word_wrap", False)})
-
-    def test_settings_keybindings(self, _server_app):
-        original = _server_app.get("/api/settings").json()
-        try:
-            bindings = {"toggle-review": "R", "sort-risk": "x"}
-            r = _server_app.put("/api/settings", json={"keybindings": bindings})
-            assert r.status_code == 200
-            assert _server_app.get("/api/settings").json()["keybindings"] == bindings
-        finally:
-            _server_app.put("/api/settings", json={"keybindings": original.get("keybindings", {})})
-
-    def test_bulk_resolve_comments(self, _server_app):
-        _server_app.post(
-            "/api/comments",
-            json={"file_path": "_test_bulk_.py", "line_index": 1, "comment": "bulk1"},
-        )
-        _server_app.post(
-            "/api/comments",
-            json={"file_path": "_test_bulk_.py", "line_index": 2, "comment": "bulk2"},
-        )
-        try:
-            r = _server_app.post(
-                "/api/comments/bulk-resolve", json={"file_path": "_test_bulk_.py", "action": "resolve"}
-            )
-            assert r.status_code == 200
-            data = r.json()
-            assert data["ok"] is True
-            assert data["count"] == 2
-            comments = _server_app.get("/api/comments").json().get("_test_bulk_.py", [])
-            assert all(c["status"] == "resolved" for c in comments)
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_bulk_.py", []):
-                _server_app.delete(f"/api/comments/_test_bulk_.py/{c['id']}")
-
-    def test_bulk_resolve_all_comments(self, _server_app):
-        _server_app.post(
-            "/api/comments",
-            json={"file_path": "_test_bulkall1_.py", "line_index": 1, "comment": "ba1"},
-        )
-        _server_app.post(
-            "/api/comments",
-            json={"file_path": "_test_bulkall2_.py", "line_index": 1, "comment": "ba2"},
-        )
-        try:
-            r = _server_app.post("/api/comments/bulk-resolve", json={"action": "resolve"})
-            assert r.status_code == 200
-            assert r.json()["count"] >= 2
-        finally:
-            for fp in ("_test_bulkall1_.py", "_test_bulkall2_.py"):
-                for c in _server_app.get("/api/comments").json().get(fp, []):
-                    _server_app.delete(f"/api/comments/{fp}/{c['id']}")
-
-    def test_diff_ignore_whitespace(self, _server_app):
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-        r = _server_app.get(f"/api/diff/{path}?view=all&ignore_whitespace=true")
-        assert r.status_code == 200
-        assert "file_path" in r.json()
-
-    def test_files_include_ignored_field(self, _server_app):
-        r = _server_app.get("/api/files?view=all")
-        assert r.status_code == 200
-        data = r.json()
-        if data:
-            assert "ignored" in data[0]
-
-    def test_pydantic_validation_rejects_bad_comment(self, _server_app):
-        r = _server_app.post("/api/comments", json={"bad_field": "nope"})
-        assert r.status_code == 422
+            app_py.write_text(original)
 
     def test_repo_switch_invalid_index(self, _server_app):
         r = _server_app.post("/api/repo/switch", json={"index": 999})
         assert r.status_code == 400
 
-    def test_bulk_resolve_reopen(self, _server_app):
-        _server_app.post(
-            "/api/comments",
-            json={"file_path": "_test_reopen_.py", "line_index": 1, "comment": "reopen test"},
-        )
-        try:
-            cid = _server_app.get("/api/comments").json()["_test_reopen_.py"][0]["id"]
-            _server_app.post(f"/api/comments/_test_reopen_.py/{cid}/resolve")
-            assert _server_app.get("/api/comments").json()["_test_reopen_.py"][0]["status"] == "resolved"
-            r = _server_app.post(
-                "/api/comments/bulk-resolve", json={"file_path": "_test_reopen_.py", "action": "reopen"}
-            )
-            assert r.status_code == 200
-            assert r.json()["count"] == 1
-            assert _server_app.get("/api/comments").json()["_test_reopen_.py"][0]["status"] == "open"
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_reopen_.py", []):
-                _server_app.delete(f"/api/comments/_test_reopen_.py/{c['id']}")
-
-    def test_bulk_resolve_invalid_action(self, _server_app):
-        r = _server_app.post("/api/comments/bulk-resolve", json={"action": "delete"})
-        assert r.status_code == 422
-
-    def test_apply_suggestion_success(self, _server_app):
-
-        from diffui.git_utils import get_repo_root
-
-        test_file = get_repo_root() / "_test_apply_ok_.py"
-        test_file.write_text("old_line\nsecond\n")
-        try:
-            _server_app.post(
-                "/api/comments",
-                json={
-                    "file_path": "_test_apply_ok_.py",
-                    "line_index": 0,
-                    "file_line_num": 1,
-                    "comment": "fix it",
-                    "suggestion": "new_line",
-                },
-            )
-            cid = _server_app.get("/api/comments").json()["_test_apply_ok_.py"][0]["id"]
-            r = _server_app.post(f"/api/comments/_test_apply_ok_.py/{cid}/apply")
-            assert r.status_code == 200
-            assert r.json()["ok"] is True
-            content = test_file.read_text()
-            assert content.startswith("new_line\n")
-            assert "second" in content
-            comment = _server_app.get("/api/comments").json()["_test_apply_ok_.py"][0]
-            assert comment["status"] == "resolved"
-        finally:
-            test_file.unlink(missing_ok=True)
-            for c in _server_app.get("/api/comments").json().get("_test_apply_ok_.py", []):
-                _server_app.delete(f"/api/comments/_test_apply_ok_.py/{c['id']}")
-
-    def test_settings_include_agent_cli(self, _server_app):
-        r = _server_app.get("/api/settings")
-        assert r.status_code == 200
-        data = r.json()
-        assert "agent_cli" in data
-        assert isinstance(data["agent_cli"], str)
-        assert len(data["agent_cli"]) > 0
-
-    def test_review_summary_with_comments(self, _server_app):
-        _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_summary_.py",
-                "line_index": 1,
-                "file_line_num": 10,
-                "comment": "fix this bug",
-                "category": "bug",
-            },
-        )
-        try:
-            r = _server_app.get("/api/review-summary")
-            assert r.status_code == 200
-            md = r.json()["markdown"]
-            assert "## Open Comments" in md
-            assert "fix this bug" in md
-            assert "_test_summary_.py:10" in md
-            assert "1 total, 1 open, 0 resolved" in md
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_summary_.py", []):
-                _server_app.delete(f"/api/comments/_test_summary_.py/{c['id']}")
-
-    def test_review_summary_categorizes_open_comments(self, _server_app):
-        _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_summary_cat_.py",
-                "line_index": 1,
-                "comment": "a bug",
-                "category": "bug",
-            },
-        )
-        _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_summary_cat_.py",
-                "line_index": 2,
-                "comment": "a nit",
-                "category": "nit",
-            },
-        )
-        try:
-            md = _server_app.get("/api/review-summary").json()["markdown"]
-            assert "### Bug" in md
-            assert "### Nit" in md
-        finally:
-            for c in _server_app.get("/api/comments").json().get("_test_summary_cat_.py", []):
-                _server_app.delete(f"/api/comments/_test_summary_cat_.py/{c['id']}")
+    def test_review_summary_lists_open_comments_by_category(self, _server_app):
+        post_comment(_server_app, comment="fix this bug", file_line_num=10, category="bug")
+        post_comment(_server_app, comment="a nit", file_line_num=2, category="nit")
+        post_comment(_server_app, comment="already handled", status="resolved")
+        md = _server_app.get("/api/review-summary").json()["markdown"]
+        assert "3 total, 2 open, 1 resolved" in md
+        assert "### Bug\n\n- **app.py:10** — fix this bug" in md
+        assert "### Nit\n\n- **app.py:2** — a nit" in md
+        assert "already handled" not in md
 
     def test_agent_prompt_with_comments(self, _server_app):
-        _server_app.post(
-            "/api/comments",
-            json={
-                "file_path": "_test_prompt_.py",
-                "line_index": 1,
-                "file_line_num": 5,
-                "comment": "rename this variable",
-                "category": "suggestion",
-            },
-        )
+        post_comment(_server_app, comment="rename this variable", file_line_num=5, category="suggestion")
+        data = _server_app.post("/api/agent/prompt").json()
+        assert data["ok"] is True
+        assert "rename this variable" in data["prompt"]
+        assert data["comment_count"] == 1
+        assert "context_path" in data
+        assert "agent_cli" in data
+
+    @pytest.mark.parametrize(
+        ("editor", "args"),
+        [("code", ["--goto", "{path}:3"]), ("nvim", ["+3", "{path}"])],
+    )
+    def test_editor_open_launches_the_editor_at_the_line(self, _server_app, temp_repo, editor, args):
+        original = _server_app.get("/api/settings").json()["editor"]
+        _server_app.put("/api/settings", json={"editor": editor})
         try:
-            r = _server_app.post("/api/agent/prompt")
-            assert r.status_code == 200
-            data = r.json()
-            assert data["ok"] is True
-            assert "rename this variable" in data["prompt"]
-            assert data["comment_count"] == 1
-            assert "context_path" in data
-            assert "agent_cli" in data
+            with patch("diffui.server.routes_settings.subprocess.Popen") as popen:
+                r = _server_app.post("/api/editor/open", json={"file_path": "app.py", "line_num": 3})
         finally:
-            for c in _server_app.get("/api/comments").json().get("_test_prompt_.py", []):
-                _server_app.delete(f"/api/comments/_test_prompt_.py/{c['id']}")
-
-    def test_editor_open(self, _server_app):
-        from unittest.mock import patch
-
-        with patch("diffui.server.routes_settings.subprocess.Popen") as mock_popen:
-            r = _server_app.post(
-                "/api/editor/open",
-                json={"file_path": "diffui/__init__.py", "line_num": 3},
-            )
-            assert r.status_code == 200
-            assert r.json()["ok"] is True
-            assert mock_popen.called
+            _server_app.put("/api/settings", json={"editor": original})
+        assert r.json() == {"ok": True}
+        path = str((temp_repo / "app.py").resolve())
+        assert popen.call_args.args[0] == [editor, *(a.format(path=path) for a in args)]
 
     def test_files_view_working(self, _server_app):
-        r = _server_app.get("/api/files?view=working")
-        assert r.status_code == 200
-        assert isinstance(r.json(), list)
+        files = _server_app.get("/api/files?view=working").json()
+        assert [f["path"] for f in files] == ["app.py", "untracked.txt"]
 
     def test_files_view_commit_sha(self, _server_app):
         commits = _server_app.get("/api/commits").json()
-        if not commits:
-            pytest.skip("No commits")
-        sha = commits[0]["sha"]
-        r = _server_app.get(f"/api/files?view={sha}")
-        assert r.status_code == 200
-        assert isinstance(r.json(), list)
+        assert len(commits) == 2
+        for commit in commits:
+            files = _server_app.get(f"/api/files?view={commit['sha']}").json()
+            assert [f["path"] for f in files] == commit["files"]
 
     def test_files_view_unknown_commit(self, _server_app):
         r = _server_app.get("/api/files?view=deadbeefdeadbeef")
         assert r.status_code == 200
         assert r.json() == []
-
-    def test_diff_expanded_context(self, _server_app):
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-        r = _server_app.get(f"/api/diff/{path}?view=all&context=10")
-        assert r.status_code == 200
-        assert "file_path" in r.json()
-
-    def test_diff_cache_hit_returns_same(self, _server_app):
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-        first = _server_app.get(f"/api/diff/{path}?view=all").json()
-        second = _server_app.get(f"/api/diff/{path}?view=all").json()
-        assert first == second
 
     @pytest.mark.parametrize("route", ["diff", "file"])
     def test_html_off_drops_only_the_html(self, _server_app, route):
@@ -793,18 +255,6 @@ class TestServerRoutes:
         assert with_html and all("html" in ln for ln in with_html)
         assert not any("html" in ln for ln in without)
         assert [{k: v for k, v in ln.items() if k != "html"} for ln in with_html] == without
-
-    def test_clear_diff_cache_empties_cache(self, _server_app):
-        from diffui.server.routes_diff import _diff_cache, clear_diff_cache
-
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-        _server_app.get(f"/api/diff/{path}?view=all")
-        assert len(_diff_cache) >= 1
-        clear_diff_cache()
-        assert len(_diff_cache) == 0
 
     def test_repo_switch_valid_index(self, _server_app):
         original = _server_app.get("/api/repos").json()
@@ -818,39 +268,16 @@ class TestServerRoutes:
         finally:
             _server_app.post("/api/repo/switch", json={"index": active})
 
-    def test_repos_caching_repeated_calls(self, _server_app):
-        first = _server_app.get("/api/repos")
-        second = _server_app.get("/api/repos")
-        assert first.status_code == 200
-        assert second.status_code == 200
-        assert first.json() == second.json()
-
-    def test_branch_includes_head_sha_and_remote(self, _server_app):
-        r = _server_app.get("/api/branch")
-        assert r.status_code == 200
-        data = r.json()
-        assert "head_sha" in data
-        assert "remote_url" in data
-        assert "merge_base" in data
-        assert "repo_name" in data
+    def test_branch(self, _server_app, temp_repo):
+        data = _server_app.get("/api/branch").json()
+        assert (data["name"], data["main_branch"], data["repo_name"]) == ("feature", "main", temp_repo.name)
+        assert len(data["head_sha"]) == 40
+        assert data["merge_base"] != data["head_sha"]
+        assert data["remote_url"] == ""
 
 
 class TestReviewModule:
-    def test_build_agent_context_no_comments(self):
-        from unittest.mock import patch
-
-        from diffui.server import routes_review
-
-        with patch.object(routes_review.app_state, "comments", {}):
-            result = routes_review._build_agent_context()
-        assert result[0] is None
-        assert result[1] == "No open comments"
-
     def test_build_agent_context_with_comments(self):
-        from unittest.mock import patch
-
-        from diffui.server import routes_review
-
         comments = {
             "src/auth.py": [
                 {
@@ -875,8 +302,6 @@ class TestReviewModule:
         assert repo_root
         assert context_path
 
-        from pathlib import Path
-
         ctx = Path(context_path).read_text()
         assert "### src/auth.py" in ctx
         assert "this is wrong" in ctx
@@ -885,34 +310,20 @@ class TestReviewModule:
         assert "src/resolved.py" not in ctx
 
     def test_process_status_none(self):
-        from diffui.server.routes_review import _process_status
-
         assert _process_status(None) == {"running": False}
 
     def test_process_status_running(self):
-        from unittest.mock import MagicMock
-
-        from diffui.server.routes_review import _process_status
-
         proc = MagicMock()
         proc.poll.return_value = None
         proc.pid = 4242
         assert _process_status(proc) == {"running": True, "pid": 4242}
 
     def test_process_status_finished(self):
-        from unittest.mock import MagicMock
-
-        from diffui.server.routes_review import _process_status
-
         proc = MagicMock()
         proc.poll.return_value = 0
         assert _process_status(proc) == {"running": False, "exit_code": 0}
 
     def test_explain_already_running(self, _server_app):
-        from unittest.mock import MagicMock, patch
-
-        from diffui.server import routes_review
-
         running = MagicMock()
         running.poll.return_value = None
         with patch.object(routes_review, "_explain_process", running):
@@ -923,10 +334,6 @@ class TestReviewModule:
             assert "already generating" in data["error"]
 
     def test_explain_unknown_agent(self, _server_app):
-        from unittest.mock import patch
-
-        from diffui.server import routes_review
-
         with (
             patch.object(routes_review, "_explain_process", None),
             patch.object(routes_review.app_state, "agent_cli", "bogus-cli"),
@@ -938,12 +345,6 @@ class TestReviewModule:
             assert "Unknown agent CLI" in data["error"]
 
     def test_view_explanation_with_temp_file(self, _server_app):
-        import tempfile
-        from pathlib import Path
-        from unittest.mock import patch
-
-        from diffui.server import routes_review
-
         # Resolve gettempdir so the module's startswith() guard matches the
         # symlink-resolved path (macOS /var -> /private/var).
         tmp_dir = Path(tempfile.gettempdir()).resolve()
@@ -961,22 +362,12 @@ class TestReviewModule:
             tmp.unlink(missing_ok=True)
 
     def test_view_explanation_path_traversal_guard(self, _server_app):
-        from unittest.mock import patch
-
-        from diffui.server import routes_review
-
         with patch.object(routes_review, "_explain_output_path", "/etc/passwd"):
             r = _server_app.get("/api/explain/view")
             assert r.status_code == 400
             assert "No explanation generated yet" in r.text
 
     def test_view_explanation_missing_file(self, _server_app):
-        import tempfile
-        from pathlib import Path
-        from unittest.mock import patch
-
-        from diffui.server import routes_review
-
         tmp_dir = Path(tempfile.gettempdir()).resolve()
         missing = str(tmp_dir / "diffui-explain-does-not-exist.html")
         with (
@@ -988,129 +379,24 @@ class TestReviewModule:
             assert "No explanation generated yet" in r.text
 
 
-class TestRiskScoring:
-    def test_migration_file_high_risk(self):
-        from diffui.server.routes_diff import _score_risk
-
-        _score, level, reasons = _score_risk("alembic/versions/001_init.py", 50, 0)
-        assert level in ("medium", "high")
-        assert "infra/migration" in reasons
-
-    def test_config_file_scored(self):
-        from diffui.server.routes_diff import _score_risk
-
-        score, _level, reasons = _score_risk("config/settings.yaml", 10, 5)
-        assert score >= 2
-        assert "config" in reasons
-
-    def test_large_deletion_scored(self):
-        from diffui.server.routes_diff import _score_risk
-
-        _score, _level, reasons = _score_risk("src/module.py", 0, 100)
-        assert "large deletion" in reasons
-
-    def test_test_removal_scored(self):
-        from diffui.server.routes_diff import _score_risk
-
-        _score, _level, reasons = _score_risk("tests/test_auth.py", 5, 30)
-        assert "test removal" in reasons
-
-    def test_low_risk_source_file(self):
-        from diffui.server.routes_diff import _score_risk
-
-        _score, level, reasons = _score_risk("src/utils.py", 10, 5)
-        assert level == "low"
-        assert reasons == []
-
-    def test_high_churn_scored(self):
-        from diffui.server.routes_diff import _score_risk
-
-        _score, _level, reasons = _score_risk("src/big_refactor.py", 150, 100)
-        assert "high churn" in reasons
-
-    def test_moderate_deletion_adds_score_without_reason(self):
-        from diffui.server.routes_diff import _score_risk
-
-        score, _level, reasons = _score_risk("src/module.py", 0, 30)
-        assert score == 1
-        assert "large deletion" not in reasons
-
-    def test_moderate_churn_adds_score_without_reason(self):
-        from diffui.server.routes_diff import _score_risk
-
-        score, _level, reasons = _score_risk("src/module.py", 40, 20)
-        assert score >= 1
-        assert "high churn" not in reasons
-
-    def test_no_extension_path(self):
-        from diffui.server.routes_diff import _score_risk
-
-        _score, level, reasons = _score_risk("Makefile", 5, 5)
-        assert level == "low"
-        assert reasons == []
-
-
 class TestExportJson:
-    def test_output_structure(self):
-        import json
-        from io import StringIO
-        from pathlib import Path
-        from unittest.mock import patch
+    def test_export_matches_the_files_comments_and_reviews_the_ui_shows(self, _server_app, capsys):
+        post_comment(_server_app)
+        post_comment(_server_app, file_path="extra.py", status="resolved")
+        _server_app.post("/api/reviewed/extra.py")
 
-        from diffui.git_utils import resolve_repo_root, set_active_repo
-
-        root = resolve_repo_root(Path(__file__).parent.parent)
-        set_active_repo(root)
-
-        buf = StringIO()
-        with patch("builtins.print", side_effect=lambda *a, **kw: buf.write(a[0] if a else "")):
-            from diffui.cli import export_json
-
-            export_json()
-
-        data = json.loads(buf.getvalue())
-        assert "branch" in data
-        assert "main_branch" in data
-        assert "merge_base" in data
-        assert "summary" in data
-        assert "files" in data
-
-        summary = data["summary"]
-        assert "total_files" in summary
-        assert "reviewed_files" in summary
-        assert "total_comments" in summary
-        assert "open_comments" in summary
-        assert "resolved_comments" in summary
-        assert summary["resolved_comments"] == summary["total_comments"] - summary["open_comments"]
-
-        assert isinstance(data["files"], list)
-        for f in data["files"]:
-            assert "path" in f
-            assert "reviewed" in f
-            assert "comments" in f
-            assert "open_comment_count" in f
-
-    def test_export_lists_the_files_the_ui_lists(self, _server_app, temp_repo, capsys):
-        from diffui.cli import export_json
-        from diffui.git_utils import set_active_repo
-
-        set_active_repo(temp_repo)
         export_json()
-        exported = [f["path"] for f in json.loads(capsys.readouterr().out)["files"]]
-        assert exported == [f["path"] for f in _server_app.get("/api/files").json()]
 
-    def test_agent_start_no_comments(self, _server_app):
-        r = _server_app.post("/api/agent/start")
-        assert r.status_code == 200
-        data = r.json()
-        assert data["ok"] is False
-        assert "No open comments" in data["error"]
-
-    def test_agent_ws_no_process(self, _server_app):
-        with _server_app.websocket_connect("ws://localhost/api/agent/ws") as ws:
-            msg = ws.receive_json()
-            assert msg["type"] == "error"
-            assert "No agent running" in msg["message"]
+        exported = json.loads(capsys.readouterr().out)
+        assert (exported["branch"], exported["main_branch"]) == ("feature", "main")
+        assert exported["summary"] == {
+            "total_files": 3,
+            "reviewed_files": 1,
+            "total_comments": 2,
+            "open_comments": 1,
+            "resolved_comments": 1,
+        }
+        assert [f["path"] for f in exported["files"]] == [f["path"] for f in _server_app.get("/api/files").json()]
 
 
 class TestPathContainment:
@@ -1186,79 +472,17 @@ class TestDiffViewValidation:
         assert not target.exists()
 
     def test_known_commit_sha_still_works(self, _server_app):
-        commits = _server_app.get("/api/commits").json()
-        sha = commits[0]["sha"]
-        r = _server_app.get(f"/api/diff/app.py?view={sha}")
-        assert r.status_code == 200
+        sha = _server_app.get("/api/commits").json()[0]["sha"]
+        data = _server_app.get(f"/api/diff/app.py?view={sha}").json()
+        assert (data["adds"], data["dels"]) == (2, 2)
 
 
 class TestExplainViewGuard:
     def test_sibling_of_tempdir_is_rejected(self, _server_app, tmp_path):
-        import tempfile
-        from unittest.mock import patch
-
-        evil = pathlib.Path(f"{tempfile.gettempdir()}-evil") / "payload.html"
+        evil = Path(f"{tempfile.gettempdir()}-evil") / "payload.html"
         with patch("diffui.server.routes_review._explain_output_path", str(evil)):
             r = _server_app.get("/api/explain/view")
         assert r.status_code == 400
-
-
-class TestApplySuggestionGuards:
-    def _add(self, client, **fields):
-        payload = {"file_path": "app.py", "line_index": 0, "comment": "fix it", **fields}
-        client.post("/api/comments", json=payload)
-        return client.get("/api/comments").json()["app.py"][-1]["id"]
-
-    def _cleanup(self, client):
-        _delete_app_py_comments(client)
-
-    def test_stale_line_text_is_rejected(self, _server_app, temp_repo):
-        before = (temp_repo / "app.py").read_text()
-        cid = self._add(
-            _server_app,
-            file_line_num=1,
-            line_text="-this line is long gone",
-            suggestion="replacement",
-        )
-        try:
-            r = _server_app.post(f"/api/comments/app.py/{cid}/apply")
-            assert r.status_code == 409
-            assert (temp_repo / "app.py").read_text() == before
-        finally:
-            self._cleanup(_server_app)
-
-    def test_multi_line_range_is_rejected(self, _server_app, temp_repo):
-        before = (temp_repo / "app.py").read_text()
-        cid = self._add(
-            _server_app,
-            file_line_num=1,
-            line_text=" line 1",
-            suggestion="replacement",
-            sel_end_index=4,
-        )
-        try:
-            r = _server_app.post(f"/api/comments/app.py/{cid}/apply")
-            assert r.status_code == 400
-            assert "more than one line" in r.json()["detail"]
-            assert (temp_repo / "app.py").read_text() == before
-        finally:
-            self._cleanup(_server_app)
-
-    def test_matching_line_text_still_applies(self, _server_app, temp_repo):
-        original = (temp_repo / "app.py").read_text()
-        cid = self._add(
-            _server_app,
-            file_line_num=1,
-            line_text=" line 1",
-            suggestion="line one",
-        )
-        try:
-            r = _server_app.post(f"/api/comments/app.py/{cid}/apply")
-            assert r.status_code == 200
-            assert (temp_repo / "app.py").read_text().splitlines()[0] == "line one"
-        finally:
-            (temp_repo / "app.py").write_text(original)
-            self._cleanup(_server_app)
 
 
 class TestSettingsValidation:
@@ -1269,19 +493,6 @@ class TestSettingsValidation:
     def test_unknown_agent_cli_is_rejected(self, _server_app):
         r = _server_app.put("/api/settings", json={"agent_cli": "curl"})
         assert r.status_code == 422
-
-    def test_font_size_out_of_range_is_rejected(self, _server_app):
-        assert _server_app.put("/api/settings", json={"font_size": 0}).status_code == 422
-        assert _server_app.put("/api/settings", json={"font_size": 400}).status_code == 422
-
-    def test_documented_editor_is_accepted(self, _server_app):
-        original = _server_app.get("/api/settings").json()
-        try:
-            r = _server_app.put("/api/settings", json={"editor": "nvim"})
-            assert r.status_code == 200
-            assert _server_app.get("/api/settings").json()["editor"] == "nvim"
-        finally:
-            _server_app.put("/api/settings", json={"editor": original["editor"]})
 
 
 _FAKE_HERDR = """#!/usr/bin/env python3
@@ -1308,11 +519,6 @@ def fake_herdr(tmp_path, monkeypatch):
     return calls
 
 
-def _delete_app_py_comments(client):
-    for c in client.get("/api/comments").json().get("app.py", []):
-        client.delete(f"/api/comments/app.py/{c['id']}")
-
-
 def _agent(pane_id, cwd, status="idle"):
     return {
         "pane_id": pane_id,
@@ -1326,14 +532,8 @@ def _agent(pane_id, cwd, status="idle"):
 class TestHerdr:
     def _paste(self, client, monkeypatch, agents):
         monkeypatch.setenv("HERDR_AGENTS", json.dumps(agents))
-        client.post(
-            "/api/comments",
-            json={"file_path": "app.py", "line_index": 1, "file_line_num": 5, "comment": "end\x1b[201~\rrm -rf ~"},
-        )
-        try:
-            return client.post("/api/agent/paste").json()
-        finally:
-            _delete_app_py_comments(client)
+        post_comment(client, file_line_num=5, comment="end\x1b[201~\rrm -rf ~")
+        return client.post("/api/agent/paste").json()
 
     @pytest.mark.parametrize(
         ("agents", "target"),
@@ -1363,13 +563,10 @@ class TestHerdr:
 
     def test_prompt_names_the_pane_agent_only_inside_a_workspace(self, _server_app, temp_repo, fake_herdr, monkeypatch):
         monkeypatch.setenv("HERDR_AGENTS", json.dumps([_agent("w1:p1", temp_repo)]))
-        _server_app.post("/api/comments", json={"file_path": "app.py", "line_index": 1, "comment": "check"})
-        try:
-            assert _server_app.post("/api/agent/prompt").json()["pane_agent"] == "claude"
-            monkeypatch.delenv("HERDR_WORKSPACE_ID")
-            assert _server_app.post("/api/agent/prompt").json()["pane_agent"] is None
-        finally:
-            _delete_app_py_comments(_server_app)
+        post_comment(_server_app)
+        assert _server_app.post("/api/agent/prompt").json()["pane_agent"] == "claude"
+        monkeypatch.delenv("HERDR_WORKSPACE_ID")
+        assert _server_app.post("/api/agent/prompt").json()["pane_agent"] is None
 
     def test_paste_refuses_blocked_agent(self, _server_app, temp_repo, fake_herdr, monkeypatch):
         r = self._paste(_server_app, monkeypatch, [_agent("w1:p1", temp_repo, "blocked")])
@@ -1377,121 +574,21 @@ class TestHerdr:
         assert not [c for c in fake_herdr() if c[:2] == ["pane", "send-text"]]
 
     def test_reviewing_a_file_reports_sidebar_counts(self, _server_app, fake_herdr):
-        from diffui.server.events import _apply_state_updates
-
-        _server_app.post("/api/comments", json={"file_path": "app.py", "line_index": 1, "comment": "check"})
-        try:
-            _server_app.post("/api/reviewed/app.py")
-            # The watcher sees reviewed.json change and runs this; TestClient never starts the watcher.
-            _apply_state_updates(["files_changed"])
-            total = len(_server_app.get("/api/files").json())
-            [*_, report] = [c for c in fake_herdr() if c[:2] == ["workspace", "report-metadata"]]
-            assert report[2:] == [
-                "w1",
-                "--source",
-                "diffui",
-                "--token",
-                "comments=1 open",
-                "--token",
-                f"reviewed=☑ 1/{total}",
-            ]
-        finally:
-            _server_app.post("/api/reviewed/app.py")
-            _delete_app_py_comments(_server_app)
-
-
-def _entry(path: str, risk: int = 0) -> dict:
-    return {"path": path, "dir": path.rpartition("/")[0] or ".", "risk_score": risk}
-
-
-def test_order_files_mirrors_the_web_tree():
-    files = [_entry("a/z.py"), _entry("b/y.py", 5), _entry("top.py", 3), _entry("a/b/x.py")]
-    assert [f["path"] for f in _order_files(files, "tree")] == ["top.py", "a/z.py", "a/b/x.py", "b/y.py"]
-    assert [f["path"] for f in _order_files(files, "risk")] == ["b/y.py", "top.py", "a/z.py", "a/b/x.py"]
-
-
-class TestSearch:
-    def test_matches_file_names_and_content_of_the_view(self, _server_app):
-        r = _server_app.get("/api/search", params={"q": "EXTRA"}).json()
-        assert r["files"] == [{"path": "extra.py", "changed": True}]
-        assert r["hits"] == []
-
-        r = _server_app.get("/api/search", params={"q": "line five"}).json()
-        assert r["hits"] == [{"path": "app.py", "line": 5, "text": "line five", "changed": True}]
-
-        # Content comes from the working tree, so an untracked file is searched too.
-        r = _server_app.get("/api/search", params={"q": "never committed"}).json()
-        assert [(h["path"], h["line"]) for h in r["hits"]] == [("untracked.txt", 1)]
-
-    def test_search_is_scoped_to_the_view(self, _server_app):
-        r = _server_app.get("/api/search", params={"q": "value", "view": "working"}).json()
-        assert r["hits"] == []
-        assert _server_app.get("/api/search", params={"q": "value"}).json()["hits"][0]["path"] == "extra.py"
-
-    @pytest.mark.parametrize(("scope", "query"), [("changed", "line"), ("all", "render")])
-    def test_hits_are_capped(self, _server_app, monkeypatch, scope, query):
-        monkeypatch.setattr("diffui.server.routes_search.MAX_HITS", 3)
-        r = _server_app.get("/api/search", params={"q": query, "scope": scope}).json()
-        assert len(r["hits"]) == 3
-        assert r["truncated"] is True
-
-    def test_empty_query_finds_nothing(self, _server_app):
-        assert _server_app.get("/api/search", params={"q": ""}).json() == {"files": [], "hits": [], "truncated": False}
-
-
-class TestWholeRepoSearch:
-    def test_all_scope_finds_files_outside_the_diff_and_marks_the_changed_ones(self, _server_app):
-        def search(q, scope="all"):
-            return _server_app.get("/api/search", params={"q": q, "scope": scope}).json()
-
-        assert search("rendrer")["files"] == [{"path": "renderer.py", "changed": False}]
-        assert search("RENDER_25")["hits"] == [
-            {"path": "renderer.py", "line": 25, "text": "def render_25(): ...", "changed": False}
+        post_comment(_server_app)
+        _server_app.post("/api/reviewed/app.py")
+        # The watcher sees reviewed.json change and runs this; TestClient never starts the watcher.
+        _apply_state_updates(["files_changed"])
+        total = len(_server_app.get("/api/files").json())
+        [*_, report] = [c for c in fake_herdr() if c[:2] == ["workspace", "report-metadata"]]
+        assert report[2:] == [
+            "w1",
+            "--source",
+            "diffui",
+            "--token",
+            "comments=1 open",
+            "--token",
+            f"reviewed=☑ 1/{total}",
         ]
-        assert search("extrra")["files"] == [{"path": "extra.py", "changed": True}]
-        assert [(h["path"], h["changed"]) for h in search("line five")["hits"]] == [("app.py", True)]
-
-        assert search("rendrer", scope="changed")["files"] == []
-        assert search("extrra", scope="changed")["files"] == [{"path": "extra.py", "changed": True}]
-
-    @pytest.fixture
-    def own_repo(self, tmp_path, temp_repo):
-        from fastapi.testclient import TestClient
-
-        from diffui.git_utils import set_active_repo
-        from diffui.server.app import create_app
-        from tests.conftest import _git
-
-        (tmp_path / ".gitignore").write_text("generated/\n")
-        (tmp_path / "generated").mkdir()
-        (tmp_path / "generated" / "out.py").write_text("needle\n")
-        (tmp_path / "blob.bin").write_bytes(b"\0needle")
-        (tmp_path / "keep.py").write_text("needle\n")
-        for args in (("init", "-q", "-b", "main"), ("add", "-A"), ("commit", "-qm", "init")):
-            _git(tmp_path, *args)
-        set_active_repo(tmp_path)
-        yield TestClient(create_app([tmp_path]), base_url="http://localhost"), tmp_path
-        set_active_repo(temp_repo)
-        create_app([temp_repo])
-
-    def test_files_written_after_the_first_search_are_found(self, own_repo):
-        from diffui.server.events import _apply_state_updates
-
-        client, repo = own_repo
-
-        def search(q):
-            return client.get("/api/search", params={"q": q, "scope": "all"}).json()
-
-        assert [h["path"] for h in search("needle")["hits"]] == ["keep.py"]
-
-        (repo / "later.py").write_text("needle again\n")
-        _apply_state_updates(["files_changed"])
-        assert [h["path"] for h in search("needle")["hits"]] == ["keep.py", "later.py"]
-        assert [f["path"] for f in search("laterr")["files"]] == ["later.py"]
-
-        (repo / "later.py").unlink()
-        _apply_state_updates(["files_changed"])
-        assert [h["path"] for h in search("needle")["hits"]] == ["keep.py"]
 
 
 @pytest.mark.parametrize(
@@ -1505,22 +602,15 @@ class TestWholeRepoSearch:
     ],
 )
 def test_turn_tracker_starts_on_the_rest_to_work_edge(samples, starts):
-    from diffui.server.turns import TurnTracker
-
     tracker = TurnTracker()
     assert [i for i, statuses in enumerate(samples) if tracker.observe(statuses)] == starts
 
 
 class TestLastTurn:
     def _git(self, repo, *args):
-        import subprocess
-
         return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
 
     def test_lists_only_files_changed_since_the_turn_started(self, _server_app, temp_repo, fake_herdr, monkeypatch):
-        from diffui.server.events import _apply_state_updates
-        from diffui.server.turns import TurnTracker, poll_once
-
         reason = _server_app.get("/api/last-turn").json()["reason"]
         assert reason.startswith("No agent turn seen yet")
         assert _server_app.get("/api/files?view=last-turn").json() == []
@@ -1568,8 +658,6 @@ class TestLocalOriginOnly:
         assert _server_app.get("/api/files", headers=headers).status_code == status
 
     def test_foreign_websocket_is_rejected(self, _server_app):
-        from starlette.websockets import WebSocketDisconnect
-
         with (
             pytest.raises(WebSocketDisconnect),
             _server_app.websocket_connect(

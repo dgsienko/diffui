@@ -1,17 +1,28 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
 from diffui.git_utils import (
+    PathOutsideRepo,
     _load_json,
     _safe_name,
     _save_json,
     diff_stat,
+    discover_sibling_repos,
+    get_changed_files,
+    get_diff_numstat,
+    get_file_content,
+    get_file_mtime,
+    get_merge_base,
+    repo_has_changes,
+    repo_relative,
+    resolve_repos,
+    set_active_repo,
     short_name,
 )
+from tests.conftest import _git
 
 
 class TestShortName:
@@ -43,17 +54,9 @@ class TestSafeName:
 
 
 class TestLoadSaveJson:
-    def test_load_missing_file(self, tmp_path: Path):
-        result = _load_json(tmp_path / "missing.json", {})
-        assert result == {}
-
-    def test_load_missing_with_default(self, tmp_path: Path):
-        result = _load_json(tmp_path / "missing.json", [])
-        assert result == []
-
-    def test_load_missing_no_default(self, tmp_path: Path):
-        result = _load_json(tmp_path / "missing.json")
-        assert result == {}
+    @pytest.mark.parametrize(("args", "expected"), [((), {}), (({},), {}), (([],), [])])
+    def test_load_missing_file_returns_the_default(self, tmp_path: Path, args, expected):
+        assert _load_json(tmp_path / "missing.json", *args) == expected
 
     def test_save_and_load(self, tmp_path: Path):
         p = tmp_path / "data.json"
@@ -62,156 +65,42 @@ class TestLoadSaveJson:
         loaded = _load_json(p, {})
         assert loaded == data
 
-    def test_save_creates_file(self, tmp_path: Path):
-        p = tmp_path / "new.json"
-        assert not p.exists()
-        _save_json(p, {"a": 1})
-        assert p.exists()
 
-    def test_save_format(self, tmp_path: Path):
-        p = tmp_path / "fmt.json"
-        _save_json(p, {"x": 1})
-        content = p.read_text()
-        assert content.endswith("\n")
-        parsed = json.loads(content)
-        assert parsed == {"x": 1}
-
-    def test_roundtrip_reviewed(self, tmp_path: Path):
-        p = tmp_path / "reviewed.json"
-        data: dict[str, float] = {"file.py": 1234567890.123}
-        _save_json(p, data)
-        loaded = _load_json(p, {})
-        assert loaded["file.py"] == pytest.approx(1234567890.123)
-
-    def test_roundtrip_comments(self, tmp_path: Path):
-        p = tmp_path / "comments.json"
-        data = {
-            "file.py": [
-                {
-                    "file_path": "file.py",
-                    "file_line_num": 10,
-                    "line_text": "+new code",
-                    "comment": "looks good",
-                    "timestamp": "2024-01-01T00:00:00Z",
-                }
-            ]
-        }
-        _save_json(p, data)
-        loaded = _load_json(p, {})
-        assert loaded["file.py"][0]["comment"] == "looks good"
-        assert loaded["file.py"][0]["file_line_num"] == 10
-
-
-class TestDiffStat:
-    def test_simple_diff(self):
-        diff = (
-            "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1,3 +1,4 @@\n line1\n-line2\n+line2_new\n+line2_extra\n line3\n"
-        )
-        adds, dels = diff_stat(diff)
-        assert adds == 2
-        assert dels == 1
-
-    def test_no_changes(self):
-        adds, dels = diff_stat("")
-        assert adds == 0
-        assert dels == 0
-
-    def test_only_adds(self):
-        diff = "@@ -1 +1,3 @@\n+a\n+b\n+c\n"
-        adds, dels = diff_stat(diff)
-        assert adds == 3
-        assert dels == 0
-
-    def test_only_deletes(self):
-        diff = "@@ -1,3 +1 @@\n-a\n-b\n-c\n"
-        adds, dels = diff_stat(diff)
-        assert adds == 0
-        assert dels == 3
-
-    def test_ignores_meta_lines(self):
-        diff = "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new\n"
-        adds, dels = diff_stat(diff)
-        assert adds == 1
-        assert dels == 1
+@pytest.mark.parametrize(
+    ("diff", "expected"),
+    [
+        pytest.param(
+            "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1,3 +1,4 @@\n line1\n-line2\n+line2_new\n+line2_extra\n line3\n",
+            (2, 1),
+            id="mixed",
+        ),
+        pytest.param("", (0, 0), id="empty"),
+        pytest.param("--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new\n", (1, 1), id="file-headers-are-not-counted"),
+        pytest.param(
+            "diff --git a/k8s.yaml b/k8s.yaml\n--- a/k8s.yaml\n+++ b/k8s.yaml\n@@ -1,3 +1,2 @@\n----\n-kind: Service\n+kind: Deployment\n",
+            (1, 2),
+            id="removed-yaml-separator-is-a-deletion",
+        ),
+    ],
+)
+def test_diff_stat(diff, expected):
+    assert diff_stat(diff) == expected
 
 
 class TestResolveRepos:
-    def test_from_current_dir(self):
-        from diffui.git_utils import resolve_repos
-
-        repos, idx = resolve_repos()
-        assert len(repos) >= 1
-        assert 0 <= idx < len(repos)
-
-    def test_explicit_paths(self):
-        from diffui.git_utils import resolve_repos
-
-        repo_path = str(Path(__file__).parent.parent)
-        repos, idx = resolve_repos([repo_path])
-        assert len(repos) == 1
-        assert idx == 0
-        assert repos[0].resolve() == Path(repo_path).resolve()
-
-    def test_deduplicates(self):
-        from diffui.git_utils import resolve_repos
-
-        repo_path = str(Path(__file__).parent.parent)
-        repos, _idx = resolve_repos([repo_path, repo_path])
-        assert len(repos) == 1
-
-
-class TestGetBlame:
-    def test_returns_list_of_dicts(self):
-        from diffui.git_utils import get_blame, set_active_repo
-
-        root = Path(__file__).parent.parent
-        set_active_repo(root)
-        result = get_blame("diffui/__init__.py")
-        assert isinstance(result, list)
-        if result:
-            assert "sha" in result[0]
-            assert "author" in result[0]
-            assert "timestamp" in result[0]
-
-    def test_sha_is_8_chars(self):
-        from diffui.git_utils import get_blame, set_active_repo
-
-        root = Path(__file__).parent.parent
-        set_active_repo(root)
-        result = get_blame("diffui/__init__.py")
-        for entry in result:
-            assert len(entry["sha"]) == 8
-
-    def test_unknown_file_returns_empty(self):
-        from diffui.git_utils import get_blame, set_active_repo
-
-        root = Path(__file__).parent.parent
-        set_active_repo(root)
-        assert get_blame("does_not_exist.py") == []
-
-
-class TestSessionPersistence:
-    def test_save_overwrites_not_merges(self, tmp_path: Path):
-        from diffui.git_utils import _load_json, _save_json
-
-        p = tmp_path / "session.json"
-        _save_json(p, {"a": 1})
-        _save_json(p, {"b": 2})
-        assert _load_json(p, {}) == {"b": 2}
+    @pytest.mark.parametrize("copies", [1, 2])
+    def test_explicit_paths_resolve_once(self, temp_repo, copies):
+        assert resolve_repos([str(temp_repo)] * copies) == ([temp_repo.resolve()], 0)
 
 
 class TestDiscoverSiblingRepos:
     def test_no_git_dirs_returns_empty(self, tmp_path: Path):
-        from diffui.git_utils import discover_sibling_repos
-
         (tmp_path / "parent").mkdir()
         child = tmp_path / "parent" / "child"
         child.mkdir()
         assert discover_sibling_repos(child) == []
 
     def test_finds_sibling_git_repos(self, tmp_path: Path):
-        from diffui.git_utils import discover_sibling_repos
-
         parent = tmp_path / "workspace"
         parent.mkdir()
         for name in ("repo_a", "repo_b"):
@@ -228,14 +117,9 @@ class TestDiscoverSiblingRepos:
 
 class TestRepoHasChanges:
     def test_branch_with_commits_has_changes(self, temp_repo):
-        from diffui.git_utils import repo_has_changes
-
         assert repo_has_changes(temp_repo) is True
 
     def test_untracked_file_alone_counts(self, tmp_path):
-        from diffui.git_utils import repo_has_changes
-        from tests.conftest import _git
-
         repo = tmp_path / "untracked-only"
         repo.mkdir()
         _git(repo, "init", "-q", "-b", "main")
@@ -247,9 +131,6 @@ class TestRepoHasChanges:
 
 class TestMergeBase:
     def test_stale_local_main_does_not_count_merged_commits(self, tmp_path):
-        from diffui.git_utils import get_changed_files, get_merge_base, set_active_repo
-        from tests.conftest import _git
-
         repo = tmp_path / "stale-main"
         repo.mkdir()
         _git(repo, "init", "-q", "-b", "main")
@@ -269,76 +150,44 @@ class TestMergeBase:
 
 
 class TestGetFileMtime:
-    def test_missing_file_returns_zero(self):
-        from diffui.git_utils import get_file_mtime, set_active_repo
-
-        root = Path(__file__).parent.parent
-        set_active_repo(root)
+    def test_missing_file_returns_zero(self, temp_repo):
+        set_active_repo(temp_repo)
         assert get_file_mtime("_definitely_missing_file_.xyz") == 0.0
 
-    def test_existing_file_returns_positive(self):
-        from diffui.git_utils import get_file_mtime, set_active_repo
-
-        root = Path(__file__).parent.parent
-        set_active_repo(root)
-        assert get_file_mtime("diffui/__init__.py") > 0.0
+    def test_existing_file_returns_its_mtime(self, temp_repo):
+        set_active_repo(temp_repo)
+        assert get_file_mtime("app.py") == (temp_repo / "app.py").stat().st_mtime
 
 
 class TestGetFileContent:
-    def test_missing_file_returns_empty(self):
-        from diffui.git_utils import get_file_content, set_active_repo
-
-        root = Path(__file__).parent.parent
-        set_active_repo(root)
+    def test_missing_file_returns_empty(self, temp_repo):
+        set_active_repo(temp_repo)
         assert get_file_content("_definitely_missing_file_.xyz") == ""
 
     def test_binary_file_returns_empty(self, tmp_path: Path):
-        from diffui.git_utils import get_file_content, set_active_repo
-
         set_active_repo(tmp_path)
         binary = tmp_path / "data.bin"
         binary.write_bytes(b"\xff\xfe\x00\x01\x80")
         assert get_file_content("data.bin") == ""
 
     def test_text_file_returns_content(self, tmp_path: Path):
-        from diffui.git_utils import get_file_content, set_active_repo
-
         set_active_repo(tmp_path)
         (tmp_path / "hello.txt").write_text("hi there\n")
         assert get_file_content("hello.txt") == "hi there\n"
 
 
 class TestGetDiffNumstat:
-    def test_returns_dict(self):
-        from diffui.git_utils import get_diff_numstat, get_merge_base, set_active_repo
-
-        root = Path(__file__).parent.parent
-        set_active_repo(root)
-        try:
-            from diffui.git_utils import get_main_branch
-
-            main = get_main_branch()
-            base = get_merge_base(main)
-            stats = get_diff_numstat(base)
-            assert isinstance(stats, dict)
-            for path, (adds, dels) in stats.items():
-                assert isinstance(path, str)
-                assert isinstance(adds, int)
-                assert isinstance(dels, int)
-        except RuntimeError:
-            pytest.skip("No merge base available")
+    def test_counts_committed_and_working_changes_but_not_untracked_files(self, temp_repo):
+        set_active_repo(temp_repo)
+        assert get_diff_numstat(get_merge_base("main")) == {"app.py": (3, 2), "extra.py": (1, 0)}
 
 
 class TestRepoRelative:
     def test_in_repo_path_returned_unchanged(self, temp_repo):
-        from diffui.git_utils import repo_relative, set_active_repo
-
         set_active_repo(temp_repo)
         assert repo_relative("app.py") == "app.py"
 
     def test_absolute_path_outside_repo_raises(self, temp_repo, tmp_path):
-        from diffui.git_utils import PathOutsideRepo, repo_relative, set_active_repo
-
         set_active_repo(temp_repo)
         outside = tmp_path / "secret.txt"
         outside.write_text("secret\n")
@@ -346,15 +195,11 @@ class TestRepoRelative:
             repo_relative(str(outside))
 
     def test_dotdot_escape_raises(self, temp_repo):
-        from diffui.git_utils import PathOutsideRepo, repo_relative, set_active_repo
-
         set_active_repo(temp_repo)
         with pytest.raises(PathOutsideRepo):
             repo_relative("../../etc/hostname")
 
     def test_symlink_pointing_outside_raises(self, temp_repo, tmp_path):
-        from diffui.git_utils import PathOutsideRepo, repo_relative, set_active_repo
-
         set_active_repo(temp_repo)
         outside = tmp_path / "target.txt"
         outside.write_text("secret\n")
@@ -367,8 +212,6 @@ class TestRepoRelative:
             link.unlink()
 
     def test_symlink_inside_repo_allowed(self, temp_repo):
-        from diffui.git_utils import repo_relative, set_active_repo
-
         set_active_repo(temp_repo)
         link = temp_repo / "alias.py"
         link.symlink_to(temp_repo / "app.py")
@@ -378,26 +221,8 @@ class TestRepoRelative:
             link.unlink()
 
 
-class TestDiffStatSeparatorLines:
-    def test_removed_separator_counts_as_a_deletion(self):
-        from diffui.git_utils import diff_stat
-
-        diff = (
-            "diff --git a/k8s.yaml b/k8s.yaml\n"
-            "--- a/k8s.yaml\n"
-            "+++ b/k8s.yaml\n"
-            "@@ -1,3 +1,2 @@\n"
-            "----\n"
-            "-kind: Service\n"
-            "+kind: Deployment\n"
-        )
-        assert diff_stat(diff) == (1, 2)
-
-
 class TestJsonPersistence:
     def test_corrupt_file_is_moved_aside_and_default_returned(self, tmp_path):
-        from diffui.git_utils import _load_json
-
         path = tmp_path / "comments.json"
         path.write_text('{"a": [{"id"')
         assert _load_json(path, {}) == {}
@@ -405,8 +230,6 @@ class TestJsonPersistence:
         assert (tmp_path / "comments.json.corrupt").read_text() == '{"a": [{"id"'
 
     def test_save_leaves_no_temp_file(self, tmp_path):
-        from diffui.git_utils import _load_json, _save_json
-
         path = tmp_path / "comments.json"
         _save_json(path, {"a.py": [{"id": "1"}]})
         assert _load_json(path, {}) == {"a.py": [{"id": "1"}]}

@@ -1,14 +1,10 @@
 from __future__ import annotations
 
 import os
-import pty
-import select
-import struct
+import signal
 import subprocess
-import termios
+import sys
 import time
-import tty
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,12 +12,12 @@ import pytest
 import diffui.server.routes_agent_terminal as rat
 from diffui.server.routes_agent_terminal import (
     _BUFFER_MAX_BYTES,
-    _is_running,
     _kill_agent,
     _read_pty,
     _resize_pty,
     _write_pty,
 )
+from tests.conftest import post_comment
 
 
 @pytest.fixture(autouse=True)
@@ -55,128 +51,56 @@ class TestAppendOutput:
         assert result.endswith(chunk)
 
 
-class TestIsRunning:
-    def test_none_process(self):
-        rat._agent_proc = None
-        assert _is_running() is False
+class TestPtyHelpers:
+    def test_read_returns_available_bytes_or_none(self):
+        r, w = os.pipe()
+        try:
+            assert _read_pty(r, timeout=0.01) is None
+            os.write(w, b"data")
+            assert _read_pty(r, timeout=1) == b"data"
+        finally:
+            os.close(r)
+            os.close(w)
 
-    def test_exited_process(self):
-        proc = MagicMock()
-        proc.poll.return_value = 0
-        rat._agent_proc = proc
-        assert _is_running() is False
-
-    def test_running_process(self):
-        proc = MagicMock()
-        proc.poll.return_value = None
-        rat._agent_proc = proc
-        assert _is_running() is True
-
-
-class TestReadPty:
-    def test_data_available(self):
-        with (
-            patch.object(rat.select, "select", return_value=([5], [], [])),
-            patch.object(rat.os, "read", return_value=b"data") as mock_read,
-        ):
-            assert _read_pty(5, timeout=0.1) == b"data"
-            mock_read.assert_called_once_with(5, 16384)
-
-    def test_no_data_timeout(self):
-        with patch.object(rat.select, "select", return_value=([], [], [])):
-            assert _read_pty(5, timeout=0.1) is None
-
-    def test_oserror_returns_none(self):
-        with patch.object(rat.select, "select", side_effect=OSError("boom")):
-            assert _read_pty(5) is None
-
-
-class TestWritePty:
-    def test_normal_write_encodes(self):
-        with patch.object(rat.os, "write") as mock_write:
-            _write_pty(7, "hi")
-            mock_write.assert_called_once_with(7, b"hi")
-
-    def test_oserror_swallowed(self):
-        with patch.object(rat.os, "write", side_effect=OSError("closed")):
-            _write_pty(7, "hi")  # must not raise
-
-
-class TestResizePty:
-    def test_calls_ioctl(self):
-        with patch("fcntl.ioctl") as mock_ioctl:
-            _resize_pty(9, 40, 120)
-            assert mock_ioctl.called
-            args = mock_ioctl.call_args[0]
-            assert args[0] == 9
-
-    def test_oserror_swallowed(self):
-        with patch("fcntl.ioctl", side_effect=OSError("bad fd")):
-            _resize_pty(9, 40, 120)  # must not raise
+    def test_closed_descriptors_are_swallowed(self):
+        r, w = os.pipe()
+        os.close(r)
+        try:
+            assert _read_pty(r) is None
+            _write_pty(w, "hi")
+            _resize_pty(r, 40, 120)
+        finally:
+            os.close(w)
 
 
 class TestKillAgent:
     def test_no_process_returns_none(self):
-        rat._agent_proc = None
         assert _kill_agent() is None
 
-    def test_terminates_cleanly(self):
+    @pytest.mark.parametrize("fd_already_closed", [False, True])
+    def test_terminates_the_process_and_releases_the_pty(self, fd_already_closed):
+        proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        r, w = os.pipe()
+        os.close(w)
+        if fd_already_closed:
+            os.close(r)
+        rat._agent_proc, rat._agent_pty_fd = proc, r
+
+        assert _kill_agent() == -signal.SIGTERM
+
+        assert proc.poll() is not None
+        assert (rat._agent_proc, rat._agent_pty_fd) == (None, None)
+        with pytest.raises(OSError):
+            os.fstat(r)
+
+    def test_kills_a_process_that_ignores_terminate(self):
         proc = MagicMock()
-        proc.wait.return_value = 0
-        proc.returncode = 0
-        rat._agent_proc = proc
-        rat._agent_pty_fd = 12
-
-        with patch.object(rat.os, "close") as mock_close:
-            code = _kill_agent()
-
-        assert code == 0
-        proc.terminate.assert_called_once()
-        proc.kill.assert_not_called()
-        mock_close.assert_called_once_with(12)
-        assert rat._agent_proc is None
-        assert rat._agent_pty_fd is None
-
-    def test_needs_kill_after_timeout(self):
-        proc = MagicMock()
-        proc.wait.side_effect = [rat.subprocess.TimeoutExpired("cmd", 5), None]
+        proc.wait.side_effect = [subprocess.TimeoutExpired("cmd", 5), None]
         proc.returncode = -9
         rat._agent_proc = proc
-        rat._agent_pty_fd = None
 
-        code = _kill_agent()
-
-        assert code == -9
-        proc.terminate.assert_called_once()
+        assert _kill_agent() == -9
         proc.kill.assert_called_once()
-        assert proc.wait.call_count == 2
-
-    def test_close_oserror_swallowed(self):
-        proc = MagicMock()
-        proc.wait.return_value = 0
-        proc.returncode = 0
-        rat._agent_proc = proc
-        rat._agent_pty_fd = 3
-
-        with patch.object(rat.os, "close", side_effect=OSError("already closed")):
-            code = _kill_agent()
-
-        assert code == 0
-        assert rat._agent_pty_fd is None
-
-
-@pytest.fixture(scope="class")
-def _server_app():
-    from diffui.git_utils import resolve_repo_root, set_active_repo
-    from diffui.server.app import create_app
-
-    root = resolve_repo_root(Path(__file__).parent.parent)
-    set_active_repo(root)
-    app = create_app([root])
-
-    from fastapi.testclient import TestClient
-
-    return TestClient(app, base_url="http://localhost")
 
 
 class TestStartAgentEndpoint:
@@ -184,81 +108,50 @@ class TestStartAgentEndpoint:
         proc = MagicMock()
         proc.poll.return_value = None
         with patch.object(rat, "_agent_proc", proc):
-            r = _server_app.post("/api/agent/start")
-        assert r.status_code == 200
-        body = r.json()
+            body = _server_app.post("/api/agent/start").json()
         assert body["ok"] is False
         assert "already running" in body["error"].lower()
 
     def test_no_open_comments(self, _server_app):
-        with (
-            patch.object(rat, "_agent_proc", None),
-            patch.object(rat, "_build_agent_context", return_value=(None, "No open comments", "", 0)),
-        ):
-            r = _server_app.post("/api/agent/start")
-        assert r.status_code == 200
-        body = r.json()
+        assert _server_app.post("/api/agent/start").json() == {"ok": False, "error": "No open comments"}
+
+    def test_unknown_agent_cli(self, _server_app, monkeypatch):
+        monkeypatch.setattr(rat.app_state, "agent_cli", "bogus-agent")
+        post_comment(_server_app)
+        body = _server_app.post("/api/agent/start").json()
         assert body["ok"] is False
-        assert body["error"] == "No open comments"
+        assert "Unknown agent CLI: bogus-agent" in body["error"]
 
-    def test_unknown_agent_cli(self, _server_app):
-        with (
-            patch.object(rat, "_agent_proc", None),
-            patch.object(
-                rat,
-                "_build_agent_context",
-                return_value=("prompt text", "/repo", "branch", 1),
-            ),
-            patch.object(rat.app_state, "agent_cli", "bogus-agent"),
-        ):
-            r = _server_app.post("/api/agent/start")
-        assert r.status_code == 200
-        body = r.json()
-        assert body["ok"] is False
-        assert "Unknown agent CLI" in body["error"]
-        assert "bogus-agent" in body["error"]
+    def test_start_stores_the_prompt_for_the_websocket_to_spawn(self, _server_app, temp_repo, monkeypatch):
+        monkeypatch.setattr(rat.app_state, "agent_cli", "claude")
+        post_comment(_server_app, comment="needs a rename")
+        assert _server_app.post("/api/agent/start").json() == {"ok": True, "agent": "claude"}
+        assert "needs a rename" in rat._pending_start["prompt"]
+        assert rat._pending_start["repo_root"] == str(temp_repo)
 
-    def test_start_stores_pending(self, _server_app):
-        with (
-            patch.object(rat, "_agent_proc", None),
-            patch.object(
-                rat,
-                "_build_agent_context",
-                return_value=("prompt text", "/repo", "branch", 1),
-            ),
-            patch.object(rat.app_state, "agent_cli", "claude"),
-        ):
-            r = _server_app.post("/api/agent/start")
 
-        assert r.status_code == 200
-        body = r.json()
-        assert body == {"ok": True, "agent": "claude"}
-        assert rat._pending_start is not None
-        assert rat._pending_start["prompt"] == "prompt text"
-        assert rat._pending_start["repo_root"] == "/repo"
+class TestSpawnAgent:
+    def test_spawned_agent_runs_in_its_own_session_on_a_sized_terminal(self, temp_repo):
+        script = (
+            "import os, sys; "
+            "print(os.getsid(0) == os.getpid(), *os.get_terminal_size(0), os.environ['COLUMNS'], os.environ['LINES'], "
+            "sys.argv[1])"
+        )
+        rat._pending_start = {
+            "prompt": "the-prompt",
+            "repo_root": str(temp_repo),
+            "agent": "claude",
+            "cmd": [sys.executable, "-c", script],
+        }
+        result = rat._spawn_agent(30, 100)
+        output = b""
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not output.endswith(b"\n"):
+            output += rat._read_pty(rat._agent_pty_fd) or b""
+        rat._kill_agent()
 
-    def test_spawn_agent_creates_process(self):
-        proc = MagicMock()
-        proc.pid = 4242
-        rat._pending_start = {"prompt": "test", "repo_root": "/repo", "agent": "claude", "cmd": ["claude"]}
-        with (
-            patch.object(rat.pty, "openpty", return_value=(10, 11)),
-            patch.object(rat.os, "ttyname", return_value="/dev/pts/99"),
-            patch.object(rat.tty, "setraw"),
-            patch.object(rat.subprocess, "Popen", return_value=proc) as mock_popen,
-            patch.object(rat.os, "close") as mock_close,
-        ):
-            result = rat._spawn_agent(30, 100)
-
-        assert result == {"ok": True, "pid": 4242, "agent": "claude"}
-        mock_close.assert_called_once_with(11)
-        called_cmd = mock_popen.call_args[0][0]
-        assert called_cmd[0] == "claude"
-        kwargs = mock_popen.call_args[1]
-        assert kwargs["stdin"] == 11
-        assert kwargs["env"]["COLUMNS"] == "100"
-        assert kwargs["env"]["LINES"] == "30"
-        assert kwargs["preexec_fn"] is not None
+        assert result["ok"] is True
+        assert output.decode().split() == ["True", "100", "30", "100", "30", "the-prompt"]
 
     def test_spawn_closes_child_fd_on_popen_failure(self):
         rat._pending_start = {"prompt": "test", "repo_root": "/repo", "agent": "claude", "cmd": ["claude"]}
@@ -273,149 +166,6 @@ class TestStartAgentEndpoint:
             rat._spawn_agent(24, 80)
 
         mock_close.assert_called_once_with(11)
-
-
-def _read_until_exit(pty_fd: int, proc: subprocess.Popen) -> bytes:
-    output = b""
-    for _ in range(50):
-        ready, _, _ = select.select([pty_fd], [], [], 0.1)
-        if ready:
-            try:
-                output += os.read(pty_fd, 4096)
-            except OSError:  # Linux raises EIO once the child closes its end; macOS returns b"".
-                break
-        if proc.poll() is not None:
-            break
-    return output
-
-
-class TestPtyIntegration:
-    def test_child_has_controlling_terminal(self):
-        pty_fd, child_fd = pty.openpty()
-        child_tty = os.ttyname(child_fd)
-        tty.setraw(child_fd)
-
-        def child_setup():
-            os.setsid()
-            fd = os.open(child_tty, os.O_RDWR)
-            os.close(fd)
-
-        proc = subprocess.Popen(
-            ["python3", "-c", "import os; print(os.ctermid())"],
-            stdin=child_fd,
-            stdout=child_fd,
-            stderr=child_fd,
-            preexec_fn=child_setup,
-            close_fds=True,
-        )
-        os.close(child_fd)
-
-        output = _read_until_exit(pty_fd, proc)
-
-        proc.wait(timeout=5)
-        os.close(pty_fd)
-        assert b"/dev/" in output
-
-    def test_arrow_key_sequences_pass_through_raw_pty(self):
-        pty_fd, child_fd = pty.openpty()
-        child_tty = os.ttyname(child_fd)
-        tty.setraw(child_fd)
-
-        def child_setup():
-            os.setsid()
-            fd = os.open(child_tty, os.O_RDWR)
-            os.close(fd)
-
-        proc = subprocess.Popen(
-            ["cat"],
-            stdin=child_fd,
-            stdout=child_fd,
-            stderr=child_fd,
-            preexec_fn=child_setup,
-            close_fds=True,
-        )
-        os.close(child_fd)
-
-        os.write(pty_fd, b"\x1b[A")
-
-        output = b""
-        for _ in range(20):
-            ready, _, _ = select.select([pty_fd], [], [], 0.1)
-            if ready:
-                output += os.read(pty_fd, 4096)
-            if b"\x1b[A" in output:
-                break
-
-        proc.terminate()
-        proc.wait(timeout=5)
-        os.close(pty_fd)
-        assert b"\x1b[A" in output
-
-    def test_sigwinch_delivered_after_resize(self):
-        pty_fd, child_fd = pty.openpty()
-        child_tty = os.ttyname(child_fd)
-        tty.setraw(child_fd)
-        import fcntl
-
-        fcntl.ioctl(pty_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
-
-        def child_setup():
-            os.setsid()
-            fd = os.open(child_tty, os.O_RDWR)
-            os.close(fd)
-
-        script = (
-            "import signal, sys, struct, fcntl, termios\n"
-            "got = []\n"
-            "def handler(sig, frame):\n"
-            "    ws = fcntl.ioctl(0, termios.TIOCGWINSZ, b'\\x00' * 8)\n"
-            "    rows, cols = struct.unpack('HHHH', ws)[:2]\n"
-            "    got.append(f'{rows}x{cols}')\n"
-            "signal.signal(signal.SIGWINCH, handler)\n"
-            "import time; time.sleep(0.5)\n"
-            "print(','.join(got) if got else 'NO_SIGWINCH')\n"
-        )
-
-        proc = subprocess.Popen(
-            ["python3", "-c", script],
-            stdin=child_fd,
-            stdout=child_fd,
-            stderr=child_fd,
-            preexec_fn=child_setup,
-            close_fds=True,
-        )
-        os.close(child_fd)
-
-        import time
-
-        time.sleep(0.1)
-        fcntl.ioctl(pty_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 100, 0, 0))
-
-        output = _read_until_exit(pty_fd, proc)
-
-        proc.wait(timeout=5)
-        os.close(pty_fd)
-        text = output.decode("utf-8", errors="replace")
-        assert "40x100" in text, f"Expected SIGWINCH with 40x100, got: {text!r}"
-
-    def test_without_setsid_no_controlling_terminal(self):
-        pty_fd, child_fd = pty.openpty()
-        tty.setraw(child_fd)
-
-        proc = subprocess.Popen(
-            ["python3", "-c", "import os; print(os.ttyname(0))"],
-            stdin=child_fd,
-            stdout=child_fd,
-            stderr=child_fd,
-            close_fds=True,
-        )
-        os.close(child_fd)
-
-        output = _read_until_exit(pty_fd, proc)
-
-        proc.wait(timeout=5)
-        os.close(pty_fd)
-        assert b"/dev/" in output
 
 
 class TestAgentWebSocket:
@@ -503,14 +253,11 @@ class TestAgentWebSocket:
 
 
 class TestPendingStart:
-    def test_missing_pending_is_stale(self):
-        rat._pending_start = None
-        assert rat._pending_is_stale() is True
-
-    def test_fresh_pending_is_not_stale(self):
-        rat._pending_start = {"created": time.monotonic()}
-        assert rat._pending_is_stale() is False
-
-    def test_abandoned_pending_goes_stale(self):
-        rat._pending_start = {"created": time.monotonic() - rat._PENDING_TTL - 1}
-        assert rat._pending_is_stale() is True
+    @pytest.mark.parametrize(
+        ("age", "stale"),
+        [(None, True), (0, False), (rat._PENDING_TTL + 1, True)],
+        ids=["missing", "fresh", "abandoned"],
+    )
+    def test_pending_start_goes_stale_after_its_ttl(self, age, stale):
+        rat._pending_start = None if age is None else {"created": time.monotonic() - age}
+        assert rat._pending_is_stale() is stale
