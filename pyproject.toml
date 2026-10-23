@@ -6,8 +6,6 @@ build-backend = "hatchling.build"
 name = "diffui"
 version = "0.10.0"
 description = "UI for reviewing AI agent diffs"
-license = "MIT"
-license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110",

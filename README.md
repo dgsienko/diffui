@@ -1,7 +1,6 @@
 # diffui
 
 [![CI](https://github.com/dgsienko/diffui/actions/workflows/ci.yml/badge.svg)](https://github.com/dgsienko/diffui/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/dgsienko/diffui)](LICENSE)
 
 <p align="center">
   <a href="#install">install</a> · <a href="#quick-start">quick start</a> · <a href="#ai-agent-integration">agents</a> · <a href="#terminal-ui">terminal UI</a> · <a href="#keybindings">keybindings</a> · <a href="#development">development</a>
@@ -236,4 +235,4 @@ ruff check .
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Copyright (c) 2026 Dillon Sienko. All rights reserved.
