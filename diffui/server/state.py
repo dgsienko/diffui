@@ -20,7 +20,7 @@ from diffui.git_utils import (
     read_turn_tree,
     snapshot_worktree,
 )
-from diffui.themes import ALL_THEMES, DEFAULT_THEME, get_current_theme, set_current_theme
+from diffui.themes import ALL_THEMES, DEFAULT_THEME
 
 log = logging.getLogger(__name__)
 
@@ -52,10 +52,8 @@ class AppState:
         saved = load_settings()
         theme_name = saved.get("theme", DEFAULT_THEME.name)
         theme_index = next((i for i, t in enumerate(ALL_THEMES) if t.name == theme_name), 0)
-        set_current_theme(ALL_THEMES[theme_index])
 
         self.editor: str = saved.get("editor", "code")
-        self.view_mode: str = saved.get("view_mode", "diff")
         self.user_name: str = saved.get("user_name", "User")
         self.agent_cli: str = saved.get("agent_cli", "claude")
         self.font_size: int = saved.get("font_size", 13)
@@ -124,7 +122,18 @@ class AppState:
 
     @property
     def theme(self):
-        return get_current_theme()
+        return ALL_THEMES[self.theme_index]
+
+    def settings(self) -> dict:
+        return {
+            "theme": self.theme.name,
+            "editor": self.editor,
+            "user_name": self.user_name,
+            "agent_cli": self.agent_cli,
+            "font_size": self.font_size,
+            "word_wrap": self.word_wrap,
+            "keybindings": self.keybindings,
+        }
 
 
 app_state = AppState()

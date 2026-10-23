@@ -46,7 +46,7 @@ diffui/
 │   ├── filelist.py     # FileList: tree or risk-ordered files
 │   └── screens.py      # Help, comment composer, agent prompt and commit picker
 ├── static/             # Preact frontend: app.js, components/, lib/ (markdown.js, utils.js), style.css
-└── themes/             # Theme dataclass, 16 themes in definitions.py, current-theme state
+└── themes/             # Theme dataclass, 16 themes in definitions.py
 ```
 
 ## Shared patterns
@@ -172,7 +172,7 @@ All in `~/.config/diffui/`:
 
 | File | Scope | Format |
 | --- | --- | --- |
-| `settings.json` | Global | `{theme, editor, view_mode, user_name, agent_cli, font_size, word_wrap, keybindings}` |
+| `settings.json` | Global | `{theme, editor, user_name, agent_cli, font_size, word_wrap, keybindings}` |
 | `{repo}/{branch}/reviewed.json` | Per branch | `{"path": mtime}` |
 | `{repo}/{branch}/comments.json` | Per branch | `{"path": [{...}]}` |
 | `{repo}/{branch}/session.json` | Per branch | `{activeFile, diffMode, showFileTree, showReviewed, scrollPositions}` |
