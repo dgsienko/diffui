@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pty
 import signal
 import subprocess
 import sys
@@ -153,19 +154,33 @@ class TestSpawnAgent:
         assert result["ok"] is True
         assert output.decode().split() == ["True", "100", "30", "100", "30", "the-prompt"]
 
-    def test_spawn_closes_child_fd_on_popen_failure(self):
+    def test_failed_spawn_closes_both_pty_fds(self):
         rat._pending_start = {"prompt": "test", "repo_root": "/repo", "agent": "claude", "cmd": ["claude"]}
-        with (
-            patch.object(rat.pty, "openpty", return_value=(10, 11)),
-            patch.object(rat.os, "ttyname", return_value="/dev/pts/99"),
-            patch.object(rat.tty, "setraw"),
-            patch.object(rat.subprocess, "Popen", side_effect=OSError("no exec")),
-            patch.object(rat.os, "close") as mock_close,
-            pytest.raises(OSError),
-        ):
-            rat._spawn_agent(24, 80)
+        opened = []
+        real_openpty = pty.openpty
 
-        mock_close.assert_called_once_with(11)
+        def record_openpty():
+            opened.extend(real_openpty())
+            return tuple(opened)
+
+        try:
+            with (
+                patch.object(rat.pty, "openpty", side_effect=record_openpty),
+                patch.object(rat.subprocess, "Popen", side_effect=OSError("no exec")),
+                pytest.raises(OSError),
+            ):
+                rat._spawn_agent(24, 80)
+
+            assert len(opened) == 2
+            for fd in opened:
+                with pytest.raises(OSError):
+                    os.fstat(fd)
+        finally:
+            for fd in opened:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
 
 
 class TestAgentWebSocket:

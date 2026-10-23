@@ -83,6 +83,9 @@ def _spawn_agent(rows: int, cols: int) -> dict:
             close_fds=True,
             preexec_fn=_child_setup,
         )
+    except BaseException:
+        os.close(pty_fd)
+        raise
     finally:
         os.close(child_fd)
 
