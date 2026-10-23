@@ -190,6 +190,19 @@ class TestServerRoutes:
         finally:
             app_py.write_text(original)
 
+    @pytest.mark.parametrize("view", ["all", "working"])
+    @pytest.mark.parametrize("edit", [False, True], ids=["unchanged", "whitespace-only"])
+    def test_diff_ignore_whitespace_never_shows_a_tracked_file_as_new(self, _server_app, temp_repo, view, edit):
+        readme = temp_repo / "README.md"
+        original = readme.read_text()
+        if edit:
+            readme.write_text(original.replace("# fixture", "#  fixture"))
+        try:
+            data = _server_app.get("/api/diff/README.md", params={"view": view, "ignore_whitespace": "true"}).json()
+            assert data["hunks"] == []
+        finally:
+            readme.write_text(original)
+
     def test_repo_switch_invalid_index(self, _server_app):
         r = _server_app.post("/api/repo/switch", json={"index": 999})
         assert r.status_code == 400
