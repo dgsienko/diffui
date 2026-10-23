@@ -76,27 +76,21 @@ class TestServerRoutes:
         assert isinstance(r.json(), list)
 
     def test_files(self, _server_app):
-        r = _server_app.get("/api/files?view=all")
-        assert r.status_code == 200
-        data = r.json()
-        assert isinstance(data, list)
-        if data:
-            assert "path" in data[0]
-            assert "short_name" in data[0]
-            assert "reviewed" in data[0]
+        files = _server_app.get("/api/files?view=all").json()
+        assert [f["path"] for f in files] == ["app.py", "extra.py", "untracked.txt"]
+        assert {k: files[0][k] for k in ("short_name", "reviewed", "adds", "dels", "risk_level", "ignored")} == {
+            "short_name": "app.py",
+            "reviewed": False,
+            "adds": 3,
+            "dels": 2,
+            "risk_level": "low",
+            "ignored": False,
+        }
 
     def test_diff(self, _server_app):
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-        r = _server_app.get(f"/api/diff/{path}?view=all")
-        assert r.status_code == 200
-        data = r.json()
-        assert "file_path" in data
-        assert "hunks" in data
-        assert "adds" in data
-        assert "dels" in data
+        data = _server_app.get("/api/diff/app.py?view=all").json()
+        assert (data["file_path"], data["adds"], data["dels"]) == ("app.py", 3, 2)
+        assert data["hunks"]
 
     def test_themes(self, _server_app):
         r = _server_app.get("/api/themes")
@@ -202,18 +196,8 @@ class TestServerRoutes:
                 _server_app.delete(f"/api/comments/_test_resolve_.py/{c['id']}")
 
     def test_review_toggle(self, _server_app):
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-
-        r = _server_app.post(f"/api/reviewed/{path}")
-        assert r.status_code == 200
-        assert r.json()["reviewed"] is True
-
-        r = _server_app.post(f"/api/reviewed/{path}")
-        assert r.status_code == 200
-        assert r.json()["reviewed"] is False
+        assert _server_app.post("/api/reviewed/app.py").json()["reviewed"] is True
+        assert _server_app.post("/api/reviewed/app.py").json()["reviewed"] is False
 
     def test_static_files(self, _server_app):
         r = _server_app.get("/static/app.js")
@@ -380,10 +364,13 @@ class TestServerRoutes:
         r = _server_app.post("/api/comments/_test_apply3_.py/nonexistent-id/apply")
         assert r.status_code == 400
 
-    def test_blame_returns_list(self, _server_app):
-        r = _server_app.get("/api/blame/diffui/__init__.py")
-        assert r.status_code == 200
-        assert isinstance(r.json(), list)
+    def test_blame_attributes_each_line_to_its_commit(self, _server_app):
+        blame = _server_app.get("/api/blame/app.py").json()
+        assert len(blame) == 21
+        assert all(len(entry["sha"]) == 8 for entry in blame)
+        assert blame[0]["author"] == "diffui test"
+        assert blame[4]["sha"] != blame[0]["sha"]
+        assert blame[20]["author"] == "Not Committed Yet"
 
     def test_blame_unknown_file(self, _server_app):
         r = _server_app.get("/api/blame/_nonexistent_path_.py")
@@ -391,11 +378,9 @@ class TestServerRoutes:
         assert r.json() == []
 
     def test_preview_text_file(self, _server_app):
-        r = _server_app.get("/api/preview/diffui/__init__.py")
-        assert r.status_code == 200
-        data = r.json()
+        data = _server_app.get("/api/preview/app.py").json()
         assert data["type"] == "text"
-        assert "content" in data
+        assert data["content"].startswith("line 1\nline 2\n")
 
     def test_preview_image_not_found(self, _server_app):
         r = _server_app.get("/api/preview/_fake_.png")
@@ -434,18 +419,6 @@ class TestServerRoutes:
             ws.send_text(json.dumps({"type": "ping"}))
             data = json.loads(ws.receive_text())
             assert data == {"type": "pong"}
-
-    def test_files_include_risk_scoring(self, _server_app):
-        r = _server_app.get("/api/files?view=all")
-        assert r.status_code == 200
-        data = r.json()
-        if data:
-            f = data[0]
-            assert "risk_score" in f
-            assert "risk_level" in f
-            assert f["risk_level"] in ("low", "medium", "high")
-            assert "risk_reasons" in f
-            assert isinstance(f["risk_reasons"], list)
 
     def test_agent_status_not_running(self, _server_app):
         r = _server_app.get("/api/agent/status")
@@ -554,21 +527,27 @@ class TestServerRoutes:
                 for c in _server_app.get("/api/comments").json().get(fp, []):
                     _server_app.delete(f"/api/comments/{fp}/{c['id']}")
 
-    def test_diff_ignore_whitespace(self, _server_app):
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-        r = _server_app.get(f"/api/diff/{path}?view=all&ignore_whitespace=true")
-        assert r.status_code == 200
-        assert "file_path" in r.json()
+    def test_diff_context_widens_the_hunks(self, _server_app):
+        def context_lines(**params):
+            hunks = _server_app.get("/api/diff/app.py", params={"view": "all", **params}).json()["hunks"]
+            return [ln for h in hunks for ln in h["lines"] if ln["type"] == "context"]
 
-    def test_files_include_ignored_field(self, _server_app):
-        r = _server_app.get("/api/files?view=all")
-        assert r.status_code == 200
-        data = r.json()
-        if data:
-            assert "ignored" in data[0]
+        assert len(context_lines(context=10)) > len(context_lines())
+
+    def test_diff_ignore_whitespace_drops_whitespace_only_changes(self, _server_app, temp_repo):
+        app_py = temp_repo / "app.py"
+        original = app_py.read_text()
+        app_py.write_text(original.replace("line 1\n", "line 1  \n", 1))
+        try:
+
+            def stats(**params):
+                data = _server_app.get("/api/diff/app.py", params={"view": "all", **params}).json()
+                return data["adds"], data["dels"]
+
+            assert stats() == (4, 3)
+            assert stats(ignore_whitespace="true") == (3, 2)
+        finally:
+            app_py.write_text(original)
 
     def test_repo_switch_invalid_index(self, _server_app):
         r = _server_app.post("/api/repo/switch", json={"index": 999})
@@ -711,32 +690,20 @@ class TestServerRoutes:
             assert mock_popen.called
 
     def test_files_view_working(self, _server_app):
-        r = _server_app.get("/api/files?view=working")
-        assert r.status_code == 200
-        assert isinstance(r.json(), list)
+        files = _server_app.get("/api/files?view=working").json()
+        assert [f["path"] for f in files] == ["app.py", "untracked.txt"]
 
     def test_files_view_commit_sha(self, _server_app):
         commits = _server_app.get("/api/commits").json()
-        if not commits:
-            pytest.skip("No commits")
-        sha = commits[0]["sha"]
-        r = _server_app.get(f"/api/files?view={sha}")
-        assert r.status_code == 200
-        assert isinstance(r.json(), list)
+        assert len(commits) == 2
+        for commit in commits:
+            files = _server_app.get(f"/api/files?view={commit['sha']}").json()
+            assert [f["path"] for f in files] == commit["files"]
 
     def test_files_view_unknown_commit(self, _server_app):
         r = _server_app.get("/api/files?view=deadbeefdeadbeef")
         assert r.status_code == 200
         assert r.json() == []
-
-    def test_diff_expanded_context(self, _server_app):
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-        r = _server_app.get(f"/api/diff/{path}?view=all&context=10")
-        assert r.status_code == 200
-        assert "file_path" in r.json()
 
     @pytest.mark.parametrize("route", ["diff", "file"])
     def test_html_off_drops_only_the_html(self, _server_app, route):
@@ -1070,10 +1037,9 @@ class TestDiffViewValidation:
         assert not target.exists()
 
     def test_known_commit_sha_still_works(self, _server_app):
-        commits = _server_app.get("/api/commits").json()
-        sha = commits[0]["sha"]
-        r = _server_app.get(f"/api/diff/app.py?view={sha}")
-        assert r.status_code == 200
+        sha = _server_app.get("/api/commits").json()[0]["sha"]
+        data = _server_app.get(f"/api/diff/app.py?view={sha}").json()
+        assert (data["adds"], data["dels"]) == (2, 2)
 
 
 class TestExplainViewGuard:
