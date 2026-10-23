@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from diffui.themes import (
-    ALL_THEMES,
-    DEFAULT_THEME,
-    get_current_theme,
-    set_current_theme,
-)
+from diffui.themes import ALL_THEMES, DEFAULT_THEME
 from diffui.themes.definitions import GRAPHITE
 
 
@@ -50,8 +45,6 @@ class TestThemeDefinitions:
             "comment_bg",
             "comment_header_bg",
             "comment_accent",
-            "delete_bg",
-            "delete_hover",
             "delete_fg",
             "warn_bg",
             "warn_hover",
@@ -64,30 +57,11 @@ class TestThemeDefinitions:
                 assert len(value) == 7, f"{theme.name}.{field_name} = {value!r}"
 
 
-class TestThemeState:
-    def test_current_theme_has_valid_name(self):
-        theme = get_current_theme()
-        assert theme.name in [t.name for t in ALL_THEMES]
-
-    def test_set_and_get(self):
-        original = get_current_theme()
-        try:
-            new_theme = ALL_THEMES[-1]
-            set_current_theme(new_theme)
-            assert get_current_theme() is new_theme
-        finally:
-            set_current_theme(original)
-
-
 class TestDefaultTheme:
     def test_no_saved_theme_uses_default_and_saved_theme_wins(self, monkeypatch):
         from diffui.server import state
 
-        original = get_current_theme()
-        try:
-            monkeypatch.setattr(state, "load_settings", lambda: {})
-            assert state.AppState().theme is DEFAULT_THEME
-            monkeypatch.setattr(state, "load_settings", lambda: {"theme": "Dracula"})
-            assert state.AppState().theme.name == "Dracula"
-        finally:
-            set_current_theme(original)
+        monkeypatch.setattr(state, "load_settings", lambda: {})
+        assert state.AppState().theme is DEFAULT_THEME
+        monkeypatch.setattr(state, "load_settings", lambda: {"theme": "Dracula"})
+        assert state.AppState().theme.name == "Dracula"

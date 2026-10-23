@@ -15,8 +15,8 @@ Span = tuple[int, int, bool]
 
 
 @lru_cache(maxsize=512)
-def style(fg: str | None, bg: str, bold: bool = False, dim: bool = False) -> Style:
-    return Style(color=Color.parse(fg) if fg else None, bgcolor=Color.parse(bg), bold=bold or None, dim=dim or None)
+def style(fg: str | None, bg: str, bold: bool = False) -> Style:
+    return Style(color=Color.parse(fg) if fg else None, bgcolor=Color.parse(bg), bold=bold or None)
 
 
 def span(first: str, last: str) -> str:

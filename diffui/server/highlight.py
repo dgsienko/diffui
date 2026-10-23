@@ -50,42 +50,18 @@ def _apply_word_highlights(code_html: str, ranges: list[tuple[int, int]], code_p
             if in_highlight:
                 result.append("</mark>")
                 in_highlight = False
-            end_tag = code_html.find(">", i)
-            if end_tag == -1:
-                result.append(code_html[i:])
-                break
-            result.append(code_html[i : end_tag + 1])
-            i = end_tag + 1
-            continue
-        if code_html[i] == "&":
-            semi = code_html.find(";", i)
-            if semi == -1:
-                result.append(code_html[i])
-                plain_idx += 1
-                i += 1
-                continue
-            entity = code_html[i : semi + 1]
+            end = code_html.index(">", i) + 1
+            result.append(code_html[i:end])
+        else:
+            # highlight_line_html escapes its input, so every `&` opens a complete entity.
+            end = code_html.index(";", i) + 1 if code_html[i] == "&" else i + 1
             should_mark = plain_idx in marked_chars
-            if should_mark and not in_highlight:
-                result.append("<mark>")
-                in_highlight = True
-            elif not should_mark and in_highlight:
-                result.append("</mark>")
-                in_highlight = False
-            result.append(entity)
+            if should_mark != in_highlight:
+                result.append("<mark>" if should_mark else "</mark>")
+                in_highlight = should_mark
+            result.append(code_html[i:end])
             plain_idx += 1
-            i = semi + 1
-            continue
-        should_mark = plain_idx in marked_chars
-        if should_mark and not in_highlight:
-            result.append("<mark>")
-            in_highlight = True
-        elif not should_mark and in_highlight:
-            result.append("</mark>")
-            in_highlight = False
-        result.append(code_html[i])
-        plain_idx += 1
-        i += 1
+        i = end
     if in_highlight:
         result.append("</mark>")
     return "".join(result)
@@ -121,7 +97,7 @@ def parse_diff_to_json(diff_text: str, file_path: str, theme: Theme, with_html: 
             line_type = classify_line(line)
             if line_type == "hunk":
                 continue
-            old_num, new_num = numbers[i] if i < len(numbers) else (None, None)
+            old_num, new_num = numbers[i]
 
             entry = {"index": i, "type": line_type, "old_num": old_num, "new_num": new_num, "text": line}
             if with_html:
@@ -149,21 +125,16 @@ def highlight_file_to_json(content: str, diff_text: str, file_path: str, theme: 
     lexer = get_lexer(file_path)
     file_lines = content.splitlines()
 
-    changed_lines: dict[int, str] = {}
-    if diff_text:
-        numbers = parse_line_numbers(diff_text)
-        diff_lines = diff_text.splitlines()
-        for i, line in enumerate(diff_lines):
-            line_type = classify_line(line)
-            if i < len(numbers):
-                _, new_num = numbers[i]
-                if new_num and line_type == "add":
-                    changed_lines[int(new_num)] = "add"
+    added = {
+        int(new_num)
+        for (_, new_num), line in zip(parse_line_numbers(diff_text), diff_text.splitlines(), strict=True)
+        if new_num and classify_line(line) == "add"
+    }
 
     result_lines: list[dict] = []
     for i, line in enumerate(file_lines):
         line_num = i + 1
-        line_type = changed_lines.get(line_num, "context")
+        line_type = "add" if line_num in added else "context"
         entry = {"num": line_num, "text": line, "type": line_type}
         if with_html:
             entry["html"] = highlight_line_html(line, lexer, theme.syntax)

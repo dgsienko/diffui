@@ -5,6 +5,7 @@ import re
 
 from pygments.lexers import get_lexer_for_filename
 from pygments.lexers.special import TextLexer
+from pygments.util import ClassNotFound
 
 _META_PREFIXES = ("diff ", "index ")
 _HUNK_RE = re.compile(r"^@@ -(\d+)")
@@ -20,7 +21,7 @@ def is_meta_line(line: str) -> bool:
 def get_lexer(file_path: str):
     try:
         return get_lexer_for_filename(file_path, stripnl=False, stripall=False)
-    except Exception:
+    except ClassNotFound:
         return TextLexer(stripnl=False, stripall=False)
 
 
@@ -79,11 +80,7 @@ def classify_line(line: str) -> str:
 
 
 def strip_diff_prefix(line: str) -> str:
-    if line.startswith("+") or line.startswith("-"):
-        return line[1:]
-    if line.startswith(" "):
-        return line[1:]
-    return line
+    return line[1:] if line[:1] in ("+", "-", " ") else line
 
 
 def _word_offsets(words: list[str]) -> list[int]:

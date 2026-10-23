@@ -115,6 +115,18 @@ class TestServerRoutes:
         assert r.status_code == 200
         assert ":root {" in r.json()["css"]
 
+    @pytest.mark.parametrize("requested, expected", [(1, 1), (len(ALL_THEMES), 0)])
+    def test_settings_switches_theme(self, _server_app, requested, expected):
+        _server_app.put("/api/settings", json={"theme_index": 0})
+        try:
+            _server_app.put("/api/settings", json={"theme_index": requested})
+            active = [t["index"] for t in _server_app.get("/api/themes").json() if t["active"]]
+            assert active == [expected]
+            css = _server_app.get("/api/theme/css").json()["css"]
+            assert css == generate_css_vars(ALL_THEMES[expected])
+        finally:
+            _server_app.put("/api/settings", json={"theme_index": 0})
+
     def test_settings_roundtrip(self, _server_app):
         r = _server_app.get("/api/settings")
         assert r.status_code == 200

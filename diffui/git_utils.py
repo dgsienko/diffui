@@ -20,7 +20,7 @@ def set_active_repo(path: Path) -> None:
     _active_repo_root = path
     get_repo_root.cache_clear()
     _resolved_repo_root.cache_clear()
-    _cached_current_branch.cache_clear()
+    clear_branch_cache()
 
 
 def discover_sibling_repos(current_root: Path) -> list[Path]:
@@ -386,12 +386,6 @@ def get_remote_url() -> str:
 def get_head_sha() -> str:
     result = _git("rev-parse", "HEAD")
     return result.stdout.strip() if result.returncode == 0 else ""
-
-
-def get_git_user_name() -> str:
-    result = _git("config", "user.name")
-    name = result.stdout.strip()
-    return name if name else "User"
 
 
 def short_name(path: str) -> str:

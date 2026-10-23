@@ -163,13 +163,18 @@ class TestBroadcast:
             _clients.discard(q)
 
 
+async def _broadcast_on_loop(events):
+    _broadcast(events)
+    await asyncio.sleep(0)
+
+
 class TestWsBroadcast:
     def test_broadcast_delivers_to_ws_clients(self):
 
         ws = AsyncMock()
         _ws_clients.add(ws)
         try:
-            _broadcast(["files_changed"])
+            asyncio.run(_broadcast_on_loop(["files_changed"]))
             ws.send_text.assert_called_once()
             import json
 
@@ -187,7 +192,7 @@ class TestWsBroadcast:
         ws = AsyncMock()
         _ws_clients.add(ws)
         try:
-            _broadcast(["git_changed"])
+            asyncio.run(_broadcast_on_loop(["git_changed"]))
             assert not q.empty()
             ws.send_text.assert_called_once()
         finally:
@@ -200,7 +205,7 @@ class TestApplyStateUpdates:
 
         with (
             patch("diffui.server.state.app_state.reload_repo_state") as reload,
-            patch("diffui.server.routes_diff.clear_diff_cache") as clear_cache,
+            patch("diffui.server.events.clear_diff_cache") as clear_cache,
         ):
             result = _apply_state_updates(["git_changed"])
 
@@ -212,7 +217,7 @@ class TestApplyStateUpdates:
 
         with (
             patch("diffui.server.state.app_state.reload_repo_state"),
-            patch("diffui.server.routes_diff.clear_diff_cache"),
+            patch("diffui.server.events.clear_diff_cache"),
         ):
             result = _apply_state_updates(["git_changed", "files_changed"])
 
@@ -224,8 +229,8 @@ class TestApplyStateUpdates:
         prev_working = app_state.working_files
         try:
             with (
-                patch("diffui.git_utils.get_diff_numstat", return_value={"a.py": (1, 2)}) as numstat,
-                patch("diffui.git_utils.get_working_changed_files", return_value=["a.py"]) as working,
+                patch("diffui.server.events.get_diff_numstat", return_value={"a.py": (1, 2)}) as numstat,
+                patch("diffui.server.events.get_working_changed_files", return_value=["a.py"]) as working,
             ):
                 result = _apply_state_updates(["files_changed"])
 
@@ -242,9 +247,9 @@ class TestApplyStateUpdates:
 
         with (
             patch("diffui.server.state.app_state.reload_repo_state"),
-            patch("diffui.server.routes_diff.clear_diff_cache"),
-            patch("diffui.git_utils.get_diff_numstat") as numstat,
-            patch("diffui.git_utils.get_working_changed_files") as working,
+            patch("diffui.server.events.clear_diff_cache"),
+            patch("diffui.server.events.get_diff_numstat") as numstat,
+            patch("diffui.server.events.get_working_changed_files") as working,
         ):
             _apply_state_updates(["git_changed"])
 
@@ -268,7 +273,7 @@ class TestApplyStateUpdates:
 
         with (
             patch("diffui.server.state.app_state.reload_repo_state") as reload,
-            patch("diffui.server.routes_diff.clear_diff_cache") as clear_cache,
+            patch("diffui.server.events.clear_diff_cache") as clear_cache,
             patch("diffui.server.events.load_comments") as load,
         ):
             result = _apply_state_updates(["git_changed", "comments_changed"])
@@ -290,7 +295,7 @@ class TestApplyStateUpdates:
                     "diffui.server.state.app_state.reload_repo_state",
                     side_effect=lambda: setattr(app_state, "comments", reloaded),
                 ),
-                patch("diffui.server.routes_diff.clear_diff_cache"),
+                patch("diffui.server.events.clear_diff_cache"),
                 patch("diffui.server.events._invalidate_stale_reviews"),
                 patch("diffui.server.events.load_comments", return_value=reloaded),
             ):
@@ -303,7 +308,7 @@ class TestApplyStateUpdates:
     def test_git_changed_stays_quiet_when_comments_unchanged(self):
         with (
             patch("diffui.server.state.app_state.reload_repo_state"),
-            patch("diffui.server.routes_diff.clear_diff_cache"),
+            patch("diffui.server.events.clear_diff_cache"),
             patch("diffui.server.events._invalidate_stale_reviews"),
         ):
             result = _apply_state_updates(["git_changed"])
@@ -319,7 +324,7 @@ class TestApplyStateUpdates:
                     "diffui.server.state.app_state.reload_repo_state",
                     side_effect=lambda: setattr(app_state, "branch_name", "new-branch"),
                 ),
-                patch("diffui.server.routes_diff.clear_diff_cache"),
+                patch("diffui.server.events.clear_diff_cache"),
                 patch("diffui.server.events._invalidate_stale_reviews"),
                 patch("diffui.server.events.restart_watcher") as restart,
             ):
@@ -332,7 +337,7 @@ class TestApplyStateUpdates:
     def test_same_branch_leaves_watcher_alone(self):
         with (
             patch("diffui.server.state.app_state.reload_repo_state"),
-            patch("diffui.server.routes_diff.clear_diff_cache"),
+            patch("diffui.server.events.clear_diff_cache"),
             patch("diffui.server.events._invalidate_stale_reviews"),
             patch("diffui.server.events.restart_watcher") as restart,
         ):
@@ -349,9 +354,11 @@ class TestAutoUnreview:
         try:
             app_state.reviewed = {"changed.py": 1000.0, "untouched.py": 2000.0}
             with (
-                patch("diffui.git_utils.get_diff_numstat", return_value={}),
-                patch("diffui.git_utils.get_working_changed_files", return_value=[]),
-                patch("diffui.git_utils.get_file_mtime", side_effect=lambda p: 1500.0 if p == "changed.py" else 2000.0),
+                patch("diffui.server.events.get_diff_numstat", return_value={}),
+                patch("diffui.server.events.get_working_changed_files", return_value=[]),
+                patch(
+                    "diffui.server.events.get_file_mtime", side_effect=lambda p: 1500.0 if p == "changed.py" else 2000.0
+                ),
             ):
                 _apply_state_updates(["files_changed"])
 
@@ -368,9 +375,9 @@ class TestAutoUnreview:
             app_state.reviewed = {"changed.py": 1000.0}
             with (
                 patch("diffui.server.state.app_state.reload_repo_state"),
-                patch("diffui.server.routes_diff.clear_diff_cache"),
-                patch("diffui.git_utils.get_file_mtime", return_value=2000.0),
-                patch("diffui.git_utils.save_reviewed"),
+                patch("diffui.server.events.clear_diff_cache"),
+                patch("diffui.server.events.get_file_mtime", return_value=2000.0),
+                patch("diffui.server.events.save_reviewed"),
             ):
                 _apply_state_updates(["git_changed"])
 
@@ -385,9 +392,9 @@ class TestAutoUnreview:
         try:
             app_state.reviewed = {"stable.py": 3000.0}
             with (
-                patch("diffui.git_utils.get_diff_numstat", return_value={}),
-                patch("diffui.git_utils.get_working_changed_files", return_value=[]),
-                patch("diffui.git_utils.get_file_mtime", return_value=3000.0),
+                patch("diffui.server.events.get_diff_numstat", return_value={}),
+                patch("diffui.server.events.get_working_changed_files", return_value=[]),
+                patch("diffui.server.events.get_file_mtime", return_value=3000.0),
             ):
                 _apply_state_updates(["files_changed"])
 
