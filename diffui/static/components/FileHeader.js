@@ -7,12 +7,25 @@ const html = htm.bind(h);
 
 const MODES = [['unified', 'Unified'], ['split', 'Split'], ['file', 'File']];
 
-export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeChange, ignoreWhitespace, onToggleWhitespace, showReviewed, onToggleShowReviewed, showBlame, onToggleBlame, contextLines, onExpandContext, openCommentCount, onBulkResolve, onToggleReview, previewing, onTogglePreview, keybindings }) {
+export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeChange, ignoreWhitespace, onToggleWhitespace, showReviewed, onToggleShowReviewed, showBlame, onToggleBlame, contextLines, onExpandContext, openCommentCount, onBulkResolve, onToggleReview, previewing, browsing, onTogglePreview, keybindings }) {
   const name = activeFile ? shortName(activeFile) : '';
   const dir = activeFile ? activeFile.slice(0, activeFile.length - name.length) : '';
   const previewable = activeFile && isPreviewable(activeFile);
   const diffView = activeFile && diffMode === 'unified' && !previewing;
   const reviewKey = kb(keybindings, 'toggle-review', 'r');
+
+  if (browsing) {
+    return html`
+      <div class="file-header">
+        <div class="file-header-path">
+          <span class="file-path" title=${activeFile}>
+            <span class="file-path-dir">${dir}</span><span class="file-path-name">${name}</span>
+          </span>
+          <span class="file-header-note">Not in diff, read only</span>
+        </div>
+      </div>
+    `;
+  }
 
   return html`
     <div class="file-header">

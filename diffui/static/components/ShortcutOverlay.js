@@ -17,6 +17,7 @@ const SHORTCUTS = [
   { keys: 'w', action: 'Toggle ignore whitespace' },
   { id: 'toggle-file-tree', keys: 'b', action: 'Toggle explorer' },
   { keys: `${mod}+K`, action: 'Command palette' },
+  { keys: '/', action: 'Search files and text' },
   { keys: 'Ctrl+F', action: 'Search in diff' },
   { keys: 'Ctrl+Shift+F', action: 'Filter files' },
   { keys: `${mod}+G`, action: 'Go to line' },

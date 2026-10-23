@@ -8,6 +8,18 @@ export function kb(keybindings, id, fallback) {
   return keybindings?.[id] || fallback;
 }
 
+// The diff's new-side line number closest to `line`, or null when it shows none.
+export function nearestNewLine(data, line) {
+  let best = null;
+  for (const hunk of data?.hunks || []) {
+    for (const l of hunk.lines) {
+      const n = parseInt(l.new_num);
+      if (n && (best === null || Math.abs(n - line) < Math.abs(best - line))) best = n;
+    }
+  }
+  return best;
+}
+
 export function mergeRef(...refs) {
   return (el) => { for (const r of refs) { if (r) r.current = el; } };
 }

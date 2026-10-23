@@ -9,7 +9,7 @@ const OVERSCAN = 40;
 
 // All line HTML is server-generated from Pygments — source code is html.escape'd
 // in highlight.py before wrapping in <span> tags. No user content is rendered as HTML.
-export function FullFileViewer({ filePath, view, containerRef }) {
+export function FullFileViewer({ filePath, view, containerRef, gotoLine, readOnly }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [scrollTop, setScrollTop] = useState(0);
@@ -45,6 +45,11 @@ export function FullFileViewer({ filePath, view, containerRef }) {
   }, [containerRef, onScroll]);
 
   useEffect(() => {
+    const el = scrollRef.current;
+    if (el && data && gotoLine) el.scrollTop = Math.max(0, (gotoLine - 1) * LINE_HEIGHT - el.clientHeight / 2);
+  }, [data, gotoLine]);
+
+  useEffect(() => {
     return () => {
       const el = scrollRef.current;
       if (el) el.removeEventListener('scroll', onScroll);
@@ -67,7 +72,7 @@ export function FullFileViewer({ filePath, view, containerRef }) {
       <div style="height: ${totalHeight}px; position: relative;">
         <div style="transform: translateY(${offsetY}px); will-change: transform;">
           ${data.lines.slice(startIdx, endIdx).map(line => html`
-            <div key=${line.num} class=${'diff-line' + (line.type === 'add' ? ' add' : line.type === 'remove' ? ' remove' : '')} style="height: ${LINE_HEIGHT}px">
+            <div key=${line.num} class=${'diff-line' + (readOnly ? '' : line.type === 'add' ? ' add' : line.type === 'remove' ? ' remove' : '') + (line.num === gotoLine ? ' goto-target' : '')} style="height: ${LINE_HEIGHT}px">
               <div class="diff-gutter">
                 <span class="gutter-new">${line.num}</span>
                 <span class="gutter-sep">│</span>
