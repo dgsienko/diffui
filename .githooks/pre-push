@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Enable once per clone: git config core.hooksPath .githooks
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Git sends the pushed refs on stdin. Read them before the checks below can consume them.
+refs=$(cat)
+
+echo "Running pre-push checks..."
+
+echo "  ruff check..."
+ruff check .
+
+echo "  ruff format --check..."
+ruff format --check .
+
+echo "  pytest..."
+pytest -q
+
+if [[ ",${SKIP:-}," == *",check-suite,"* ]]; then
+    echo "  check-suite skipped."
+else
+    echo "  check-suite..."
+    printf '%s\n' "$refs" | python scripts/check_suite.py
+fi
+
+echo "All checks passed."
