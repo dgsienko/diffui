@@ -108,9 +108,10 @@ function App() {
   const hoveredLineRef = useRef(null);
   const scrollToLineRef = useRef(null);
   const searchJumpRef = useRef(null);
-  const latestCallbacks = useRef({});
   const activeFileRef = useRef(activeFile);
   activeFileRef.current = activeFile;
+  const commentsRef = useRef(comments);
+  commentsRef.current = comments;
   const viewRef = useRef(view);
   viewRef.current = view;
   const contextRef = useRef(contextLines);
@@ -171,7 +172,7 @@ function App() {
   }, []);
 
   const fetchFiles = useCallback(async (v) => {
-    const currentView = v || view;
+    const currentView = v || viewRef.current;
     const res = await safeFetch(`/api/files?view=${currentView}`);
     const data = await res.json();
     setFiles(data);
@@ -190,7 +191,7 @@ function App() {
       fetchDiff(newActive);
     }
     setLoading(false);
-  }, [view, fetchDiff]);
+  }, [fetchDiff]);
 
   const saveScrollPosition = useCallback(() => {
     if (activeFileRef.current && diffRef.current) {
@@ -230,8 +231,6 @@ function App() {
     }
     return () => cancelAnimationFrame(rafId);
   }, [diffData, activeFile, scrollToLineAndFlash]);
-
-  latestCallbacks.current = { fetchFiles, fetchCommits, fetchComments, fetchDiff, fetchRepos, activeFile, comments };
 
   useEffect(() => {
     Promise.all([fetchTheme(), fetchRepos(), fetchBranch(), fetchCommits(), fetchFiles(), fetchComments()]).then(async () => {
@@ -281,18 +280,17 @@ function App() {
     let cleanup = () => {};
 
     const handleEvents = (events) => {
-      const cb = latestCallbacks.current;
       if (events.includes('git_changed') || events.includes('files_changed')) {
         diffCache.current.clear();
         saveScrollPosition();
-        cb.fetchFiles();
-        cb.fetchCommits();
-        cb.fetchRepos();
-        if (cb.activeFile) cb.fetchDiff(cb.activeFile);
+        fetchFiles();
+        fetchCommits();
+        fetchRepos();
+        if (activeFileRef.current) fetchDiff(activeFileRef.current);
       }
       if (events.includes('comments_changed')) {
-        cb.fetchComments();
-        cb.fetchFiles();
+        fetchComments();
+        fetchFiles();
         setCommentsPulse(true);
         clearTimeout(commentsPulseTimer.current);
         commentsPulseTimer.current = setTimeout(() => setCommentsPulse(false), 2000);
@@ -327,7 +325,7 @@ function App() {
       connectSSE();
     }
 
-    const repoInterval = setInterval(() => latestCallbacks.current.fetchRepos(), 30000);
+    const repoInterval = setInterval(fetchRepos, 30000);
     return () => { cleanup(); clearInterval(repoInterval); clearTimeout(commentsPulseTimer.current); };
   }, []);
 
@@ -548,7 +546,7 @@ function App() {
   const [agentCliName, setAgentCliName] = useState('agent');
 
   const handleSendToAgent = useCallback(async () => {
-    const hasOpen = Object.values(latestCallbacks.current.comments || {}).some(
+    const hasOpen = Object.values(commentsRef.current).some(
       arr => arr.some(c => (c.status || 'open') !== 'resolved')
     );
     if (!hasOpen) { showToast('No open comments to send', 'error'); return; }
@@ -661,7 +659,7 @@ function App() {
   const commentNavRef = useRef(0);
   const navigateComment = useCallback((direction) => {
     const allComments = [];
-    for (const [filePath, fileComments] of Object.entries(latestCallbacks.current.comments || {})) {
+    for (const [filePath, fileComments] of Object.entries(commentsRef.current)) {
       for (const c of fileComments) {
         allComments.push({ filePath, lineNum: c.file_line_num || c.line_index });
       }
