@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-import os
-import pty
-import select
-import struct
-import subprocess
-import termios
+import sys
 import time
-import tty
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -237,28 +231,27 @@ class TestStartAgentEndpoint:
         assert rat._pending_start["prompt"] == "prompt text"
         assert rat._pending_start["repo_root"] == "/repo"
 
-    def test_spawn_agent_creates_process(self):
-        proc = MagicMock()
-        proc.pid = 4242
-        rat._pending_start = {"prompt": "test", "repo_root": "/repo", "agent": "claude", "cmd": ["claude"]}
-        with (
-            patch.object(rat.pty, "openpty", return_value=(10, 11)),
-            patch.object(rat.os, "ttyname", return_value="/dev/pts/99"),
-            patch.object(rat.tty, "setraw"),
-            patch.object(rat.subprocess, "Popen", return_value=proc) as mock_popen,
-            patch.object(rat.os, "close") as mock_close,
-        ):
-            result = rat._spawn_agent(30, 100)
+    def test_spawned_agent_runs_in_its_own_session_on_a_sized_terminal(self, temp_repo):
+        script = (
+            "import os, sys; "
+            "print(os.getsid(0) == os.getpid(), *os.get_terminal_size(0), os.environ['COLUMNS'], os.environ['LINES'], "
+            "sys.argv[1])"
+        )
+        rat._pending_start = {
+            "prompt": "the-prompt",
+            "repo_root": str(temp_repo),
+            "agent": "claude",
+            "cmd": [sys.executable, "-c", script],
+        }
+        result = rat._spawn_agent(30, 100)
+        output = b""
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not output.endswith(b"\n"):
+            output += rat._read_pty(rat._agent_pty_fd) or b""
+        rat._kill_agent()
 
-        assert result == {"ok": True, "pid": 4242, "agent": "claude"}
-        mock_close.assert_called_once_with(11)
-        called_cmd = mock_popen.call_args[0][0]
-        assert called_cmd[0] == "claude"
-        kwargs = mock_popen.call_args[1]
-        assert kwargs["stdin"] == 11
-        assert kwargs["env"]["COLUMNS"] == "100"
-        assert kwargs["env"]["LINES"] == "30"
-        assert kwargs["preexec_fn"] is not None
+        assert result["ok"] is True
+        assert output.decode().split() == ["True", "100", "30", "100", "30", "the-prompt"]
 
     def test_spawn_closes_child_fd_on_popen_failure(self):
         rat._pending_start = {"prompt": "test", "repo_root": "/repo", "agent": "claude", "cmd": ["claude"]}
@@ -273,149 +266,6 @@ class TestStartAgentEndpoint:
             rat._spawn_agent(24, 80)
 
         mock_close.assert_called_once_with(11)
-
-
-def _read_until_exit(pty_fd: int, proc: subprocess.Popen) -> bytes:
-    output = b""
-    for _ in range(50):
-        ready, _, _ = select.select([pty_fd], [], [], 0.1)
-        if ready:
-            try:
-                output += os.read(pty_fd, 4096)
-            except OSError:  # Linux raises EIO once the child closes its end; macOS returns b"".
-                break
-        if proc.poll() is not None:
-            break
-    return output
-
-
-class TestPtyIntegration:
-    def test_child_has_controlling_terminal(self):
-        pty_fd, child_fd = pty.openpty()
-        child_tty = os.ttyname(child_fd)
-        tty.setraw(child_fd)
-
-        def child_setup():
-            os.setsid()
-            fd = os.open(child_tty, os.O_RDWR)
-            os.close(fd)
-
-        proc = subprocess.Popen(
-            ["python3", "-c", "import os; print(os.ctermid())"],
-            stdin=child_fd,
-            stdout=child_fd,
-            stderr=child_fd,
-            preexec_fn=child_setup,
-            close_fds=True,
-        )
-        os.close(child_fd)
-
-        output = _read_until_exit(pty_fd, proc)
-
-        proc.wait(timeout=5)
-        os.close(pty_fd)
-        assert b"/dev/" in output
-
-    def test_arrow_key_sequences_pass_through_raw_pty(self):
-        pty_fd, child_fd = pty.openpty()
-        child_tty = os.ttyname(child_fd)
-        tty.setraw(child_fd)
-
-        def child_setup():
-            os.setsid()
-            fd = os.open(child_tty, os.O_RDWR)
-            os.close(fd)
-
-        proc = subprocess.Popen(
-            ["cat"],
-            stdin=child_fd,
-            stdout=child_fd,
-            stderr=child_fd,
-            preexec_fn=child_setup,
-            close_fds=True,
-        )
-        os.close(child_fd)
-
-        os.write(pty_fd, b"\x1b[A")
-
-        output = b""
-        for _ in range(20):
-            ready, _, _ = select.select([pty_fd], [], [], 0.1)
-            if ready:
-                output += os.read(pty_fd, 4096)
-            if b"\x1b[A" in output:
-                break
-
-        proc.terminate()
-        proc.wait(timeout=5)
-        os.close(pty_fd)
-        assert b"\x1b[A" in output
-
-    def test_sigwinch_delivered_after_resize(self):
-        pty_fd, child_fd = pty.openpty()
-        child_tty = os.ttyname(child_fd)
-        tty.setraw(child_fd)
-        import fcntl
-
-        fcntl.ioctl(pty_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
-
-        def child_setup():
-            os.setsid()
-            fd = os.open(child_tty, os.O_RDWR)
-            os.close(fd)
-
-        script = (
-            "import signal, sys, struct, fcntl, termios\n"
-            "got = []\n"
-            "def handler(sig, frame):\n"
-            "    ws = fcntl.ioctl(0, termios.TIOCGWINSZ, b'\\x00' * 8)\n"
-            "    rows, cols = struct.unpack('HHHH', ws)[:2]\n"
-            "    got.append(f'{rows}x{cols}')\n"
-            "signal.signal(signal.SIGWINCH, handler)\n"
-            "import time; time.sleep(0.5)\n"
-            "print(','.join(got) if got else 'NO_SIGWINCH')\n"
-        )
-
-        proc = subprocess.Popen(
-            ["python3", "-c", script],
-            stdin=child_fd,
-            stdout=child_fd,
-            stderr=child_fd,
-            preexec_fn=child_setup,
-            close_fds=True,
-        )
-        os.close(child_fd)
-
-        import time
-
-        time.sleep(0.1)
-        fcntl.ioctl(pty_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 100, 0, 0))
-
-        output = _read_until_exit(pty_fd, proc)
-
-        proc.wait(timeout=5)
-        os.close(pty_fd)
-        text = output.decode("utf-8", errors="replace")
-        assert "40x100" in text, f"Expected SIGWINCH with 40x100, got: {text!r}"
-
-    def test_without_setsid_no_controlling_terminal(self):
-        pty_fd, child_fd = pty.openpty()
-        tty.setraw(child_fd)
-
-        proc = subprocess.Popen(
-            ["python3", "-c", "import os; print(os.ttyname(0))"],
-            stdin=child_fd,
-            stdout=child_fd,
-            stderr=child_fd,
-            close_fds=True,
-        )
-        os.close(child_fd)
-
-        output = _read_until_exit(pty_fd, proc)
-
-        proc.wait(timeout=5)
-        os.close(pty_fd)
-        assert b"/dev/" in output
 
 
 class TestAgentWebSocket:
