@@ -1,7 +1,7 @@
 import { h } from 'preact';
 import { useMemo } from 'preact/hooks';
 import htm from 'htm';
-import { kb } from '../lib/utils.js';
+import { kb } from '../lib/keys.js';
 
 const html = htm.bind(h);
 
@@ -26,7 +26,7 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
   return html`
     <div class="top-bar">
       <div class="top-bar-left">
-        <button class=${'btn' + (showFileTree ? ' active' : '')} onClick=${onToggleFileTree} title=${`Toggle explorer (${kb(keybindings, 'toggle-file-tree', 'b')})`}>
+        <button class=${'btn' + (showFileTree ? ' active' : '')} onClick=${onToggleFileTree} title=${`Toggle explorer (${kb(keybindings, 'toggle-file-tree')})`}>
           Explorer
         </button>
         ${showRepoSelect && html`

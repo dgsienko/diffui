@@ -24,6 +24,7 @@ import { FileFilterBar } from './components/FileFilterBar.js';
 import { GoToLineDialog } from './components/GoToLineDialog.js';
 import { SearchDialog } from './components/SearchDialog.js';
 import { shortName, mod, nearestNewLine, isOpen, clampFont } from './lib/utils.js';
+import { kb } from './lib/keys.js';
 
 const html = htm.bind(h);
 
@@ -794,8 +795,6 @@ function App() {
   }, [reviewedCount, files.length]);
 
   useEffect(() => {
-    const key = (id) => keybindings[id] || null;
-
     const handler = (e) => {
       if (showCompletionRef.current) { setShowCompletion(false); return; }
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
@@ -849,23 +848,23 @@ function App() {
           : (idx + 1) % vf.length;
         handleFileSelect(vf[next].path);
         e.preventDefault();
-      } else if (e.key === (key('toggle-review') || 'r')) {
+      } else if (e.key === kb(keybindings, 'toggle-review')) {
         handleToggleReview();
-      } else if (e.key === (key('toggle-show-reviewed') || 'a')) {
+      } else if (e.key === kb(keybindings, 'toggle-show-reviewed')) {
         setShowReviewed(v => !v);
-      } else if (e.key === (key('copy-path') || 'y')) {
+      } else if (e.key === kb(keybindings, 'copy-path')) {
         handleCopyPath();
-      } else if (e.key === (key('sort-risk') || 's')) {
+      } else if (e.key === kb(keybindings, 'sort-risk')) {
         handleSortByRisk();
-      } else if (e.key === (key('export-summary') || 'S')) {
+      } else if (e.key === kb(keybindings, 'export-summary')) {
         handleExportSummary();
       } else if (e.key === 'Y') {
         handleCopyGitLabLink();
-      } else if (e.key === (key('toggle-file-tree') || 'b')) {
+      } else if (e.key === kb(keybindings, 'toggle-file-tree')) {
         setShowFileTree(v => !v);
-      } else if (e.key === (key('next-unreviewed') || ']')) {
+      } else if (e.key === kb(keybindings, 'next-unreviewed')) {
         handleNextUnreviewed();
-      } else if (e.key === (key('comment-line') || 'c')) {
+      } else if (e.key === kb(keybindings, 'comment-line')) {
         document.dispatchEvent(new CustomEvent('diffui:comment-on-hovered'));
       } else if (e.key === 'n' || e.key === 'p') {
         navigateComment(e.key === 'n' ? 'next' : 'prev');
@@ -885,17 +884,17 @@ function App() {
   }, [keybindings]);
 
   const paletteCommands = useMemo(() => [
-    { id: 'comment-line', label: 'Comment on hovered line', keys: keybindings['comment-line'] || 'c', category: 'Actions' },
-    { id: 'toggle-review', label: 'Toggle reviewed', keys: keybindings['toggle-review'] || 'r', category: 'Actions' },
-    { id: 'toggle-show-reviewed', label: 'Show/hide reviewed files', keys: keybindings['toggle-show-reviewed'] || 'a', category: 'Actions' },
+    { id: 'comment-line', label: 'Comment on hovered line', keys: kb(keybindings, 'comment-line'), category: 'Actions' },
+    { id: 'toggle-review', label: 'Toggle reviewed', keys: kb(keybindings, 'toggle-review'), category: 'Actions' },
+    { id: 'toggle-show-reviewed', label: 'Show/hide reviewed files', keys: kb(keybindings, 'toggle-show-reviewed'), category: 'Actions' },
     { id: 'prev-file', label: 'Previous file', keys: '←', category: 'Navigation' },
     { id: 'next-file', label: 'Next file', keys: '→', category: 'Navigation' },
     { id: 'prev-hunk', label: 'Previous hunk', keys: 'k', category: 'Navigation' },
     { id: 'next-hunk', label: 'Next hunk', keys: 'j', category: 'Navigation' },
     { id: 'go-to-line', label: 'Go to line', keys: `${mod}+G`, category: 'Navigation' },
-    { id: 'copy-path', label: 'Copy file path', keys: keybindings['copy-path'] || 'y', category: 'Actions' },
+    { id: 'copy-path', label: 'Copy file path', keys: kb(keybindings, 'copy-path'), category: 'Actions' },
     { id: 'copy-gitlab-link', label: 'Copy GitLab link', keys: 'Y', category: 'Actions' },
-    { id: 'toggle-file-tree', label: 'Toggle file tree', keys: keybindings['toggle-file-tree'] || 'b', category: 'Actions' },
+    { id: 'toggle-file-tree', label: 'Toggle file tree', keys: kb(keybindings, 'toggle-file-tree'), category: 'Actions' },
     { id: 'search', label: 'Search in diff', keys: 'Ctrl+F', category: 'Actions' },
     { id: 'repo-search', label: 'Search files and text', keys: '/', category: 'Navigation' },
     { id: 'shortcuts', label: 'Show keyboard shortcuts', keys: '?', category: 'Help' },
@@ -911,8 +910,8 @@ function App() {
     { id: 'toggle-word-wrap', label: 'Toggle word wrap', category: 'Settings' },
     { id: 'font-size-up', label: 'Increase font size', category: 'Settings' },
     { id: 'font-size-down', label: 'Decrease font size', category: 'Settings' },
-    { id: 'export-summary', label: 'Copy review summary', keys: keybindings['export-summary'] || 'S', category: 'Actions' },
-    { id: 'sort-risk', label: 'Toggle sort by risk', keys: keybindings['sort-risk'] || 's', category: 'Actions' },
+    { id: 'export-summary', label: 'Copy review summary', keys: kb(keybindings, 'export-summary'), category: 'Actions' },
+    { id: 'sort-risk', label: 'Toggle sort by risk', keys: kb(keybindings, 'sort-risk'), category: 'Actions' },
     { id: 'bulk-resolve', label: 'Resolve all comments in file', category: 'Actions' },
     { id: 'bulk-resolve-all', label: 'Resolve all open comments', category: 'Actions' },
     { id: 'send-to-agent', label: 'Send comments to agent', category: 'Agent' },

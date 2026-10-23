@@ -2,6 +2,7 @@ import { h } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import htm from 'htm';
 import { clampFont } from '../lib/utils.js';
+import { kb } from '../lib/keys.js';
 
 const html = htm.bind(h);
 
@@ -20,14 +21,14 @@ const AGENTS = [
 ];
 
 const REBINDABLE_KEYS = [
-  { id: 'toggle-review', label: 'Toggle reviewed', default: 'r' },
-  { id: 'toggle-show-reviewed', label: 'Show/hide reviewed', default: 'a' },
-  { id: 'comment-line', label: 'Comment on line', default: 'c' },
-  { id: 'copy-path', label: 'Copy file path', default: 'y' },
-  { id: 'sort-risk', label: 'Sort by risk', default: 's' },
-  { id: 'export-summary', label: 'Export summary', default: 'S' },
-  { id: 'toggle-file-tree', label: 'Toggle explorer', default: 'b' },
-  { id: 'next-unreviewed', label: 'Next unreviewed', default: ']' },
+  { id: 'toggle-review', label: 'Toggle reviewed' },
+  { id: 'toggle-show-reviewed', label: 'Show/hide reviewed' },
+  { id: 'comment-line', label: 'Comment on line' },
+  { id: 'copy-path', label: 'Copy file path' },
+  { id: 'sort-risk', label: 'Sort by risk' },
+  { id: 'export-summary', label: 'Export summary' },
+  { id: 'toggle-file-tree', label: 'Toggle explorer' },
+  { id: 'next-unreviewed', label: 'Next unreviewed' },
 ];
 
 export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindings }) {
@@ -183,7 +184,7 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
                   onClick=${() => setCapturingKey(capturingKey === k.id ? null : k.id)}
                   onKeyDown=${(e) => { if (capturingKey === k.id) handleKeyCapture(e, k.id); }}
                 >
-                  ${capturingKey === k.id ? 'Press key...' : html`<kbd>${localBindings[k.id] || k.default}</kbd>`}
+                  ${capturingKey === k.id ? 'Press key...' : html`<kbd>${kb(localBindings, k.id)}</kbd>`}
                 </button>
               </div>
             `)}

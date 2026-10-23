@@ -1,7 +1,8 @@
 import { h } from 'preact';
 import htm from 'htm';
 import { isPreviewable, previewLabel } from './PreviewViewer.js';
-import { kb, shortName } from '../lib/utils.js';
+import { shortName } from '../lib/utils.js';
+import { kb } from '../lib/keys.js';
 
 const html = htm.bind(h);
 
@@ -12,7 +13,7 @@ export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeCh
   const dir = activeFile ? activeFile.slice(0, activeFile.length - name.length) : '';
   const previewable = activeFile && isPreviewable(activeFile);
   const diffView = activeFile && diffMode === 'unified' && !previewing;
-  const reviewKey = kb(keybindings, 'toggle-review', 'r');
+  const reviewKey = kb(keybindings, 'toggle-review');
 
   const path = html`
     <span class="file-path" title=${activeFile}>
@@ -53,7 +54,7 @@ export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeCh
         <button class=${'btn' + (ignoreWhitespace ? ' active' : '')} onClick=${onToggleWhitespace} title="Toggle ignore whitespace (w)">
           Whitespace
         </button>
-        <button class=${'btn' + (showReviewed ? '' : ' active')} onClick=${onToggleShowReviewed} title=${`${showReviewed ? 'Hide' : 'Show'} reviewed files (${kb(keybindings, 'toggle-show-reviewed', 'a')})`}>
+        <button class=${'btn' + (showReviewed ? '' : ' active')} onClick=${onToggleShowReviewed} title=${`${showReviewed ? 'Hide' : 'Show'} reviewed files (${kb(keybindings, 'toggle-show-reviewed')})`}>
           ${showReviewed ? 'Hide reviewed' : 'Show all'}
         </button>
         ${previewable && html`

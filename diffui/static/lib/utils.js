@@ -8,10 +8,6 @@ export const isOpen = (c) => (c.status || 'open') !== 'resolved';
 
 export const clampFont = (n) => Math.max(8, Math.min(24, n));
 
-export function kb(keybindings, id, fallback) {
-  return keybindings?.[id] || fallback;
-}
-
 // The diff's new-side line number closest to `line`, or null when it shows none.
 export function nearestNewLine(data, line) {
   let best = null;
