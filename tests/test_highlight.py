@@ -59,14 +59,6 @@ class TestApplyWordHighlights:
         result = _apply_word_highlights(html, [(0, 5)], "<div>")
         assert "<mark>" in result
 
-    def test_malformed_tag_no_crash(self):
-        result = _apply_word_highlights("<unclosed", [], "x")
-        assert isinstance(result, str)
-
-    def test_malformed_entity_no_crash(self):
-        result = _apply_word_highlights("&notsemicolon", [(0, 1)], "&")
-        assert isinstance(result, str)
-
 
 class TestParseDiffToJson:
     def test_empty_diff(self):

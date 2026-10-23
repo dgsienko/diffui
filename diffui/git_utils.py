@@ -20,7 +20,7 @@ def set_active_repo(path: Path) -> None:
     _active_repo_root = path
     get_repo_root.cache_clear()
     _resolved_repo_root.cache_clear()
-    _cached_current_branch.cache_clear()
+    clear_branch_cache()
 
 
 def discover_sibling_repos(current_root: Path) -> list[Path]:
