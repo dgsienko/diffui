@@ -193,6 +193,15 @@ class TestAgentWebSocket:
             msg = ws.receive_json()
         assert msg == {"type": "error", "message": "No agent running"}
 
+    def test_start_consumed_between_check_and_spawn_sends_error(self, _server_app):
+        with (
+            patch.object(rat, "_pending_is_stale", return_value=False),
+            _server_app.websocket_connect("ws://localhost/api/agent/ws") as ws,
+        ):
+            ws.send_json({"type": "init", "rows": 24, "cols": 80})
+            msg = ws.receive_json()
+        assert msg == {"type": "error", "message": "No pending agent start"}
+
     def test_replays_buffer_and_started_then_exit(self, _server_app):
         proc = MagicMock()
         proc.pid = 555
