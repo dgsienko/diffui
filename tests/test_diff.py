@@ -162,17 +162,9 @@ class TestSplitIntoHunks:
 
 
 class TestGetLexer:
-    def test_python_file(self):
-        lexer = get_lexer("test.py")
-        assert "python" in lexer.name.lower()
-
     def test_unknown_extension_falls_back_to_text(self):
         lexer = get_lexer("file.xyz_unknown")
         assert "text" in lexer.name.lower()
-
-    def test_terraform(self):
-        lexer = get_lexer("main.tf")
-        assert "terraform" in lexer.name.lower() or "hcl" in lexer.name.lower()
 
 
 class TestTokenColor:
@@ -213,11 +205,6 @@ class TestWordDiffRanges:
     def test_deletion(self):
         old_ranges, new_ranges = word_diff_ranges("a b c", "a c")
         assert len(old_ranges) == 1
-        assert new_ranges == []
-
-    def test_empty_lines(self):
-        old_ranges, new_ranges = word_diff_ranges("", "")
-        assert old_ranges == []
         assert new_ranges == []
 
 

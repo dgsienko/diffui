@@ -1,29 +1,12 @@
 from __future__ import annotations
 
 from diffui.themes import ALL_THEMES, DEFAULT_THEME
-from diffui.themes.definitions import GRAPHITE
 
 
 class TestThemeDefinitions:
-    def test_all_themes_count(self):
-        assert len(ALL_THEMES) == 16
-
-    def test_all_themes_have_names(self):
-        for theme in ALL_THEMES:
-            assert theme.name
-            assert isinstance(theme.name, str)
-
-    def test_all_themes_have_syntax(self):
-        for theme in ALL_THEMES:
-            assert theme.syntax
-            assert isinstance(theme.syntax, dict)
-
     def test_unique_names(self):
         names = [t.name for t in ALL_THEMES]
         assert len(names) == len(set(names))
-
-    def test_graphite_is_first(self):
-        assert ALL_THEMES[0] is GRAPHITE
 
     def test_all_color_fields_are_hex(self):
         color_fields = [

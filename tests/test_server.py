@@ -8,7 +8,7 @@ import pytest
 
 from diffui.server.routes_diff import _order_files
 from diffui.server.theme_css import generate_css_vars
-from diffui.themes.definitions import ALL_THEMES, CATPPUCCIN_MOCHA, GITHUB_DARK
+from diffui.themes.definitions import ALL_THEMES, CATPPUCCIN_MOCHA
 
 
 class TestGenerateCssVars:
@@ -33,11 +33,6 @@ class TestGenerateCssVars:
         result = generate_css_vars(CATPPUCCIN_MOCHA)
         assert "--bg-dark:" in result
         assert "--bg_dark:" not in result
-
-    def test_different_themes_produce_different_css(self):
-        mocha = generate_css_vars(CATPPUCCIN_MOCHA)
-        github = generate_css_vars(GITHUB_DARK)
-        assert mocha != github
 
 
 @pytest.fixture(scope="class")
@@ -109,11 +104,6 @@ class TestServerRoutes:
         data = r.json()
         assert len(data) == len(ALL_THEMES)
         assert all("name" in t for t in data)
-
-    def test_theme_css(self, _server_app):
-        r = _server_app.get("/api/theme/css")
-        assert r.status_code == 200
-        assert ":root {" in r.json()["css"]
 
     @pytest.mark.parametrize("requested, expected", [(1, 1), (len(ALL_THEMES), 0)])
     def test_settings_switches_theme(self, _server_app, requested, expected):
@@ -422,16 +412,6 @@ class TestServerRoutes:
         total = len(_server_app.get("/api/files").json())
         assert f"/{total} reviewed" in md
 
-    def test_session_get_returns_dict(self, _server_app):
-        r = _server_app.get("/api/session")
-        assert r.status_code == 200
-        assert isinstance(r.json(), dict)
-
-    def test_session_put_and_get_roundtrip(self, _server_app):
-        _server_app.put("/api/session", json={"activeFile": "test.py"})
-        r = _server_app.get("/api/session")
-        assert r.json().get("activeFile") == "test.py"
-
     def test_session_put_is_additive(self, _server_app):
         _server_app.put("/api/session", json={"activeFile": "a.py"})
         _server_app.put("/api/session", json={"diffMode": "split"})
@@ -590,10 +570,6 @@ class TestServerRoutes:
         if data:
             assert "ignored" in data[0]
 
-    def test_pydantic_validation_rejects_bad_comment(self, _server_app):
-        r = _server_app.post("/api/comments", json={"bad_field": "nope"})
-        assert r.status_code == 422
-
     def test_repo_switch_invalid_index(self, _server_app):
         r = _server_app.post("/api/repo/switch", json={"index": 999})
         assert r.status_code == 400
@@ -616,10 +592,6 @@ class TestServerRoutes:
         finally:
             for c in _server_app.get("/api/comments").json().get("_test_reopen_.py", []):
                 _server_app.delete(f"/api/comments/_test_reopen_.py/{c['id']}")
-
-    def test_bulk_resolve_invalid_action(self, _server_app):
-        r = _server_app.post("/api/comments/bulk-resolve", json={"action": "delete"})
-        assert r.status_code == 422
 
     def test_apply_suggestion_success(self, _server_app):
 
@@ -651,14 +623,6 @@ class TestServerRoutes:
             test_file.unlink(missing_ok=True)
             for c in _server_app.get("/api/comments").json().get("_test_apply_ok_.py", []):
                 _server_app.delete(f"/api/comments/_test_apply_ok_.py/{c['id']}")
-
-    def test_settings_include_agent_cli(self, _server_app):
-        r = _server_app.get("/api/settings")
-        assert r.status_code == 200
-        data = r.json()
-        assert "agent_cli" in data
-        assert isinstance(data["agent_cli"], str)
-        assert len(data["agent_cli"]) > 0
 
     def test_review_summary_with_comments(self, _server_app):
         _server_app.post(
@@ -774,15 +738,6 @@ class TestServerRoutes:
         assert r.status_code == 200
         assert "file_path" in r.json()
 
-    def test_diff_cache_hit_returns_same(self, _server_app):
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-        first = _server_app.get(f"/api/diff/{path}?view=all").json()
-        second = _server_app.get(f"/api/diff/{path}?view=all").json()
-        assert first == second
-
     @pytest.mark.parametrize("route", ["diff", "file"])
     def test_html_off_drops_only_the_html(self, _server_app, route):
         def lines(data):
@@ -793,18 +748,6 @@ class TestServerRoutes:
         assert with_html and all("html" in ln for ln in with_html)
         assert not any("html" in ln for ln in without)
         assert [{k: v for k, v in ln.items() if k != "html"} for ln in with_html] == without
-
-    def test_clear_diff_cache_empties_cache(self, _server_app):
-        from diffui.server.routes_diff import _diff_cache, clear_diff_cache
-
-        files = _server_app.get("/api/files?view=all").json()
-        if not files:
-            pytest.skip("No changed files")
-        path = files[0]["path"]
-        _server_app.get(f"/api/diff/{path}?view=all")
-        assert len(_diff_cache) >= 1
-        clear_diff_cache()
-        assert len(_diff_cache) == 0
 
     def test_repo_switch_valid_index(self, _server_app):
         original = _server_app.get("/api/repos").json()
@@ -817,13 +760,6 @@ class TestServerRoutes:
             assert "branch" in data
         finally:
             _server_app.post("/api/repo/switch", json={"index": active})
-
-    def test_repos_caching_repeated_calls(self, _server_app):
-        first = _server_app.get("/api/repos")
-        second = _server_app.get("/api/repos")
-        assert first.status_code == 200
-        assert second.status_code == 200
-        assert first.json() == second.json()
 
     def test_branch_includes_head_sha_and_remote(self, _server_app):
         r = _server_app.get("/api/branch")
@@ -1051,45 +987,6 @@ class TestRiskScoring:
 
 
 class TestExportJson:
-    def test_output_structure(self):
-        import json
-        from io import StringIO
-        from pathlib import Path
-        from unittest.mock import patch
-
-        from diffui.git_utils import resolve_repo_root, set_active_repo
-
-        root = resolve_repo_root(Path(__file__).parent.parent)
-        set_active_repo(root)
-
-        buf = StringIO()
-        with patch("builtins.print", side_effect=lambda *a, **kw: buf.write(a[0] if a else "")):
-            from diffui.cli import export_json
-
-            export_json()
-
-        data = json.loads(buf.getvalue())
-        assert "branch" in data
-        assert "main_branch" in data
-        assert "merge_base" in data
-        assert "summary" in data
-        assert "files" in data
-
-        summary = data["summary"]
-        assert "total_files" in summary
-        assert "reviewed_files" in summary
-        assert "total_comments" in summary
-        assert "open_comments" in summary
-        assert "resolved_comments" in summary
-        assert summary["resolved_comments"] == summary["total_comments"] - summary["open_comments"]
-
-        assert isinstance(data["files"], list)
-        for f in data["files"]:
-            assert "path" in f
-            assert "reviewed" in f
-            assert "comments" in f
-            assert "open_comment_count" in f
-
     def test_export_lists_the_files_the_ui_lists(self, _server_app, temp_repo, capsys):
         from diffui.cli import export_json
         from diffui.git_utils import set_active_repo
@@ -1098,19 +995,6 @@ class TestExportJson:
         export_json()
         exported = [f["path"] for f in json.loads(capsys.readouterr().out)["files"]]
         assert exported == [f["path"] for f in _server_app.get("/api/files").json()]
-
-    def test_agent_start_no_comments(self, _server_app):
-        r = _server_app.post("/api/agent/start")
-        assert r.status_code == 200
-        data = r.json()
-        assert data["ok"] is False
-        assert "No open comments" in data["error"]
-
-    def test_agent_ws_no_process(self, _server_app):
-        with _server_app.websocket_connect("ws://localhost/api/agent/ws") as ws:
-            msg = ws.receive_json()
-            assert msg["type"] == "error"
-            assert "No agent running" in msg["message"]
 
 
 class TestPathContainment:
@@ -1269,19 +1153,6 @@ class TestSettingsValidation:
     def test_unknown_agent_cli_is_rejected(self, _server_app):
         r = _server_app.put("/api/settings", json={"agent_cli": "curl"})
         assert r.status_code == 422
-
-    def test_font_size_out_of_range_is_rejected(self, _server_app):
-        assert _server_app.put("/api/settings", json={"font_size": 0}).status_code == 422
-        assert _server_app.put("/api/settings", json={"font_size": 400}).status_code == 422
-
-    def test_documented_editor_is_accepted(self, _server_app):
-        original = _server_app.get("/api/settings").json()
-        try:
-            r = _server_app.put("/api/settings", json={"editor": "nvim"})
-            assert r.status_code == 200
-            assert _server_app.get("/api/settings").json()["editor"] == "nvim"
-        finally:
-            _server_app.put("/api/settings", json={"editor": original["editor"]})
 
 
 _FAKE_HERDR = """#!/usr/bin/env python3

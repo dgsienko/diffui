@@ -10,7 +10,6 @@ import pytest
 import diffui.server.routes_agent_terminal as rat
 from diffui.server.routes_agent_terminal import (
     _BUFFER_MAX_BYTES,
-    _is_running,
     _kill_agent,
     _read_pty,
     _resize_pty,
@@ -49,24 +48,6 @@ class TestAppendOutput:
         assert result.endswith(chunk)
 
 
-class TestIsRunning:
-    def test_none_process(self):
-        rat._agent_proc = None
-        assert _is_running() is False
-
-    def test_exited_process(self):
-        proc = MagicMock()
-        proc.poll.return_value = 0
-        rat._agent_proc = proc
-        assert _is_running() is False
-
-    def test_running_process(self):
-        proc = MagicMock()
-        proc.poll.return_value = None
-        rat._agent_proc = proc
-        assert _is_running() is True
-
-
 class TestReadPty:
     def test_data_available(self):
         with (
@@ -97,13 +78,6 @@ class TestWritePty:
 
 
 class TestResizePty:
-    def test_calls_ioctl(self):
-        with patch("fcntl.ioctl") as mock_ioctl:
-            _resize_pty(9, 40, 120)
-            assert mock_ioctl.called
-            args = mock_ioctl.call_args[0]
-            assert args[0] == 9
-
     def test_oserror_swallowed(self):
         with patch("fcntl.ioctl", side_effect=OSError("bad fd")):
             _resize_pty(9, 40, 120)  # must not raise

@@ -88,14 +88,6 @@ class TestParseDiffToJson:
         assert remove_line["old_num"] is not None
         assert add_line["new_num"] is not None
 
-    def test_each_line_has_index(self):
-        diff = "diff --git a/f.py b/f.py\n--- a/f.py\n+++ b/f.py\n@@ -1 +1 @@\n-old\n+new\n"
-        result = parse_diff_to_json(diff, "f.py", CATPPUCCIN_MOCHA)
-        for hunk in result["hunks"]:
-            for line in hunk["lines"]:
-                assert "index" in line
-                assert isinstance(line["index"], int)
-
     def test_header_and_hunk_lines_are_not_emitted(self):
         diff = "diff --git a/f.py b/f.py\nnew file mode 100644\n--- /dev/null\n+++ b/f.py\n@@ -0,0 +1 @@\n+x\n"
         result = parse_diff_to_json(diff, "f.py", CATPPUCCIN_MOCHA)

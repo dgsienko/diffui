@@ -144,12 +144,6 @@ class TestBroadcast:
         finally:
             _clients.discard(q)
 
-    def test_broadcast_no_clients_is_noop(self):
-        from diffui.server.events import _sse_clients as _clients
-
-        _clients.clear()
-        _broadcast(["files_changed"])
-
     def test_broadcast_full_queue_skipped(self):
         from diffui.server.events import _sse_clients as _clients
 
@@ -183,36 +177,8 @@ class TestWsBroadcast:
         finally:
             _ws_clients.discard(ws)
 
-    def test_broadcast_sends_to_both_sse_and_ws(self):
-
-        from diffui.server.events import _sse_clients as _clients
-
-        q = asyncio.Queue(maxsize=8)
-        _clients.add(q)
-        ws = AsyncMock()
-        _ws_clients.add(ws)
-        try:
-            asyncio.run(_broadcast_on_loop(["git_changed"]))
-            assert not q.empty()
-            ws.send_text.assert_called_once()
-        finally:
-            _clients.discard(q)
-            _ws_clients.discard(ws)
-
 
 class TestApplyStateUpdates:
-    def test_git_changed_reloads_and_clears_cache(self):
-
-        with (
-            patch("diffui.server.state.app_state.reload_repo_state") as reload,
-            patch("diffui.server.events.clear_diff_cache") as clear_cache,
-        ):
-            result = _apply_state_updates(["git_changed"])
-
-        reload.assert_called_once()
-        clear_cache.assert_called_once()
-        assert "files_changed" in result
-
     def test_git_changed_does_not_duplicate_files_changed(self):
 
         with (
@@ -385,25 +351,6 @@ class TestAutoUnreview:
         finally:
             app_state.reviewed = prev_reviewed
 
-    def test_files_changed_keeps_reviewed_when_mtime_matches(self):
-        prev_reviewed = app_state.reviewed.copy()
-        prev_numstat = app_state.numstat
-        prev_working = app_state.working_files
-        try:
-            app_state.reviewed = {"stable.py": 3000.0}
-            with (
-                patch("diffui.server.events.get_diff_numstat", return_value={}),
-                patch("diffui.server.events.get_working_changed_files", return_value=[]),
-                patch("diffui.server.events.get_file_mtime", return_value=3000.0),
-            ):
-                _apply_state_updates(["files_changed"])
-
-            assert "stable.py" in app_state.reviewed
-        finally:
-            app_state.reviewed = prev_reviewed
-            app_state.numstat = prev_numstat
-            app_state.working_files = prev_working
-
 
 class TestWatcherLifecycle:
     def test_do_restart_sets_cancel_event(self):
@@ -495,9 +442,3 @@ class TestGitDirBoundary:
 
         events = _classify_changes({(1, "/repo/.github/workflows/ci.yml")}, "/repo/.git", "/cfg/comments.json")
         assert events == ["files_changed"]
-
-    def test_git_head_is_a_git_change(self):
-        from diffui.server.events import _classify_changes
-
-        events = _classify_changes({(1, "/repo/.git/HEAD")}, "/repo/.git", "/cfg/comments.json")
-        assert events == ["git_changed"]

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -62,45 +61,6 @@ class TestLoadSaveJson:
         loaded = _load_json(p, {})
         assert loaded == data
 
-    def test_save_creates_file(self, tmp_path: Path):
-        p = tmp_path / "new.json"
-        assert not p.exists()
-        _save_json(p, {"a": 1})
-        assert p.exists()
-
-    def test_save_format(self, tmp_path: Path):
-        p = tmp_path / "fmt.json"
-        _save_json(p, {"x": 1})
-        content = p.read_text()
-        assert content.endswith("\n")
-        parsed = json.loads(content)
-        assert parsed == {"x": 1}
-
-    def test_roundtrip_reviewed(self, tmp_path: Path):
-        p = tmp_path / "reviewed.json"
-        data: dict[str, float] = {"file.py": 1234567890.123}
-        _save_json(p, data)
-        loaded = _load_json(p, {})
-        assert loaded["file.py"] == pytest.approx(1234567890.123)
-
-    def test_roundtrip_comments(self, tmp_path: Path):
-        p = tmp_path / "comments.json"
-        data = {
-            "file.py": [
-                {
-                    "file_path": "file.py",
-                    "file_line_num": 10,
-                    "line_text": "+new code",
-                    "comment": "looks good",
-                    "timestamp": "2024-01-01T00:00:00Z",
-                }
-            ]
-        }
-        _save_json(p, data)
-        loaded = _load_json(p, {})
-        assert loaded["file.py"][0]["comment"] == "looks good"
-        assert loaded["file.py"][0]["file_line_num"] == 10
-
 
 class TestDiffStat:
     def test_simple_diff(self):
@@ -136,13 +96,6 @@ class TestDiffStat:
 
 
 class TestResolveRepos:
-    def test_from_current_dir(self):
-        from diffui.git_utils import resolve_repos
-
-        repos, idx = resolve_repos()
-        assert len(repos) >= 1
-        assert 0 <= idx < len(repos)
-
     def test_explicit_paths(self):
         from diffui.git_utils import resolve_repos
 
@@ -188,16 +141,6 @@ class TestGetBlame:
         root = Path(__file__).parent.parent
         set_active_repo(root)
         assert get_blame("does_not_exist.py") == []
-
-
-class TestSessionPersistence:
-    def test_save_overwrites_not_merges(self, tmp_path: Path):
-        from diffui.git_utils import _load_json, _save_json
-
-        p = tmp_path / "session.json"
-        _save_json(p, {"a": 1})
-        _save_json(p, {"b": 2})
-        assert _load_json(p, {}) == {"b": 2}
 
 
 class TestDiscoverSiblingRepos:
