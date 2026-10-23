@@ -50,8 +50,6 @@ class TestThemeDefinitions:
             "comment_bg",
             "comment_header_bg",
             "comment_accent",
-            "delete_bg",
-            "delete_hover",
             "delete_fg",
             "warn_bg",
             "warn_hover",

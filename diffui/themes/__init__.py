@@ -1,4 +1,4 @@
-from diffui.themes.definitions import ALL_THEMES, CATPPUCCIN_MOCHA
+from diffui.themes.definitions import ALL_THEMES
 from diffui.themes.theme import Theme
 
 DEFAULT_THEME: Theme = ALL_THEMES[0]
@@ -16,7 +16,6 @@ def set_current_theme(theme: Theme) -> None:
 
 __all__ = [
     "ALL_THEMES",
-    "CATPPUCCIN_MOCHA",
     "DEFAULT_THEME",
     "Theme",
     "get_current_theme",

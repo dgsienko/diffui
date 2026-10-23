@@ -47,7 +47,6 @@ class AppState:
         self._last_turn_stale = True
         self.reviewed: dict[str, float] = {}
         self.comments: dict[str, list[dict]] = {}
-        self.current_view: str = "all"
         self.branch_name: str = ""
 
         saved = load_settings()
@@ -79,7 +78,6 @@ class AppState:
         self.reload_last_turn()
         self.reviewed = load_reviewed()
         self.comments = load_comments()
-        self.current_view = "all"
         self._load_ignore_patterns(get_repo_root())
 
     def reload_last_turn(self) -> None:
@@ -123,10 +121,6 @@ class AppState:
 
     def open_comments(self) -> list[dict]:
         return [{**c, "_file": f} for f, cs in self.comments.items() for c in cs if is_comment_open(c)]
-
-    def reload_branch_name(self) -> str:
-        self.branch_name = current_branch()
-        return self.branch_name
 
     @property
     def theme(self):

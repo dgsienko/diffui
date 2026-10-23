@@ -24,8 +24,6 @@ class Theme:
     comment_bg: str
     comment_header_bg: str
     comment_accent: str
-    delete_bg: str
-    delete_hover: str
     delete_fg: str
     warn_bg: str
     warn_hover: str

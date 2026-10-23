@@ -388,12 +388,6 @@ def get_head_sha() -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def get_git_user_name() -> str:
-    result = _git("config", "user.name")
-    name = result.stdout.strip()
-    return name if name else "User"
-
-
 def short_name(path: str) -> str:
     return path.split("/")[-1]
 
