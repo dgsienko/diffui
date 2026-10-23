@@ -183,8 +183,9 @@ function App() {
       setEmptyReason(null);
     }
     const current = activeFileRef.current;
-    if (data.some(f => f.path === current)) setBrowsing(false);
-    if (data.length > 0 && !browsingRef.current && (!current || !data.find(f => f.path === current))) {
+    const inDiff = data.some(f => f.path === current);
+    if (inDiff) setBrowsing(false);
+    if (data.length > 0 && !browsingRef.current && !inDiff) {
       const firstUnreviewed = data.find(f => !f.reviewed);
       const newActive = (firstUnreviewed || data[0]).path;
       setActiveFile(newActive);
@@ -192,6 +193,12 @@ function App() {
     }
     setLoading(false);
   }, [view, fetchDiff]);
+
+  const saveScrollPosition = useCallback(() => {
+    if (activeFileRef.current && diffRef.current) {
+      scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
+    }
+  }, []);
 
   const flashLineRef = useRef(null);
   const scrollToLineAndFlash = useCallback((lineNum) => {
@@ -279,9 +286,7 @@ function App() {
       const cb = latestCallbacks.current;
       if (events.includes('git_changed') || events.includes('files_changed')) {
         diffCache.current.clear();
-        if (cb.activeFile && diffRef.current) {
-          scrollPositions.current.set(cb.activeFile, diffRef.current.scrollTop);
-        }
+        saveScrollPosition();
         cb.fetchFiles();
         cb.fetchCommits();
         cb.fetchRepos();
@@ -356,9 +361,7 @@ function App() {
   }, [fetchRepos, fetchBranch, fetchCommits, fetchFiles, fetchComments]);
 
   const handleFileSelect = useCallback((path) => {
-    if (activeFileRef.current && diffRef.current) {
-      scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
-    }
+    saveScrollPosition();
     const cacheKey = `${path}:${viewRef.current}:c${contextRef.current}:ws${ignoreWsRef.current}`;
     const cached = diffCache.current.get(cacheKey);
     if (cached) {
@@ -368,15 +371,12 @@ function App() {
     setBrowsing(false);
     setFileLine(null);
     fetchDiff(path);
-  }, [fetchDiff]);
+  }, [fetchDiff, saveScrollPosition]);
 
-  // A hit in the diff opens at the nearest line the diff shows. A file outside it opens read-only.
   const handleSearchOpen = useCallback(({ path, line, changed }) => {
     setShowRepoSearch(false);
     if (!changed) {
-      if (activeFileRef.current && diffRef.current) {
-        scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
-      }
+      saveScrollPosition();
       setActiveFile(path);
       setDiffData(null);
       setBrowsing(true);
@@ -389,7 +389,7 @@ function App() {
     if (diffMode === 'file') setFileLine(line);
     else if (opening) searchJumpRef.current = { path, line };
     else scrollToLineAndFlash(nearestNewLine(diffData, line));
-  }, [diffMode, diffData, handleFileSelect, scrollToLineAndFlash]);
+  }, [diffMode, diffData, handleFileSelect, saveScrollPosition, scrollToLineAndFlash]);
 
   const handleCommentSelect = useCallback((filePath, lineIndex) => {
     scrollToLineRef.current = lineIndex;

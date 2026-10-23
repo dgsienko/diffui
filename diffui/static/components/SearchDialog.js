@@ -13,7 +13,6 @@ function Marked({ text, query }) {
   return text.split(new RegExp(`(${escaped})`, 'i')).map((part, i) => (i % 2 ? html`<mark>${part}</mark>` : part));
 }
 
-// Files outside the diff are dimmed and tagged, as in the terminal UI.
 function NotInDiff({ changed }) {
   return !changed && html`<span class="repo-search-tag">not in diff</span>`;
 }
@@ -70,14 +69,15 @@ export function SearchDialog({ view, onOpen, onClose }) {
 
   useEffect(() => {
     setSelected(0);
+    if (listRef.current) listRef.current.scrollTop = 0;
   }, [data]);
 
-  useEffect(() => {
-    const el = listRef.current && listRef.current.querySelector('.selected');
+  const move = (step) => {
+    const next = Math.max(0, Math.min(selected + step, items.length - 1));
+    setSelected(next);
+    const el = listRef.current && listRef.current.querySelectorAll('.repo-search-item')[next];
     if (el) el.scrollIntoView({ block: 'nearest' });
-  }, [selected]);
-
-  const move = (step) => setSelected(i => Math.max(0, Math.min(i + step, items.length - 1)));
+  };
   const toggleScope = () => setScope(s => (s === 'changed' ? 'all' : 'changed'));
 
   const handleKeyDown = (e) => {

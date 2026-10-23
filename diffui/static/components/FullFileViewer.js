@@ -18,10 +18,12 @@ export function FullFileViewer({ filePath, view, containerRef, gotoLine, readOnl
   const rafRef = useRef(0);
 
   useEffect(() => {
+    let stale = false;
     setLoading(true);
     fetch(`/api/file/${encodeURIComponent(filePath)}?view=${view}`)
       .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); });
+      .then(d => { if (!stale) { setData(d); setLoading(false); } });
+    return () => { stale = true; };
   }, [filePath, view]);
 
   const onScroll = useCallback(() => {

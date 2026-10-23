@@ -14,13 +14,17 @@ export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeCh
   const diffView = activeFile && diffMode === 'unified' && !previewing;
   const reviewKey = kb(keybindings, 'toggle-review', 'r');
 
+  const path = html`
+    <span class="file-path" title=${activeFile}>
+      <span class="file-path-dir">${dir}</span><span class="file-path-name">${name}</span>
+    </span>
+  `;
+
   if (browsing) {
     return html`
       <div class="file-header">
         <div class="file-header-path">
-          <span class="file-path" title=${activeFile}>
-            <span class="file-path-dir">${dir}</span><span class="file-path-name">${name}</span>
-          </span>
+          ${path}
           <span class="file-header-note">Not in diff, read only</span>
         </div>
       </div>
@@ -31,9 +35,7 @@ export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeCh
     <div class="file-header">
       <div class="file-header-path">
         ${activeFile && html`
-          <span class="file-path" title=${activeFile}>
-            <span class="file-path-dir">${dir}</span><span class="file-path-name">${name}</span>
-          </span>
+          ${path}
           ${stats && html`
             <span class="file-header-stats">
               <span class="stats-add">+${stats.adds}</span>
