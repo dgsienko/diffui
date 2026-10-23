@@ -55,7 +55,6 @@ class TestWholeRepoSearch:
 
     @pytest.fixture
     def own_repo(self, tmp_path, temp_repo):
-
         (tmp_path / ".gitignore").write_text("generated/\n")
         (tmp_path / "generated").mkdir()
         (tmp_path / "generated" / "out.py").write_text("needle\n")
@@ -69,7 +68,6 @@ class TestWholeRepoSearch:
         create_app([temp_repo])
 
     def test_files_written_after_the_first_search_are_found(self, own_repo):
-
         client, repo = own_repo
 
         def search(q):

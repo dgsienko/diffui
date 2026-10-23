@@ -154,14 +154,14 @@ ruff format --check .                # Format check
 git config core.hooksPath .githooks  # Once per clone: enables the pre-push hook
 ```
 
-CI (`.github/workflows/ci.yml`) runs `ruff check`, `ruff format --check` and `pytest` on Ubuntu and macOS, Python 3.10 and 3.13. The checkout is full-depth because some tests diff the repo against `origin/main`.
+CI (`.github/workflows/ci.yml`) runs `ruff check`, `ruff format --check` and `pytest` on Ubuntu and macOS, Python 3.10 and 3.13.
 
 `.githooks/pre-push` runs the same three checks, then `scripts/check_suite.py` (the README's Development section describes it). Change what the review looks for in the skills, not in the script.
 
 ## Testing
 
-- `tests/conftest.py` points `_CONFIG_ROOT` at a temp dir for the whole session, clears `HERDR_WORKSPACE_ID`, and builds the `temp_repo` fixture (a `feature` branch with a dirty tree and an untracked file). Server tests use a `TestClient` with `base_url="http://localhost"`.
-- `tests/test_server.py` covers the routes. Its `fake_herdr` fixture puts a fake `herdr` on `PATH`.
+- `tests/conftest.py` points `_CONFIG_ROOT` at a temp dir for the whole session, clears `HERDR_WORKSPACE_ID`, and builds the `temp_repo` fixture (a `feature` branch with a dirty tree and an untracked file). It also provides `_server_app` (a `TestClient` on `temp_repo` with `base_url="http://localhost"`) and `post_comment`, and after every test resets the comments, reviewed marks and active repo, so tests need no cleanup of their own.
+- `tests/test_server.py` covers the routes that `test_comments.py` and `test_search.py` don't. Its `fake_herdr` fixture puts a fake `herdr` on `PATH`. `test_risk.py` covers `_score_risk` and `_order_files`.
 - `tests/test_tui.py` runs the real `DiffuiApp` under `App.run_test()` against a `LocalServer` on `temp_repo`. Tests drive the app with `asyncio.run` and wait with `until()`, because the server reaches the view through the watcher and SSE.
 - `test_diff.py`, `test_highlight.py`, `test_git_utils.py`, `test_events.py`, `test_agent_terminal.py` and `test_themes.py` cover the matching modules.
 - `test_check_suite.py` covers the verdict parsing and skip paths of `scripts/check_suite.py` with `subprocess` patched. It never starts `claude`.

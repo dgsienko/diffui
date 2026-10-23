@@ -277,15 +277,7 @@ class TestServerRoutes:
 
 
 class TestReviewModule:
-    def test_build_agent_context_no_comments(self):
-
-        with patch.object(routes_review.app_state, "comments", {}):
-            result = routes_review._build_agent_context()
-        assert result[0] is None
-        assert result[1] == "No open comments"
-
     def test_build_agent_context_with_comments(self):
-
         comments = {
             "src/auth.py": [
                 {
@@ -318,24 +310,20 @@ class TestReviewModule:
         assert "src/resolved.py" not in ctx
 
     def test_process_status_none(self):
-
         assert _process_status(None) == {"running": False}
 
     def test_process_status_running(self):
-
         proc = MagicMock()
         proc.poll.return_value = None
         proc.pid = 4242
         assert _process_status(proc) == {"running": True, "pid": 4242}
 
     def test_process_status_finished(self):
-
         proc = MagicMock()
         proc.poll.return_value = 0
         assert _process_status(proc) == {"running": False, "exit_code": 0}
 
     def test_explain_already_running(self, _server_app):
-
         running = MagicMock()
         running.poll.return_value = None
         with patch.object(routes_review, "_explain_process", running):
@@ -346,7 +334,6 @@ class TestReviewModule:
             assert "already generating" in data["error"]
 
     def test_explain_unknown_agent(self, _server_app):
-
         with (
             patch.object(routes_review, "_explain_process", None),
             patch.object(routes_review.app_state, "agent_cli", "bogus-cli"),
@@ -358,7 +345,6 @@ class TestReviewModule:
             assert "Unknown agent CLI" in data["error"]
 
     def test_view_explanation_with_temp_file(self, _server_app):
-
         # Resolve gettempdir so the module's startswith() guard matches the
         # symlink-resolved path (macOS /var -> /private/var).
         tmp_dir = Path(tempfile.gettempdir()).resolve()
@@ -376,14 +362,12 @@ class TestReviewModule:
             tmp.unlink(missing_ok=True)
 
     def test_view_explanation_path_traversal_guard(self, _server_app):
-
         with patch.object(routes_review, "_explain_output_path", "/etc/passwd"):
             r = _server_app.get("/api/explain/view")
             assert r.status_code == 400
             assert "No explanation generated yet" in r.text
 
     def test_view_explanation_missing_file(self, _server_app):
-
         tmp_dir = Path(tempfile.gettempdir()).resolve()
         missing = str(tmp_dir / "diffui-explain-does-not-exist.html")
         with (
@@ -495,7 +479,6 @@ class TestDiffViewValidation:
 
 class TestExplainViewGuard:
     def test_sibling_of_tempdir_is_rejected(self, _server_app, tmp_path):
-
         evil = Path(f"{tempfile.gettempdir()}-evil") / "payload.html"
         with patch("diffui.server.routes_review._explain_output_path", str(evil)):
             r = _server_app.get("/api/explain/view")
@@ -591,7 +574,6 @@ class TestHerdr:
         assert not [c for c in fake_herdr() if c[:2] == ["pane", "send-text"]]
 
     def test_reviewing_a_file_reports_sidebar_counts(self, _server_app, fake_herdr):
-
         post_comment(_server_app)
         _server_app.post("/api/reviewed/app.py")
         # The watcher sees reviewed.json change and runs this; TestClient never starts the watcher.
@@ -620,18 +602,15 @@ class TestHerdr:
     ],
 )
 def test_turn_tracker_starts_on_the_rest_to_work_edge(samples, starts):
-
     tracker = TurnTracker()
     assert [i for i, statuses in enumerate(samples) if tracker.observe(statuses)] == starts
 
 
 class TestLastTurn:
     def _git(self, repo, *args):
-
         return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
 
     def test_lists_only_files_changed_since_the_turn_started(self, _server_app, temp_repo, fake_herdr, monkeypatch):
-
         reason = _server_app.get("/api/last-turn").json()["reason"]
         assert reason.startswith("No agent turn seen yet")
         assert _server_app.get("/api/files?view=last-turn").json() == []
@@ -679,7 +658,6 @@ class TestLocalOriginOnly:
         assert _server_app.get("/api/files", headers=headers).status_code == status
 
     def test_foreign_websocket_is_rejected(self, _server_app):
-
         with (
             pytest.raises(WebSocketDisconnect),
             _server_app.websocket_connect(

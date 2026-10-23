@@ -95,14 +95,12 @@ class TestResolveRepos:
 
 class TestDiscoverSiblingRepos:
     def test_no_git_dirs_returns_empty(self, tmp_path: Path):
-
         (tmp_path / "parent").mkdir()
         child = tmp_path / "parent" / "child"
         child.mkdir()
         assert discover_sibling_repos(child) == []
 
     def test_finds_sibling_git_repos(self, tmp_path: Path):
-
         parent = tmp_path / "workspace"
         parent.mkdir()
         for name in ("repo_a", "repo_b"):
@@ -119,11 +117,9 @@ class TestDiscoverSiblingRepos:
 
 class TestRepoHasChanges:
     def test_branch_with_commits_has_changes(self, temp_repo):
-
         assert repo_has_changes(temp_repo) is True
 
     def test_untracked_file_alone_counts(self, tmp_path):
-
         repo = tmp_path / "untracked-only"
         repo.mkdir()
         _git(repo, "init", "-q", "-b", "main")
@@ -135,7 +131,6 @@ class TestRepoHasChanges:
 
 class TestMergeBase:
     def test_stale_local_main_does_not_count_merged_commits(self, tmp_path):
-
         repo = tmp_path / "stale-main"
         repo.mkdir()
         _git(repo, "init", "-q", "-b", "main")
@@ -170,14 +165,12 @@ class TestGetFileContent:
         assert get_file_content("_definitely_missing_file_.xyz") == ""
 
     def test_binary_file_returns_empty(self, tmp_path: Path):
-
         set_active_repo(tmp_path)
         binary = tmp_path / "data.bin"
         binary.write_bytes(b"\xff\xfe\x00\x01\x80")
         assert get_file_content("data.bin") == ""
 
     def test_text_file_returns_content(self, tmp_path: Path):
-
         set_active_repo(tmp_path)
         (tmp_path / "hello.txt").write_text("hi there\n")
         assert get_file_content("hello.txt") == "hi there\n"
@@ -191,12 +184,10 @@ class TestGetDiffNumstat:
 
 class TestRepoRelative:
     def test_in_repo_path_returned_unchanged(self, temp_repo):
-
         set_active_repo(temp_repo)
         assert repo_relative("app.py") == "app.py"
 
     def test_absolute_path_outside_repo_raises(self, temp_repo, tmp_path):
-
         set_active_repo(temp_repo)
         outside = tmp_path / "secret.txt"
         outside.write_text("secret\n")
@@ -204,13 +195,11 @@ class TestRepoRelative:
             repo_relative(str(outside))
 
     def test_dotdot_escape_raises(self, temp_repo):
-
         set_active_repo(temp_repo)
         with pytest.raises(PathOutsideRepo):
             repo_relative("../../etc/hostname")
 
     def test_symlink_pointing_outside_raises(self, temp_repo, tmp_path):
-
         set_active_repo(temp_repo)
         outside = tmp_path / "target.txt"
         outside.write_text("secret\n")
@@ -223,7 +212,6 @@ class TestRepoRelative:
             link.unlink()
 
     def test_symlink_inside_repo_allowed(self, temp_repo):
-
         set_active_repo(temp_repo)
         link = temp_repo / "alias.py"
         link.symlink_to(temp_repo / "app.py")
@@ -235,7 +223,6 @@ class TestRepoRelative:
 
 class TestJsonPersistence:
     def test_corrupt_file_is_moved_aside_and_default_returned(self, tmp_path):
-
         path = tmp_path / "comments.json"
         path.write_text('{"a": [{"id"')
         assert _load_json(path, {}) == {}
@@ -243,7 +230,6 @@ class TestJsonPersistence:
         assert (tmp_path / "comments.json.corrupt").read_text() == '{"a": [{"id"'
 
     def test_save_leaves_no_temp_file(self, tmp_path):
-
         path = tmp_path / "comments.json"
         _save_json(path, {"a.py": [{"id": "1"}]})
         assert _load_json(path, {}) == {"a.py": [{"id": "1"}]}

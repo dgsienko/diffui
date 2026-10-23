@@ -129,7 +129,7 @@ class TestBroadcast:
 
 @pytest.fixture
 def git_reload():
-    """The git-changed path with the repo reload and its side effects stubbed; the reload mock sets what it changes."""
+    """Stub the reload a git change triggers. Give the yielded mock a side_effect to change the state a reload would."""
     with (
         patch("diffui.server.state.app_state.reload_repo_state") as reload,
         patch("diffui.server.events.clear_diff_cache"),
