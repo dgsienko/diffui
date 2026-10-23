@@ -13,7 +13,6 @@ from diffui.git_utils import PathOutsideRepo
 from diffui.server import fff_index
 from diffui.server.events import router as events_router
 from diffui.server.events import start_poller
-from diffui.server.herdr import clear_status, report_status
 from diffui.server.routes_comments import router as comments_router
 from diffui.server.routes_diff import router as diff_router
 from diffui.server.routes_repo import router as repo_router
@@ -22,6 +21,7 @@ from diffui.server.routes_review import shutdown as review_shutdown
 from diffui.server.routes_search import router as search_router
 from diffui.server.routes_settings import router as settings_router
 from diffui.server.state import app_state
+from diffui.server.terminal_host import clear_status, report_status
 from diffui.server.turns import router as turns_router
 from diffui.server.turns import start_turn_poller
 from diffui.themes import ALL_THEMES

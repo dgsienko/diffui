@@ -3,15 +3,15 @@ import htm from 'htm';
 
 const html = htm.bind(h);
 
-export function AgentConfirmDialog({ agentCli, herdrAgent, commentCount, onConfirm, onCancel }) {
+export function AgentConfirmDialog({ agentCli, paneAgent, commentCount, onConfirm, onCancel }) {
   const comments = html`<strong>${commentCount || 'the'} open comment${commentCount === 1 ? '' : 's'}</strong>`;
   return html`
     <div class="settings-overlay" onClick=${(e) => { if (e.target.classList.contains('settings-overlay')) onCancel(); }}>
       <div class="agent-confirm-dialog">
         <div class="agent-confirm-title">Send to agent</div>
         <div class="agent-confirm-body">
-          ${herdrAgent
-            ? html`<p>This will paste a prompt for ${comments} into your <strong>${herdrAgent}</strong> pane in herdr. Press Enter there to send it.</p>`
+          ${paneAgent
+            ? html`<p>This will paste a prompt for ${comments} into your <strong>${paneAgent}</strong> pane. Press Enter there to send it.</p>`
             : html`<p>This will spawn <strong>${agentCli || 'your configured agent'}</strong> to address ${comments}.</p>`}
           <p>The agent will:</p>
           <ul>
@@ -24,7 +24,7 @@ export function AgentConfirmDialog({ agentCli, herdrAgent, commentCount, onConfi
         </div>
         <div class="agent-confirm-actions">
           <button class="btn" onClick=${onCancel}>Cancel</button>
-          <button class="btn btn-primary" onClick=${() => onConfirm(herdrAgent)}>${herdrAgent ? 'Paste into pane' : 'Start agent'}</button>
+          <button class="btn btn-primary" onClick=${() => onConfirm(paneAgent)}>${paneAgent ? 'Paste into pane' : 'Start agent'}</button>
         </div>
       </div>
     </div>

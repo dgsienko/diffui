@@ -9,8 +9,8 @@ from pathlib import Path
 from fastapi import APIRouter
 
 from diffui.git_utils import get_file_mtime, repo_relative, save_reviewed
-from diffui.server.herdr import find_agent, paste_to_agent
 from diffui.server.state import app_state
+from diffui.server.terminal_host import agent_pane_name, paste_to_agent_pane
 
 _agent_process: subprocess.Popen | None = None
 _explain_process: subprocess.Popen | None = None
@@ -237,14 +237,13 @@ def get_agent_prompt():
     if result[0] is None:
         return {"ok": False, "error": result[1]}
     prompt, repo_root, context_path, open_count = result
-    herdr_agent = find_agent(Path(repo_root))
     return {
         "ok": True,
         "prompt": prompt,
         "context_path": context_path,
         "agent_cli": app_state.agent_cli,
         "comment_count": open_count,
-        "herdr_agent": herdr_agent["agent"] if herdr_agent else None,
+        "pane_agent": agent_pane_name(Path(repo_root)),
     }
 
 
@@ -254,7 +253,7 @@ def paste_agent_prompt():
     if result[0] is None:
         return {"ok": False, "error": result[1]}
     prompt, repo_root, _, _ = result
-    return paste_to_agent(prompt, Path(repo_root))
+    return paste_to_agent_pane(prompt, Path(repo_root))
 
 
 @router.post("/agent/run")

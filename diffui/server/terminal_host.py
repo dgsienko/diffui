@@ -1,3 +1,9 @@
+"""The terminal host: the multiplexer diffui runs inside, which owns the agent panes and the sidebar.
+
+Only this module knows the host is herdr. Callers get agent names and status strings (`idle`, `working`,
+`done`, `blocked`), never the host's agent dicts.
+"""
+
 from __future__ import annotations
 
 import json
@@ -8,6 +14,7 @@ from pathlib import Path
 
 from diffui.server.state import app_state
 
+NAME = "herdr"  # shown to users in messages that say which host diffui must run in
 _SOURCE = "diffui"
 _PASTE_START = "\x1b[200~"
 _PASTE_END = "\x1b[201~"
@@ -31,18 +38,22 @@ def available() -> bool:
     return bool(_workspace()) and shutil.which("herdr") is not None
 
 
-def repo_agents(repo_root: Path) -> list[dict] | None:
-    """Every herdr agent working inside the repo, in any workspace. None when herdr could not answer."""
+def repo_agent_statuses(repo_root: Path) -> list[str] | None:
+    """Status of every agent working inside the repo, in any workspace. None when the host could not answer."""
     listing = _herdr("agent", "list")
     if listing is None:
         return None
     root = repo_root.resolve()
     agents = listing.get("result", {}).get("agents", [])
     # foreground_cwd is where the agent is now. cwd is where its pane started.
-    return [a for a in agents if Path(a.get("foreground_cwd") or a.get("cwd") or "/").resolve().is_relative_to(root)]
+    return [
+        a.get("agent_status", "unknown")
+        for a in agents
+        if Path(a.get("foreground_cwd") or a.get("cwd") or "/").resolve().is_relative_to(root)
+    ]
 
 
-def find_agent(repo_root: Path) -> dict | None:
+def _find_agent(repo_root: Path) -> dict | None:
     workspace = _workspace()
     if not workspace:
         return None
@@ -55,8 +66,8 @@ def find_agent(repo_root: Path) -> dict | None:
     return (in_repo or agents or [None])[0]
 
 
-def paste_to_agent(text: str, repo_root: Path) -> dict:
-    agent = find_agent(repo_root)
+def paste_to_agent_pane(text: str, repo_root: Path) -> dict:
+    agent = _find_agent(repo_root)
     if agent is None:
         return {"ok": False, "error": "No agent found in this herdr workspace"}
     # Claude Code silently drops a paste while a permission prompt is open.
@@ -69,6 +80,12 @@ def paste_to_agent(text: str, repo_root: Path) -> dict:
         return {"ok": False, "error": "herdr rejected the paste"}
     _herdr("agent", "focus", agent["pane_id"])
     return {"ok": True, "agent": agent["agent"]}
+
+
+def agent_pane_name(repo_root: Path) -> str | None:
+    """Name of the agent a paste would reach, or None when there is no pane to paste into."""
+    agent = _find_agent(repo_root)
+    return agent["agent"] if agent else None
 
 
 def _report_metadata(*flags: str) -> None:
