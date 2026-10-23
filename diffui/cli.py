@@ -18,7 +18,7 @@ from diffui.git_utils import (
 )
 
 
-def _find_free_port() -> int:
+def find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         return s.getsockname()[1]
@@ -122,7 +122,7 @@ def main() -> None:
 
     from diffui.server.app import create_app
 
-    port = _find_free_port()
+    port = find_free_port()
     app = create_app(repos, active_index=active_index)
 
     import uvicorn
