@@ -3,7 +3,7 @@ name: check-docs
 description: Check that a branch leaves the docs true, necessary and short, including comments and docstrings. Use this during every code review.
 ---
 
-Review the prose the diff adds or leaves behind: README.md, AGENTS.md, code comments and docstrings. Most branches need no doc change, and that is the good outcome.
+Review the prose the diff adds or leaves behind: README.md, AGENTS.md, code comments and docstrings.
 
 Where facts live:
 

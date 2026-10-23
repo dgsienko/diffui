@@ -3,7 +3,7 @@
 One headless Claude session runs check-docs, check-scope and check-tests against
 origin/main and blocks the push when any of them raises a :warning: finding.
 The pre-push hook pipes git's `<local ref> <local sha> <remote ref> <remote sha>`
-lines to stdin. Skip a run with `SKIP=check-suite git push`.
+lines to stdin.
 """
 
 from __future__ import annotations
@@ -36,12 +36,6 @@ Commit messages on the branch, which state its purpose:
 {diff}"""
 
 
-def verdict(report: str) -> str | None:
-    """Return PASS or BLOCK from the report's last CHECK-SUITE verdict, or None."""
-    found = VERDICT.findall(report)
-    return found[-1] if found else None
-
-
 def pushed_sha(hook_input: str) -> str | None:
     """Return the first local sha being pushed, skipping branch deletions."""
     for line in hook_input.splitlines():
@@ -64,15 +58,16 @@ def main() -> int:
     if hook_input.strip() and sha is None:
         print("check-suite: the push only deletes refs, skipping.")
         return 0
-    diff_range = f"origin/main...{sha or 'HEAD'}"
+    tip = sha or "HEAD"
+    diff_range = f"origin/main...{tip}"
     diff = git("diff", "-M", diff_range)
     stat = git("diff", "--stat", "-M", diff_range)
-    if diff.returncode != 0 or stat.returncode != 0:
+    if diff.returncode != 0:
         print(f"check-suite: git diff {diff_range} failed, skipping.\n{diff.stderr}")
         return 0
     if not diff.stdout:
         return 0
-    log = git("log", "--format=%B", diff_range.replace("...", ".."))
+    log = git("log", "--format=%B", f"origin/main..{tip}")
 
     print(f"check-suite: running {', '.join(SKILLS)} on {diff_range}. This takes a few minutes.")
     skill_files = ", ".join(f".claude/skills/{skill}/SKILL.md" for skill in SKILLS)
@@ -94,11 +89,12 @@ def main() -> int:
         print(f"check-suite: claude exited {result.returncode}, skipping.")
         return 0
 
-    found = verdict(result.stdout)
-    if found is None:
+    verdicts = VERDICT.findall(result.stdout)
+    if not verdicts:
         print("check-suite: no CHECK-SUITE verdict in the report, skipping.")
         return 0
-    if found == "BLOCK":
+    # The prompt quotes a verdict line, so the report can echo one before its own.
+    if verdicts[-1] == "BLOCK":
         print("check-suite: fix the :warning: findings above, commit, and push again.")
         return 1
     return 0

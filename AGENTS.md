@@ -154,7 +154,7 @@ git config core.hooksPath .githooks  # Once per clone: enables the pre-push hook
 
 CI (`.github/workflows/ci.yml`) runs `ruff check`, `ruff format --check` and `pytest` on Ubuntu and macOS, Python 3.10 and 3.13. The checkout is full-depth because some tests diff the repo against `origin/main`.
 
-`.githooks/pre-push` runs the same three checks, then `scripts/check_suite.py` (the README's Development section describes it). Fix a `:warning:` finding with a new commit and push again. Change what the review looks for in the skills, not in the script.
+`.githooks/pre-push` runs the same three checks, then `scripts/check_suite.py` (the README's Development section describes it). Change what the review looks for in the skills, not in the script.
 
 ## Testing
 
