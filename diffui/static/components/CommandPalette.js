@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'preact/hooks';
+import { useState, useEffect, useRef, useMemo } from 'preact/hooks';
 import htm from 'htm';
 
 const html = htm.bind(h);
@@ -14,11 +14,11 @@ export function CommandPalette({ commands, onExecute, onClose }) {
     if (inputRef.current) inputRef.current.focus();
   }, []);
 
-  const scrollSelectedIntoView = useCallback((idx) => {
-    if (!listRef.current) return;
+  const moveSelection = (idx) => {
+    setSelectedIndex(idx);
     const items = listRef.current.querySelectorAll('.command-palette-item');
     if (items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
-  }, []);
+  };
 
   const filtered = useMemo(() => {
     if (!query) return commands;
@@ -39,31 +39,29 @@ export function CommandPalette({ commands, onExecute, onClose }) {
       onClose();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex(i => { const n = Math.min(i + 1, filtered.length - 1); scrollSelectedIntoView(n); return n; });
+      moveSelection(Math.min(selectedIndex + 1, filtered.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex(i => { const n = Math.max(i - 1, 0); scrollSelectedIntoView(n); return n; });
+      moveSelection(Math.max(selectedIndex - 1, 0));
     } else if (e.key === 'Enter' && filtered[selectedIndex]) {
       onExecute(filtered[selectedIndex].id);
       onClose();
     }
   };
 
-  const { grouped, flatCommands } = useMemo(() => {
+  const grouped = useMemo(() => {
     const groups = {};
-    const flat = [];
+    let flatIdx = 0;
     for (const cmd of filtered) {
       const cat = cmd.category || 'Actions';
       if (!groups[cat]) groups[cat] = [];
-      const entry = { ...cmd, flatIdx: flat.length };
-      groups[cat].push(entry);
-      flat.push(entry);
+      groups[cat].push({ ...cmd, flatIdx: flatIdx++ });
     }
-    return { grouped: groups, flatCommands: flat };
+    return groups;
   }, [filtered]);
 
   return html`
-    <div class="command-palette-overlay" onClick=${(e) => { if (e.target.classList.contains('command-palette-overlay')) onClose(); }}>
+    <div class="command-palette-overlay" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="command-palette">
         <input
           ref=${inputRef}

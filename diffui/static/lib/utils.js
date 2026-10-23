@@ -4,6 +4,12 @@ export function shortName(path) {
   return path.split('/').pop();
 }
 
+export function formatDuration(ms) {
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+}
+
 export const isOpen = (c) => (c.status || 'open') !== 'resolved';
 
 export const clampFont = (n) => Math.max(8, Math.min(24, n));
@@ -79,8 +85,8 @@ export const NO_COMMENTS = { comments: [], ranges: [] };
 
 // Index a file's comments by diff line in one pass: which comments anchor to a
 // line, and which [{start, end}] spans it highlights. A range comment may cover
-// several lines — it runs from sel_start on line_index to sel_end on
-// sel_end_index — so interior lines highlight whole and the edges partially.
+// several lines. It runs from sel_start on line_index to sel_end on
+// sel_end_index, so interior lines highlight whole and the edges partially.
 export function commentsByLine(fileComments) {
   const byLine = new Map();
   const at = (i) => {
@@ -145,7 +151,7 @@ export function useRangeSelection(codeSelector, containerRef, groupSelector) {
       const selEnd = endCode.contains(range.endContainer)
         ? offsetInElement(endCode, range.endContainer, range.endOffset) : endCode.textContent.length;
       if (endLineIndex === lineIndex && selEnd <= selStart) { setSelMenu(null); return; }
-      // Anchor to the end of the selection — that's where the cursor just was.
+      // Anchor to the end of the selection, where the cursor just was.
       const rects = range.getClientRects();
       const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
       setSelMenu({

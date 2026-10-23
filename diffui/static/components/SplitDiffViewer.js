@@ -38,8 +38,6 @@ function splitHunkLines(lines) {
   return { left, right };
 }
 
-// All HTML content is server-generated from Pygments output — source code is
-// html.escape'd server-side in highlight.py before being wrapped in <span> tags.
 function SplitLine({ line, side, onRightClick, commentRanges }) {
   if (!line) return html`<div class="split-line empty"></div>`;
 

@@ -3,15 +3,9 @@ import { useEffect, useRef, useState, useCallback } from 'preact/hooks';
 import htm from 'htm';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { useResize } from '../lib/utils.js';
+import { useResize, formatDuration } from '../lib/utils.js';
 
 const html = htm.bind(h);
-
-function formatElapsed(s) {
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
-}
 
 export function AgentTerminal({ onClose, agentCli }) {
   const containerRef = useRef(null);
@@ -63,10 +57,10 @@ export function AgentTerminal({ onClose, agentCli }) {
 
     const term = new Terminal({
       theme: {
-        background: cs.getPropertyValue('--bg-dark').trim() || '#181825',
-        foreground: cs.getPropertyValue('--fg').trim() || '#cdd6f4',
-        cursor: cs.getPropertyValue('--accent').trim() || '#89b4fa',
-        selectionBackground: cs.getPropertyValue('--hover-bg').trim() || '#313244',
+        background: cs.getPropertyValue('--bg-dark').trim(),
+        foreground: cs.getPropertyValue('--fg').trim(),
+        cursor: cs.getPropertyValue('--accent').trim(),
+        selectionBackground: cs.getPropertyValue('--hover-bg').trim(),
       },
       fontFamily: "'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace",
       fontSize: parseInt(cs.getPropertyValue('--code-font-size')) || 13,
@@ -157,19 +151,16 @@ export function AgentTerminal({ onClose, agentCli }) {
     setExitCode(-15);
   }, []);
 
+  const submitInput = useCallback(() => {
+    sendStdin(inputValue + '\r');
+    setInputValue('');
+  }, [inputValue, sendStdin]);
+
   const handleInputKeyDown = useCallback((e) => {
     if (e.key === 'ArrowUp') { e.preventDefault(); sendStdin('\x1b[A'); }
     else if (e.key === 'ArrowDown') { e.preventDefault(); sendStdin('\x1b[B'); }
-    else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (inputValue) {
-        sendStdin(inputValue + '\r');
-        setInputValue('');
-      } else {
-        sendStdin('\r');
-      }
-    }
-  }, [inputValue, sendStdin]);
+    else if (e.key === 'Enter') { e.preventDefault(); submitInput(); }
+  }, [sendStdin, submitInput]);
 
   const statusLabel = status === 'connecting' ? 'Connecting...'
     : status === 'running' ? `${agentCli || 'Agent'} running`
@@ -191,7 +182,7 @@ export function AgentTerminal({ onClose, agentCli }) {
         <div class="agent-terminal-header-left">
           ${status === 'running' && html`<span class="agent-status-spinner"></span>`}
           <span class="agent-terminal-title">${statusLabel}</span>
-          <span class="agent-terminal-elapsed">${formatElapsed(elapsed)}</span>
+          <span class="agent-terminal-elapsed">${formatDuration(elapsed * 1000)}</span>
         </div>
         <div class="agent-terminal-header-right">
           ${isActive && html`
@@ -214,7 +205,7 @@ export function AgentTerminal({ onClose, agentCli }) {
             onInput=${(e) => setInputValue(e.target.value)}
             onKeyDown=${handleInputKeyDown}
           />
-          <button class="btn btn-primary" onClick=${() => { sendStdin((inputValue || '') + '\r'); setInputValue(''); }} title="Send">Enter</button>
+          <button class="btn btn-primary" onClick=${submitInput} title="Send">Enter</button>
         </div>
       `}
     </div>
