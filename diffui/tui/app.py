@@ -46,6 +46,8 @@ ModalScreen { align: center middle; background: $background 60%; }
 .buttons { height: auto; margin-top: 1; }
 .buttons Button { margin-right: 2; }
 #compose-text { height: 8; }
+Screen.-narrow #body { layout: vertical; }
+Screen.-narrow FileList { width: 1fr; max-width: 100%; height: 30%; min-height: 6; }
 """
 
 
@@ -87,6 +89,8 @@ class DiffuiApp(App[None]):
     TITLE = "diffui"
     ENABLE_COMMAND_PALETTE = False
     CSS = _CSS
+    # Below 110 columns the diff column drops under ~80, so the file list moves below it.
+    HORIZONTAL_BREAKPOINTS: ClassVar[list[tuple[int, str]]] = [(0, "-narrow"), (110, "-wide")]
     BINDINGS: ClassVar[list[BindingType]] = [
         # The first bindings hint what the cursor can do now; check_action shows the one that fits.
         Binding("c", "comment('range')", "Comment"),
