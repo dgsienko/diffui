@@ -42,12 +42,8 @@ export function CommentDisplay({ comment, onDelete, onEdit, onReply, onResolve, 
 
   const handleEditSubmit = () => {
     const text = editRef.current?.value.trim();
-    if (text && text !== comment.comment) {
-      onEdit(text);
-      setEditing(false);
-    } else {
-      setEditing(false);
-    }
+    if (text && text !== comment.comment) onEdit(text);
+    setEditing(false);
   };
 
   const handleKeyDown = (handler) => (e) => {

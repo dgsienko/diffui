@@ -13,14 +13,14 @@ export function SearchBar({ value, onChange, onClose, matchCount, matchIndex, on
 
   const handleKeyDown = (e) => {
     if (e.key === 'Escape') onClose();
-    if (e.key === 'Enter' && onNext) {
+    if (e.key === 'Enter') {
       e.preventDefault();
-      if (e.shiftKey) { onPrev && onPrev(); }
-      else { onNext(); }
+      if (e.shiftKey) onPrev();
+      else onNext();
     }
   };
 
-  const hasValue = value && matchCount !== undefined;
+  const hasValue = !!value;
   const noResults = hasValue && matchCount === 0;
 
   return html`
@@ -36,7 +36,7 @@ export function SearchBar({ value, onChange, onClose, matchCount, matchIndex, on
         placeholder="Type to search..."
       />
       ${hasValue && html`
-        <span class="search-count">${matchCount > 0 && matchIndex !== undefined ? `${matchIndex + 1}/` : ''}${matchCount} ${matchCount === 1 ? 'match' : 'matches'}</span>
+        <span class="search-count">${matchCount > 0 ? `${matchIndex + 1}/` : ''}${matchCount} ${matchCount === 1 ? 'match' : 'matches'}</span>
       `}
       ${matchCount > 0 && html`
         <button class="search-nav-btn" onClick=${onPrev} title="Previous match (Shift+Enter)">↑</button>

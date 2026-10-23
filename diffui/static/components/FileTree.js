@@ -5,34 +5,24 @@ import { useResize } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
-function groupByDir(files) {
-  const groups = {};
-  for (const f of files) {
+const GROUP_KEYS = {
+  dir: (f) => {
     const parts = f.path.split('/');
-    const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : '.';
-    if (!groups[dir]) groups[dir] = [];
-    groups[dir].push(f);
-  }
-  return groups;
-}
-
-function groupByType(files) {
-  const groups = {};
-  for (const f of files) {
+    return parts.length > 1 ? parts.slice(0, -1).join('/') : '.';
+  },
+  type: (f) => {
     const ext = f.path.includes('.') ? f.path.split('.').pop() : null;
-    const label = ext ? `.${ext}` : 'Other';
-    if (!groups[label]) groups[label] = [];
-    groups[label].push(f);
-  }
-  return groups;
-}
+    return ext ? `.${ext}` : 'Other';
+  },
+  status: (f) => (f.adds > 0 && f.dels > 0 ? 'modified' : f.dels > 0 ? 'deleted' : 'added'),
+};
 
-function groupByStatus(files) {
+function groupBy(files, keyOf) {
   const groups = {};
   for (const f of files) {
-    const status = f.adds > 0 && f.dels > 0 ? 'modified' : f.dels > 0 ? 'deleted' : 'added';
-    if (!groups[status]) groups[status] = [];
-    groups[status].push(f);
+    const key = keyOf(f);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(f);
   }
   return groups;
 }
@@ -43,10 +33,8 @@ const GROUP_MODES = [
   { value: 'status', label: 'Status', title: 'Group by change status' },
 ];
 
-const GROUPERS = { dir: groupByDir, type: groupByType, status: groupByStatus };
-
 function groupEntries(files, groupMode) {
-  const groups = (GROUPERS[groupMode] || groupByDir)(files);
+  const groups = groupBy(files, GROUP_KEYS[groupMode]);
   return Object.keys(groups).sort().map(name => [name, groups[name]]);
 }
 

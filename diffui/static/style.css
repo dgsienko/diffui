@@ -19,8 +19,6 @@
   --comment-bg: #1a1d22;
   --comment-header-bg: #20242a;
   --comment-accent: #6f9fd8;
-  --warn-bg: #2a2516;
-  --warn-hover: #382f1c;
   --warn-fg: #d6b363;
   --purple: #cba6f7;
   --purple-bg: #2a2040;
@@ -157,6 +155,9 @@ option {
   color: var(--fg-muted);
   white-space: nowrap;
 }
+
+.stats-add { color: var(--add-fg); }
+.stats-del { color: var(--remove-fg); margin-left: 4px; }
 
 /* --- Review Progress --- */
 
@@ -580,6 +581,7 @@ mark {
   padding: 8px 16px;
   background: var(--bg-dark);
   flex-shrink: 0;
+  animation: slide-down 0.15s ease-out;
 }
 
 .search-label {
@@ -1037,18 +1039,6 @@ mark {
   outline-offset: 2px;
 }
 
-.settings-overlay {
-  transition: opacity 0.2s;
-}
-
-.settings-panel {
-  transition: transform 0.2s ease-out;
-}
-
-.search-bar {
-  animation: slide-down 0.15s ease-out;
-}
-
 @keyframes slide-down {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1297,44 +1287,6 @@ mark {
   margin-left: 4px;
   font-size: 11px;
 }
-
-/* --- Diff Stats Bar --- */
-
-.stats-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 4px 16px;
-  background: var(--bg-dark);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  font-size: 12px;
-}
-
-.stats-total {
-  white-space: nowrap;
-}
-
-.stats-add { color: var(--add-fg); }
-.stats-del { color: var(--remove-fg); margin-left: 4px; }
-
-.stats-files {
-  flex: 1;
-  display: flex;
-  gap: 2px;
-  height: 8px;
-  align-items: stretch;
-}
-
-.stats-file {
-  display: flex;
-  min-width: 2px;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.stats-file-add { background: var(--add-fg); }
-.stats-file-del { background: var(--remove-fg); }
 
 /* --- Shortcut Overlay --- */
 
@@ -2255,18 +2207,9 @@ html.word-wrap-enabled .diff-gutter {
 
 /* --- Settings panel enhancements --- */
 
-.settings-overlay.closing .settings-panel {
-  animation: slide-out-right 0.15s ease forwards;
-}
-
 @keyframes slide-in-right {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
-}
-
-@keyframes slide-out-right {
-  from { transform: translateX(0); }
-  to { transform: translateX(100%); }
 }
 
 .settings-divider {

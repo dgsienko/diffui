@@ -97,7 +97,7 @@ export function SearchDialog({ view, onOpen, onClose }) {
   const itemClass = (idx, changed) => 'command-palette-item repo-search-item' + (idx === selected ? ' selected' : '') + (changed ? '' : ' dim');
 
   return html`
-    <div class="command-palette-overlay" onClick=${(e) => { if (e.target.classList.contains('command-palette-overlay')) onClose(); }}>
+    <div class="command-palette-overlay" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="command-palette repo-search" role="dialog" aria-label="Search">
         <div class="repo-search-head">
           <input
