@@ -86,7 +86,7 @@ When you start the `diffui` server in a [herdr](https://herdr.dev) pane, Send to
 
 Inside herdr, diffui also tracks agent turns for the [Last turn](#last-turn) scope.
 
-diffui also reports two values for the workspace's row in herdr's sidebar: `$comments` (like `3 open`) and `$reviewed` (like `12/20 reviewed`). Add them to your herdr config to show them:
+diffui also reports two values for the workspace's row in herdr's sidebar: `$comments` (like `3 open`) and `$reviewed` (like `☑ 12/20`). Add them to your herdr config to show them:
 
 ```toml
 [ui.sidebar.spaces]

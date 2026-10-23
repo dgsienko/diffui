@@ -86,7 +86,7 @@ def report_status() -> None:
         "--token",
         f"comments={open_count} open" if open_count else "comments=",
         "--token",
-        f"reviewed={reviewed}/{len(files)} reviewed" if files else "reviewed=",
+        f"reviewed=☑ {reviewed}/{len(files)}" if files else "reviewed=",
     )
 
 
