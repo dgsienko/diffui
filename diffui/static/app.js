@@ -23,45 +23,20 @@ import { CommentsPanel } from './components/CommentsPanel.js';
 import { FileFilterBar } from './components/FileFilterBar.js';
 import { GoToLineDialog } from './components/GoToLineDialog.js';
 import { SearchDialog } from './components/SearchDialog.js';
-import { shortName, mod, nearestNewLine, isOpen, clampFont } from './lib/utils.js';
-import { kb } from './lib/keys.js';
-import { sendJson, commentUrl } from './lib/api.js';
+import { DiffSkeleton, EmptyState } from './components/EmptyState.js';
+import { nearestNewLine, isOpen } from './lib/utils.js';
+import { safeFetch, sendJson } from './lib/api.js';
+import { useLiveEvents } from './lib/useLiveEvents.js';
+import { useComments } from './lib/useComments.js';
+import { useKeyboard } from './lib/useKeyboard.js';
+import { useAgent } from './lib/useAgent.js';
+import { useDiffScroll } from './lib/useDiffScroll.js';
+import { useCopyActions } from './lib/useCopyActions.js';
+import { useDiffSearch } from './lib/useDiffSearch.js';
+import { useAppearance } from './lib/useAppearance.js';
+import { useSessionSave } from './lib/useSessionSave.js';
 
 const html = htm.bind(h);
-
-const SKELETON_WIDTHS = ['60%', '80%', '45%', '90%', '70%', '55%', '85%', '40%'];
-
-function DiffSkeleton() {
-  return html`
-    <div class="skeleton-lines" aria-label="Loading diff" aria-busy="true">
-      ${SKELETON_WIDTHS.map((w, i) => html`<div class="skeleton-line" key=${i} style=${`width: ${w}`}></div>`)}
-    </div>
-  `;
-}
-
-function EmptyState({ files, visibleFiles, fileFilter, showReviewed, emptyReason }) {
-  if (files.length === 0) {
-    if (emptyReason) return html`<div class="empty-state"><span class="empty-state-title">No last-turn changes</span><span class="empty-state-hint">${emptyReason}</span></div>`;
-    return html`<div class="empty-state"><span class="empty-state-title">No changes on this branch</span><span class="empty-state-hint">This branch has no diff against the merge base</span></div>`;
-  }
-  if (visibleFiles.length === 0) {
-    if (fileFilter) return html`<div class="empty-state"><span class="empty-state-title">No files match your filter</span><span class="empty-state-hint">No files match "${fileFilter}"</span></div>`;
-    if (!showReviewed) return html`<div class="empty-state"><span class="empty-state-title">All files reviewed</span><span class="empty-state-hint">Press <kbd>a</kbd> to show reviewed files</span></div>`;
-    return html`<div class="empty-state"><span class="empty-state-title">No files to show</span><span class="empty-state-hint">No files match the current view</span></div>`;
-  }
-  return html`<div class="empty-state"><span class="empty-state-title">Select a file</span><span class="empty-state-hint">Choose a file from the explorer</span></div>`;
-}
-
-async function safeFetch(url, opts) {
-  try {
-    const res = await fetch(url, opts);
-    if (!res.ok) throw new Error(`${res.status}`);
-    return res;
-  } catch (err) {
-    showToast(`Request failed: ${url.replace('/api/', '')}`, 'error');
-    throw err;
-  }
-}
 
 function App() {
   const [repos, setRepos] = useState([]);
@@ -97,7 +72,6 @@ function App() {
   const [showRepoSearch, setShowRepoSearch] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const [fileLine, setFileLine] = useState(null);
-  const [wsConnected, setWsConnected] = useState(false);
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   const [collapseAll, setCollapseAll] = useState(null);
   const [fontSize, setFontSize] = useState(13);
@@ -197,44 +171,7 @@ function App() {
     setLoading(false);
   }, [fetchDiff]);
 
-  const saveScrollPosition = useCallback(() => {
-    if (activeFileRef.current && diffRef.current) {
-      scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
-    }
-  }, []);
-
-  const flashLineRef = useRef(null);
-  const scrollToLineAndFlash = useCallback((lineNum) => {
-    if (!diffRef.current) return false;
-    const el = diffRef.current.querySelector(`[data-line-new="${lineNum}"]`);
-    if (!el) return false;
-    el.scrollIntoView({ block: 'center' });
-    el.style.outline = '2px solid var(--accent)';
-    clearTimeout(flashLineRef.current);
-    flashLineRef.current = setTimeout(() => { el.style.outline = ''; }, 2000);
-    return true;
-  }, []);
-
-  useEffect(() => {
-    if (!activeFile || !diffRef.current) return;
-    let targetLine = scrollToLineRef.current;
-    const jump = searchJumpRef.current;
-    if (jump && diffData?.file_path === jump.path) {
-      searchJumpRef.current = null;
-      targetLine = nearestNewLine(diffData, jump.line);
-    }
-    let rafId;
-    if (targetLine !== null) {
-      scrollToLineRef.current = null;
-      rafId = requestAnimationFrame(() => scrollToLineAndFlash(targetLine));
-    } else {
-      const saved = scrollPositions.current.get(activeFile) || 0;
-      rafId = requestAnimationFrame(() => {
-        if (diffRef.current) diffRef.current.scrollTop = saved;
-      });
-    }
-    return () => cancelAnimationFrame(rafId);
-  }, [diffData, activeFile, scrollToLineAndFlash]);
+  const { saveScrollPosition, scrollToLineAndFlash, scrollToHunk } = useDiffScroll({ diffRef, activeFile, activeFileRef, diffData, scrollPositions, scrollToLineRef, searchJumpRef });
 
   useEffect(() => {
     Promise.all([fetchTheme(), fetchRepos(), fetchBranch(), fetchCommits(), fetchFiles(), fetchComments()]).then(async () => {
@@ -256,74 +193,31 @@ function App() {
     });
   }, []);
 
-  useEffect(() => {
-    if (themeCss) {
-      let style = document.getElementById('theme-vars');
-      if (!style) {
-        style = document.createElement('style');
-        style.id = 'theme-vars';
-        document.head.appendChild(style);
-      }
-      style.textContent = themeCss;
-    }
-  }, [themeCss]);
-
-  useEffect(() => {
-    document.documentElement.style.setProperty('--code-font-size', `${fontSize}px`);
-  }, [fontSize]);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('word-wrap-enabled', wordWrap);
-  }, [wordWrap]);
+  useAppearance({ themeCss, fontSize, wordWrap });
 
   const commentsPulseTimer = useRef(null);
+  const handleLiveEvents = useCallback((events) => {
+    if (events.includes('git_changed') || events.includes('files_changed')) {
+      diffCache.current.clear();
+      saveScrollPosition();
+      fetchFiles();
+      fetchCommits();
+      fetchRepos();
+      if (activeFileRef.current) fetchDiff(activeFileRef.current);
+    }
+    if (events.includes('comments_changed')) {
+      fetchComments();
+      fetchFiles();
+      setCommentsPulse(true);
+      clearTimeout(commentsPulseTimer.current);
+      commentsPulseTimer.current = setTimeout(() => setCommentsPulse(false), 2000);
+    }
+  }, [fetchFiles, fetchCommits, fetchRepos, fetchComments, fetchDiff, saveScrollPosition]);
+  const wsConnected = useLiveEvents(handleLiveEvents);
+
   useEffect(() => {
-    let cleanup = () => {};
-
-    const handleEvents = (events) => {
-      if (events.includes('git_changed') || events.includes('files_changed')) {
-        diffCache.current.clear();
-        saveScrollPosition();
-        fetchFiles();
-        fetchCommits();
-        fetchRepos();
-        if (activeFileRef.current) fetchDiff(activeFileRef.current);
-      }
-      if (events.includes('comments_changed')) {
-        fetchComments();
-        fetchFiles();
-        setCommentsPulse(true);
-        clearTimeout(commentsPulseTimer.current);
-        commentsPulseTimer.current = setTimeout(() => setCommentsPulse(false), 2000);
-      }
-    };
-
-    const connectSSE = () => {
-      setWsConnected(false);
-      const es = new EventSource('/api/events');
-      es.onopen = () => setWsConnected(true);
-      es.onerror = () => setWsConnected(false);
-      es.onmessage = (e) => {
-        try { handleEvents(JSON.parse(e.data).events); } catch {}
-      };
-      cleanup = () => { es.close(); setWsConnected(false); };
-    };
-
-    const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProto}//${location.host}/api/ws`;
-    const ws = new WebSocket(wsUrl);
-    ws.onopen = () => setWsConnected(true);
-    ws.onclose = () => { setWsConnected(false); connectSSE(); };
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.events) handleEvents(msg.events);
-      } catch {}
-    };
-    cleanup = () => { ws.close(); setWsConnected(false); };
-
     const repoInterval = setInterval(fetchRepos, 30000);
-    return () => { cleanup(); clearInterval(repoInterval); clearTimeout(commentsPulseTimer.current); };
+    return () => { clearInterval(repoInterval); clearTimeout(commentsPulseTimer.current); };
   }, []);
 
   const handleViewChange = useCallback(async (newView) => {
@@ -394,76 +288,7 @@ function App() {
     }
   }, [fetchFiles, handleFileSelect]);
 
-  const handleAddComment = useCallback(async (filePath, lineIndex, lineText, fileLineNum, commentText, category, suggestion, selection) => {
-    await sendJson('/api/comments', 'POST', {
-      file_path: filePath,
-      line_index: lineIndex,
-      line_text: lineText,
-      file_line_num: fileLineNum,
-      comment: commentText,
-      category: category || '',
-      suggestion: suggestion || '',
-      selected_text: selection?.selectedText || '',
-      sel_start: selection?.selStart ?? null,
-      sel_end: selection?.selEnd ?? null,
-      sel_end_index: selection?.endLineIndex ?? null,
-    });
-    showToast(`Comment added to ${shortName(filePath)}`, 'success');
-    await Promise.all([fetchComments(), fetchFiles()]);
-  }, [fetchComments, fetchFiles]);
-
-  const handleDeleteComment = useCallback(async (filePath, commentId) => {
-    await fetch(commentUrl(filePath, commentId), { method: 'DELETE' });
-    await Promise.all([fetchComments(), fetchFiles()]);
-  }, [fetchComments, fetchFiles]);
-
-  const handleEditComment = useCallback(async (filePath, commentId, newText) => {
-    await sendJson(commentUrl(filePath, commentId), 'PUT', { comment: newText });
-    await fetchComments();
-  }, [fetchComments]);
-
-  const handleReplyComment = useCallback(async (filePath, commentId, text) => {
-    await sendJson(commentUrl(filePath, commentId, '/reply'), 'POST', { text });
-    await fetchComments();
-  }, [fetchComments]);
-
-  const handleResolveComment = useCallback(async (filePath, commentId) => {
-    await fetch(commentUrl(filePath, commentId, '/resolve'), { method: 'POST' });
-    await fetchComments();
-  }, [fetchComments]);
-
-  const handleBulkResolve = useCallback(async (filePath) => {
-    const r = await sendJson('/api/comments/bulk-resolve', 'POST', { file_path: filePath || null, action: 'resolve' });
-    const data = await r.json();
-    if (data.count > 0) {
-      showToast(`Resolved ${data.count} comment${data.count === 1 ? '' : 's'}`, 'success');
-      await Promise.all([fetchComments(), fetchFiles()]);
-    } else {
-      showToast('No open comments to resolve');
-    }
-  }, [fetchComments, fetchFiles]);
-
-  const handleApplySuggestion = useCallback(async (filePath, commentId) => {
-    const r = await fetch(commentUrl(filePath, commentId, '/apply'), { method: 'POST' });
-    const data = await r.json();
-    if (data.ok) {
-      showToast('Suggestion applied', 'success');
-      diffCache.current.clear();
-      await Promise.all([fetchComments(), fetchFiles()]);
-      if (activeFileRef.current) fetchDiff(activeFileRef.current);
-    } else {
-      showToast(data.error || 'Failed to apply', 'error');
-    }
-  }, [fetchComments, fetchFiles, fetchDiff]);
-
-  const commentActions = {
-    onAddComment: handleAddComment,
-    onDeleteComment: handleDeleteComment,
-    onEditComment: handleEditComment,
-    onReplyComment: handleReplyComment,
-    onResolveComment: handleResolveComment,
-    onApplySuggestion: handleApplySuggestion,
-  };
+  const { commentActions, handleBulkResolve } = useComments({ fetchComments, fetchFiles, fetchDiff, diffCache, activeFileRef });
 
   const handleOpenInEditor = useCallback(async (filePath, lineNum) => {
     await sendJson('/api/editor/open', 'POST', { file_path: filePath, line_num: lineNum });
@@ -478,47 +303,6 @@ function App() {
     if (data.css) setThemeCss(data.css);
   }, []);
 
-  const pollTimer = useRef(null);
-  const dismissTimer = useRef(null);
-  useEffect(() => () => { clearInterval(pollTimer.current); clearTimeout(dismissTimer.current); }, []);
-
-  const [taskStatus, setTaskStatus] = useState(null);
-
-  const [agentRunning, setAgentRunning] = useState(false);
-  const [showAgentConfirm, setShowAgentConfirm] = useState(null);
-  const [showAgentTerminal, setShowAgentTerminal] = useState(false);
-  const [agentCliName, setAgentCliName] = useState('agent');
-
-  const handleSendToAgent = useCallback(async () => {
-    const hasOpen = Object.values(commentsRef.current).some(arr => arr.some(isOpen));
-    if (!hasOpen) { showToast('No open comments to send', 'error'); return; }
-    const r = await fetch('/api/agent/prompt', { method: 'POST' });
-    const data = await r.json();
-    if (!data.ok) { showToast(data.error || 'No comments to address', 'error'); return; }
-    setShowAgentConfirm(data);
-  }, []);
-
-  const handleConfirmAgent = useCallback(async (paneAgent) => {
-    setShowAgentConfirm(null);
-    if (paneAgent) {
-      const r = await safeFetch('/api/agent/paste', { method: 'POST' });
-      const data = await r.json();
-      showToast(data.ok ? `Pasted into ${data.agent}. Press Enter there to send.` : data.error, data.ok ? 'success' : 'error');
-      return;
-    }
-    const r = await safeFetch('/api/agent/start', { method: 'POST' });
-    const data = await r.json();
-    if (!data.ok) { showToast(data.error || 'Failed to start agent', 'error'); return; }
-    setAgentCliName(data.agent || 'agent');
-    setAgentRunning(true);
-    setShowAgentTerminal(true);
-  }, []);
-
-  const handleCloseTerminal = useCallback(() => {
-    setShowAgentTerminal(false);
-    setAgentRunning(false);
-  }, []);
-
   const handleSortByRisk = useCallback(() => {
     const next = !sortByRiskRef.current;
     sortByRiskRef.current = next;
@@ -526,49 +310,10 @@ function App() {
     showToast(next ? 'Sorted by risk' : 'Default file order');
   }, []);
 
-  const [explainRunning, setExplainRunning] = useState(false);
-  const handleExplain = useCallback(async () => {
-    const r = await fetch('/api/explain', { method: 'POST' });
-    const data = await r.json();
-    if (!data.ok) { showToast(data.error || 'Failed to start', 'error'); return; }
-    setExplainRunning(true);
-    const label = 'Generating explanation';
-    const startTime = Date.now();
-    setTaskStatus({ label, startTime, status: 'running' });
-    pollTimer.current = setInterval(async () => {
-      try {
-        const s = await fetch('/api/explain/status');
-        const status = await s.json();
-        if (!status.running) {
-          clearInterval(pollTimer.current);
-          setExplainRunning(false);
-          const ok = status.exit_code === 0;
-          const message = ok ? { text: 'Explanation ready', url: `${location.origin}/api/explain/view` } : 'Explanation generation failed';
-          setTaskStatus({ label, startTime, status: ok ? 'done' : 'failed', message, endTime: Date.now() });
-          dismissTimer.current = setTimeout(() => setTaskStatus(s => s?.startTime === startTime ? null : s), 10000);
-        }
-      } catch {
-        clearInterval(pollTimer.current);
-        setExplainRunning(false);
-        setTaskStatus({ label, startTime, status: 'failed', message: 'Lost connection', endTime: Date.now() });
-      }
-    }, 3000);
-  }, []);
+  const { agentRunning, taskStatus, setTaskStatus, explainRunning, showAgentConfirm, setShowAgentConfirm, showAgentTerminal, agentCliName,
+    handleSendToAgent, handleConfirmAgent, handleCloseTerminal, handleExplain } = useAgent({ commentsRef });
 
-  const handleCopyPath = useCallback(() => {
-    const af = activeFileRef.current;
-    if (af) {
-      navigator.clipboard.writeText(af);
-      showToast(`Copied: ${af}`);
-    }
-  }, []);
-
-  const handleExportSummary = useCallback(async () => {
-    const res = await fetch('/api/review-summary');
-    const data = await res.json();
-    await navigator.clipboard.writeText(data.markdown);
-    showToast('Review summary copied to clipboard', 'success');
-  }, []);
+  const { handleCopyPath, handleExportSummary, handleCopyGitLabLink } = useCopyActions({ activeFileRef, branchRef, hoveredLineRef });
 
   const handleNextUnreviewed = useCallback(() => {
     const vf = visibleFilesRef.current;
@@ -643,73 +388,7 @@ function App() {
     showToast(`Comment ${commentNavRef.current + 1}/${allComments.length}`);
   }, [handleFileSelect]);
 
-  const scrollToHunk = useCallback((direction) => {
-    const container = diffRef.current;
-    if (!container) return;
-    const headers = [...container.querySelectorAll('.hunk-header')];
-    if (!headers.length) return;
-    const scrollTop = container.scrollTop;
-    if (direction === 'next') {
-      const next = headers.find(h => h.offsetTop > scrollTop + 10);
-      if (next) container.scrollTo({ top: next.offsetTop, behavior: 'instant' });
-    } else {
-      const prev = [...headers].reverse().find(h => h.offsetTop < scrollTop - 10);
-      if (prev) container.scrollTo({ top: prev.offsetTop, behavior: 'instant' });
-    }
-  }, []);
-
-  const handleCopyGitLabLink = useCallback(() => {
-    const af = activeFileRef.current;
-    const b = branchRef.current;
-    if (!af || !b?.remote_url) return;
-    const remote = b.remote_url;
-    let base;
-    if (remote.startsWith('git@')) {
-      const hostPath = remote.split(':')[1].replace(/\.git$/, '');
-      const host = remote.split('@')[1].split(':')[0];
-      base = `https://${host}/${hostPath}`;
-    } else {
-      base = remote.replace(/\.git$/, '');
-    }
-    const ref = b.head_sha ? b.head_sha.slice(0, 12) : b.name;
-    const lineNum = hoveredLineRef.current;
-    const url = `${base}/-/blob/${ref}/${af}${lineNum ? '#L' + lineNum : ''}`;
-    navigator.clipboard.writeText(url);
-    showToast(lineNum ? `GitLab link copied (line ${lineNum})` : 'GitLab link copied');
-  }, []);
-
-  const searchMatches = useMemo(() => {
-    if (!searchTerm || !diffData?.hunks) return [];
-    const lower = searchTerm.toLowerCase();
-    const matches = [];
-    for (const hunk of diffData.hunks) {
-      for (const line of hunk.lines) {
-        if (line.text && line.text.toLowerCase().includes(lower)) {
-          matches.push(line.new_num || line.old_num || line.index);
-        }
-      }
-    }
-    return matches;
-  }, [searchTerm, diffData]);
-
-  const searchMatchCount = searchMatches.length;
-
-  useEffect(() => {
-    setSearchMatchIndex(0);
-  }, [searchTerm]);
-
-  const navigateSearchMatch = useCallback((direction) => {
-    if (!searchMatches.length) return;
-    const nextIdx = direction === 'next'
-      ? (searchMatchIndex + 1) % searchMatches.length
-      : (searchMatchIndex - 1 + searchMatches.length) % searchMatches.length;
-    setSearchMatchIndex(nextIdx);
-    const lineNum = searchMatches[nextIdx];
-    if (diffRef.current && lineNum) {
-      const el = diffRef.current.querySelector(`[data-line-new="${lineNum}"]`);
-      if (el) el.scrollIntoView({ block: 'center' });
-    }
-  }, [searchMatches, searchMatchIndex]);
+  const { searchMatchCount, navigateSearchMatch } = useDiffSearch({ searchTerm, searchMatchIndex, setSearchMatchIndex, diffData, diffRef });
 
   const visibleFiles = useMemo(() => {
     let filtered = (showReviewed ? files : files.filter(f => !f.reviewed)).filter(f => !f.ignored);
@@ -740,21 +419,7 @@ function App() {
     return { total, open };
   }, [comments]);
 
-  const saveTimerRef = useRef(null);
-  useEffect(() => {
-    clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      const scrollObj = {};
-      scrollPositions.current.forEach((v, k) => { scrollObj[k] = v; });
-      sendJson('/api/session', 'PUT', {
-        activeFile: browsingRef.current ? undefined : activeFile,
-        diffMode,
-        showFileTree,
-        showReviewed,
-        scrollPositions: scrollObj,
-      }).catch(() => {});
-    }, 1000);
-  }, [activeFile, diffMode, showFileTree, showReviewed]);
+  useSessionSave({ activeFile, diffMode, showFileTree, showReviewed, scrollPositions, browsingRef });
 
   showCompletionRef.current = showCompletion;
   dialogOpenRef.current = showSettings || showSearch || showFileFilter || showShortcuts || showCommandPalette || showGoToLine || showRepoSearch;
@@ -768,169 +433,15 @@ function App() {
     prevReviewedRef.current = reviewedCount;
   }, [reviewedCount, files.length]);
 
-  useEffect(() => {
-    const handler = (e) => {
-      if (showCompletionRef.current) { setShowCompletion(false); return; }
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-      if (e.target.closest('.agent-terminal-panel')) return;
-
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        setShowCommandPalette(v => !v);
-        return;
-      }
-      if (e.key === 'Escape') {
-        setShowSettings(false);
-        setShowSearch(false);
-        setShowShortcuts(false);
-        setShowCommandPalette(false);
-        setShowGoToLine(false);
-        setShowRepoSearch(false);
-        setSearchTerm('');
-        return;
-      }
-
-      if (dialogOpenRef.current) return;
-
-      if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
-        e.preventDefault();
-        setShowGoToLine(v => !v);
-        return;
-      }
-
-      if (e.ctrlKey && !e.metaKey && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
-        e.preventDefault();
-        setShowFileFilter(v => { if (v) setFileFilter(''); return !v; });
-        return;
-      }
-      if (e.ctrlKey && !e.metaKey && (e.key === 'f' || e.key === 'F')) {
-        e.preventDefault();
-        setShowSearch(v => !v);
-        return;
-      }
-
-      // Don't hijack browser/OS shortcuts (copy, select-all, save, etc.)
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        const vf = visibleFilesRef.current;
-        const af = activeFileRef.current;
-        const idx = vf.findIndex(f => f.path === af);
-        if (idx === -1) return;
-        const next = e.key === 'ArrowLeft'
-          ? (idx - 1 + vf.length) % vf.length
-          : (idx + 1) % vf.length;
-        handleFileSelect(vf[next].path);
-        e.preventDefault();
-      } else if (e.key === kb(keybindings, 'toggle-review')) {
-        handleToggleReview();
-      } else if (e.key === kb(keybindings, 'toggle-show-reviewed')) {
-        setShowReviewed(v => !v);
-      } else if (e.key === kb(keybindings, 'copy-path')) {
-        handleCopyPath();
-      } else if (e.key === kb(keybindings, 'sort-risk')) {
-        handleSortByRisk();
-      } else if (e.key === kb(keybindings, 'export-summary')) {
-        handleExportSummary();
-      } else if (e.key === 'Y') {
-        handleCopyGitLabLink();
-      } else if (e.key === kb(keybindings, 'toggle-file-tree')) {
-        setShowFileTree(v => !v);
-      } else if (e.key === kb(keybindings, 'next-unreviewed')) {
-        handleNextUnreviewed();
-      } else if (e.key === kb(keybindings, 'comment-line')) {
-        document.dispatchEvent(new CustomEvent('diffui:comment-on-hovered'));
-      } else if (e.key === 'n' || e.key === 'p') {
-        navigateComment(e.key === 'n' ? 'next' : 'prev');
-      } else if (e.key === 'j' || e.key === 'k') {
-        scrollToHunk(e.key === 'j' ? 'next' : 'prev');
-      } else if (e.key === 'w') {
-        handleToggleWhitespace();
-      } else if (e.key === '/') {
-        e.preventDefault();
-        setShowRepoSearch(true);
-      } else if (e.key === '?') {
-        setShowShortcuts(v => !v);
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [keybindings]);
-
-  const paletteCommands = useMemo(() => [
-    { id: 'comment-line', label: 'Comment on hovered line', keys: kb(keybindings, 'comment-line'), category: 'Actions' },
-    { id: 'toggle-review', label: 'Toggle reviewed', keys: kb(keybindings, 'toggle-review'), category: 'Actions' },
-    { id: 'toggle-show-reviewed', label: 'Show/hide reviewed files', keys: kb(keybindings, 'toggle-show-reviewed'), category: 'Actions' },
-    { id: 'prev-file', label: 'Previous file', keys: '←', category: 'Navigation' },
-    { id: 'next-file', label: 'Next file', keys: '→', category: 'Navigation' },
-    { id: 'prev-hunk', label: 'Previous hunk', keys: 'k', category: 'Navigation' },
-    { id: 'next-hunk', label: 'Next hunk', keys: 'j', category: 'Navigation' },
-    { id: 'go-to-line', label: 'Go to line', keys: `${mod}+G`, category: 'Navigation' },
-    { id: 'copy-path', label: 'Copy file path', keys: kb(keybindings, 'copy-path'), category: 'Actions' },
-    { id: 'copy-gitlab-link', label: 'Copy GitLab link', keys: 'Y', category: 'Actions' },
-    { id: 'toggle-file-tree', label: 'Toggle file tree', keys: kb(keybindings, 'toggle-file-tree'), category: 'Actions' },
-    { id: 'search', label: 'Search in diff', keys: 'Ctrl+F', category: 'Actions' },
-    { id: 'repo-search', label: 'Search files and text', keys: '/', category: 'Navigation' },
-    { id: 'shortcuts', label: 'Show keyboard shortcuts', keys: '?', category: 'Help' },
-    { id: 'settings', label: 'Open settings', category: 'Settings' },
-    { id: 'mode-unified', label: 'Switch to unified diff', category: 'Settings' },
-    { id: 'mode-split', label: 'Switch to split diff', category: 'Settings' },
-    { id: 'mode-file', label: 'Switch to full file view', category: 'Settings' },
-    { id: 'expand-context', label: 'Expand diff context', category: 'Actions' },
-    { id: 'collapse-context', label: 'Collapse diff context', category: 'Actions' },
-    { id: 'expand-all-hunks', label: 'Expand all hunks', category: 'Actions' },
-    { id: 'collapse-all-hunks', label: 'Collapse all hunks', category: 'Actions' },
-    { id: 'toggle-whitespace', label: 'Toggle ignore whitespace', keys: 'w', category: 'Actions' },
-    { id: 'toggle-word-wrap', label: 'Toggle word wrap', category: 'Settings' },
-    { id: 'font-size-up', label: 'Increase font size', category: 'Settings' },
-    { id: 'font-size-down', label: 'Decrease font size', category: 'Settings' },
-    { id: 'export-summary', label: 'Copy review summary', keys: kb(keybindings, 'export-summary'), category: 'Actions' },
-    { id: 'sort-risk', label: 'Toggle sort by risk', keys: kb(keybindings, 'sort-risk'), category: 'Actions' },
-    { id: 'bulk-resolve', label: 'Resolve all comments in file', category: 'Actions' },
-    { id: 'bulk-resolve-all', label: 'Resolve all open comments', category: 'Actions' },
-    { id: 'send-to-agent', label: 'Send comments to agent', category: 'Agent' },
-    { id: 'explain', label: 'Explain changes (generate HTML)', category: 'Agent' },
-  ], [keybindings]);
-
-  const handleCommand = useCallback((id) => {
-    const vf = visibleFilesRef.current;
-    const af = activeFileRef.current;
-    const idx = vf.findIndex(f => f.path === af);
-    switch (id) {
-      case 'comment-line': document.dispatchEvent(new CustomEvent('diffui:comment-on-hovered')); break;
-      case 'toggle-review': handleToggleReview(); break;
-      case 'toggle-show-reviewed': setShowReviewed(v => !v); break;
-      case 'prev-file': if (vf.length) handleFileSelect(vf[(idx - 1 + vf.length) % vf.length].path); break;
-      case 'next-file': if (vf.length) handleFileSelect(vf[(idx + 1) % vf.length].path); break;
-      case 'copy-path': handleCopyPath(); break;
-      case 'copy-gitlab-link': handleCopyGitLabLink(); break;
-      case 'toggle-file-tree': setShowFileTree(v => !v); break;
-      case 'search': setShowSearch(v => !v); break;
-      case 'repo-search': setShowRepoSearch(true); break;
-      case 'shortcuts': setShowShortcuts(v => !v); break;
-      case 'settings': setShowSettings(v => !v); break;
-      case 'mode-unified': setDiffMode('unified'); break;
-      case 'mode-split': setDiffMode('split'); break;
-      case 'mode-file': setDiffMode('file'); break;
-      case 'expand-context': handleExpandContext('expand'); break;
-      case 'collapse-context': handleExpandContext('collapse'); break;
-      case 'expand-all-hunks': handleCollapseAll('expand'); break;
-      case 'collapse-all-hunks': handleCollapseAll('collapse'); break;
-      case 'toggle-whitespace': handleToggleWhitespace(); break;
-      case 'toggle-word-wrap': handleSettingsChange({ word_wrap: !wordWrap }); break;
-      case 'font-size-up': handleSettingsChange({ font_size: clampFont(fontSize + 1) }); break;
-      case 'font-size-down': handleSettingsChange({ font_size: clampFont(fontSize - 1) }); break;
-      case 'go-to-line': setShowGoToLine(v => !v); break;
-      case 'export-summary': handleExportSummary(); break;
-      case 'sort-risk': handleSortByRisk(); break;
-      case 'bulk-resolve': handleBulkResolve(af); break;
-      case 'bulk-resolve-all': handleBulkResolve(null); break;
-      case 'send-to-agent': handleSendToAgent(); break;
-      case 'explain': handleExplain(); break;
-      case 'prev-hunk': scrollToHunk('prev'); break;
-      case 'next-hunk': scrollToHunk('next'); break;
-    }
-  }, [handleToggleReview, handleFileSelect, handleCopyPath, handleCopyGitLabLink, handleExpandContext, handleCollapseAll, handleToggleWhitespace, handleExportSummary, handleSortByRisk, handleBulkResolve, handleSendToAgent, handleExplain, scrollToHunk, handleSettingsChange, wordWrap, fontSize]);
+  const { paletteCommands, handleCommand } = useKeyboard({
+    keybindings, fontSize, wordWrap,
+    showCompletionRef, dialogOpenRef, visibleFilesRef, activeFileRef,
+    handleFileSelect, handleToggleReview, handleCopyPath, handleSortByRisk, handleExportSummary,
+    handleCopyGitLabLink, handleNextUnreviewed, navigateComment, scrollToHunk, handleToggleWhitespace,
+    handleExpandContext, handleCollapseAll, handleSettingsChange, handleBulkResolve, handleSendToAgent, handleExplain,
+    setDiffMode, setFileFilter, setSearchTerm, setShowCommandPalette, setShowCompletion, setShowFileFilter,
+    setShowFileTree, setShowGoToLine, setShowRepoSearch, setShowReviewed, setShowSearch, setShowSettings, setShowShortcuts
+  });
 
   return html`
     <${TopBar}
