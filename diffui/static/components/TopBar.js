@@ -1,7 +1,7 @@
 import { h } from 'preact';
 import { useMemo } from 'preact/hooks';
 import htm from 'htm';
-import { kb } from '../lib/utils.js';
+import { kb } from '../lib/keys.js';
 
 const html = htm.bind(h);
 
@@ -12,21 +12,21 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
     { value: 'all', label: 'All changes' },
     { value: 'working', label: 'Working changes (uncommitted)' },
     { value: 'last-turn', label: 'Last turn (agent)' },
-    ...(commits || []).map(c => ({
+    ...commits.map(c => ({
       value: c.sha,
       label: c.message.slice(0, 50),
     })).reverse(),
   ];
 
-  const totalAdds = useMemo(() => (files || []).reduce((s, f) => s + (f.adds || 0), 0), [files]);
-  const totalDels = useMemo(() => (files || []).reduce((s, f) => s + (f.dels || 0), 0), [files]);
+  const totalAdds = useMemo(() => files.reduce((s, f) => s + (f.adds || 0), 0), [files]);
+  const totalDels = useMemo(() => files.reduce((s, f) => s + (f.dels || 0), 0), [files]);
 
   const progressPct = fileCount > 0 ? (reviewedCount / fileCount) * 100 : 0;
 
   return html`
     <div class="top-bar">
       <div class="top-bar-left">
-        <button class=${'btn' + (showFileTree ? ' active' : '')} onClick=${onToggleFileTree} title=${`Toggle explorer (${kb(keybindings, 'toggle-file-tree', 'b')})`}>
+        <button class=${'btn' + (showFileTree ? ' active' : '')} onClick=${onToggleFileTree} title=${`Toggle explorer (${kb(keybindings, 'toggle-file-tree')})`}>
           Explorer
         </button>
         ${showRepoSelect && html`
@@ -56,24 +56,20 @@ export function TopBar({ repos, branch, commits, view, files, fileCount, reviewe
         <button class=${'btn' + (showCommentsPanel ? ' active' : '') + (commentsPulse && !showCommentsPanel ? ' pulse-notify' : '')} onClick=${onToggleCommentsPanel} title="Toggle comments panel">
           ${openCommentCount > 0 ? `Comments (${openCommentCount})` : 'Comments'}
         </button>
-        ${onExplain && html`
-          <button
-            class="btn"
-            onClick=${onExplain}
-            disabled=${explainRunning}
-            title="Generate an HTML walkthrough of all changes"
-          >${explainRunning ? 'Generating...' : 'Explain changes'}</button>
-        `}
+        <button
+          class="btn"
+          onClick=${onExplain}
+          disabled=${explainRunning}
+          title="Generate an HTML walkthrough of all changes"
+        >${explainRunning ? 'Generating...' : 'Explain changes'}</button>
         <button class="btn" onClick=${onShowShortcuts} title="Keyboard shortcuts (?)">? Shortcuts</button>
         <button class="btn" onClick=${onOpenSettings} title="Settings" aria-label="Settings">Settings</button>
-        ${onSendToAgent && html`
-          <button
-            class=${'btn btn-primary' + (agentRunning ? ' agent-running' : '')}
-            onClick=${onSendToAgent}
-            disabled=${agentRunning}
-            title="Send open comments to your configured agent CLI"
-          >${agentRunning ? 'Agent running...' : 'Send to agent'}</button>
-        `}
+        <button
+          class=${'btn btn-primary' + (agentRunning ? ' agent-running' : '')}
+          onClick=${onSendToAgent}
+          disabled=${agentRunning}
+          title="Send open comments to your configured agent CLI"
+        >${agentRunning ? 'Agent running...' : 'Send to agent'}</button>
       </div>
     </div>
   `;

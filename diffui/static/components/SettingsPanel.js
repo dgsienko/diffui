@@ -1,6 +1,8 @@
 import { h } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import htm from 'htm';
+import { clampFont } from '../lib/utils.js';
+import { kb } from '../lib/keys.js';
 
 const html = htm.bind(h);
 
@@ -19,21 +21,20 @@ const AGENTS = [
 ];
 
 const REBINDABLE_KEYS = [
-  { id: 'toggle-review', label: 'Toggle reviewed', default: 'r' },
-  { id: 'toggle-show-reviewed', label: 'Show/hide reviewed', default: 'a' },
-  { id: 'comment-line', label: 'Comment on line', default: 'c' },
-  { id: 'copy-path', label: 'Copy file path', default: 'y' },
-  { id: 'sort-risk', label: 'Sort by risk', default: 's' },
-  { id: 'export-summary', label: 'Export summary', default: 'S' },
-  { id: 'toggle-file-tree', label: 'Toggle explorer', default: 'b' },
-  { id: 'next-unreviewed', label: 'Next unreviewed', default: ']' },
+  { id: 'toggle-review', label: 'Toggle reviewed' },
+  { id: 'toggle-show-reviewed', label: 'Show/hide reviewed' },
+  { id: 'comment-line', label: 'Comment on line' },
+  { id: 'copy-path', label: 'Copy file path' },
+  { id: 'sort-risk', label: 'Sort by risk' },
+  { id: 'export-summary', label: 'Export summary' },
+  { id: 'toggle-file-tree', label: 'Toggle explorer' },
+  { id: 'next-unreviewed', label: 'Next unreviewed' },
 ];
 
 export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindings }) {
   const [settings, setSettings] = useState(null);
   const [themes, setThemes] = useState([]);
   const [showKeybindings, setShowKeybindings] = useState(false);
-  const [localBindings, setLocalBindings] = useState(keybindings || {});
   const [capturingKey, setCapturingKey] = useState(null);
   const captureBtnRef = useRef(null);
   const panelRef = useRef(null);
@@ -42,10 +43,6 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
     fetch('/api/settings').then(r => r.json()).then(setSettings);
     fetch('/api/themes').then(r => r.json()).then(setThemes);
   }, []);
-
-  useEffect(() => {
-    setLocalBindings(keybindings || {});
-  }, [keybindings]);
 
   useEffect(() => {
     if (capturingKey && captureBtnRef.current) captureBtnRef.current.focus();
@@ -87,23 +84,21 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
       return;
     }
     if (e.key === 'Backspace') {
-      const next = { ...localBindings };
+      const next = { ...keybindings };
       delete next[keyId];
-      setLocalBindings(next);
       setCapturingKey(null);
       onChange({ keybindings: next });
       return;
     }
-    if (e.key.length === 1 || e.key === '[' || e.key === ']') {
-      const next = { ...localBindings, [keyId]: e.key };
-      setLocalBindings(next);
+    if (e.key.length === 1) {
+      const next = { ...keybindings, [keyId]: e.key };
       setCapturingKey(null);
       onChange({ keybindings: next });
     }
   };
 
   return html`
-    <div class="settings-overlay" onClick=${(e) => { if (e.target.classList.contains('settings-overlay')) onClose(); }}>
+    <div class="settings-overlay" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="settings-panel" ref=${panelRef} role="dialog" aria-label="Settings">
         <div class="settings-title">Settings</div>
 
@@ -153,9 +148,9 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
 
         <label class="settings-label">Font size</label>
         <div class="settings-row">
-          <button class="settings-btn-sm" onClick=${() => update({ font_size: Math.max((fontSize || 13) - 1, 8) })}>−</button>
-          <span class="settings-value">${fontSize || 13}px</span>
-          <button class="settings-btn-sm" onClick=${() => update({ font_size: Math.min((fontSize || 13) + 1, 24) })}>+</button>
+          <button class="settings-btn-sm" onClick=${() => update({ font_size: clampFont(fontSize - 1) })}>−</button>
+          <span class="settings-value">${fontSize}px</span>
+          <button class="settings-btn-sm" onClick=${() => update({ font_size: clampFont(fontSize + 1) })}>+</button>
         </div>
 
         <label class="settings-label">Word wrap</label>
@@ -182,7 +177,7 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
                   onClick=${() => setCapturingKey(capturingKey === k.id ? null : k.id)}
                   onKeyDown=${(e) => { if (capturingKey === k.id) handleKeyCapture(e, k.id); }}
                 >
-                  ${capturingKey === k.id ? 'Press key...' : html`<kbd>${localBindings[k.id] || k.default}</kbd>`}
+                  ${capturingKey === k.id ? 'Press key...' : html`<kbd>${kb(keybindings, k.id)}</kbd>`}
                 </button>
               </div>
             `)}

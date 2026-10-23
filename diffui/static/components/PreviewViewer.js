@@ -2,12 +2,11 @@ import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
 import { renderMd, renderDiagrams } from '../lib/markdown.js';
-import { mergeRef } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
 const MD_EXTS = new Set(['md', 'markdown', 'mdx']);
-// UI hint only — backend uses mimetypes.guess_type for authoritative detection
+// UI hint only; backend uses mimetypes.guess_type for authoritative detection
 const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'avif', 'tiff', 'tif']);
 
 function getExt(path) {
@@ -44,7 +43,7 @@ export function PreviewViewer({ filePath, containerRef }) {
   const ext = getExt(filePath);
 
   return html`
-    <div class="diff-container preview-container" ref=${mergeRef(containerRef)}>
+    <div class="diff-container preview-container" ref=${containerRef}>
       ${preview?.type === 'image' ? html`
         <div class="preview-image-container">
           ${preview.exists

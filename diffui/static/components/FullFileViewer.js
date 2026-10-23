@@ -1,13 +1,14 @@
 import { h } from 'preact';
 import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import htm from 'htm';
+import { mergeRef } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
 const LINE_HEIGHT = 20;
 const OVERSCAN = 40;
 
-// All line HTML is server-generated from Pygments — source code is html.escape'd
+// All line HTML is server-generated from Pygments: source code is html.escape'd
 // in highlight.py before wrapping in <span> tags. No user content is rendered as HTML.
 export function FullFileViewer({ filePath, view, containerRef, gotoLine, readOnly }) {
   const [data, setData] = useState(null);
@@ -37,27 +38,14 @@ export function FullFileViewer({ filePath, view, containerRef, gotoLine, readOnl
     });
   }, []);
 
-  const mergedRef = useCallback((el) => {
-    scrollRef.current = el;
-    if (containerRef) containerRef.current = el;
-    if (el) {
-      setViewportHeight(el.clientHeight);
-      el.addEventListener('scroll', onScroll, { passive: true });
-    }
-  }, [containerRef, onScroll]);
-
   useEffect(() => {
     const el = scrollRef.current;
-    if (el && data && gotoLine) el.scrollTop = Math.max(0, (gotoLine - 1) * LINE_HEIGHT - el.clientHeight / 2);
+    if (!el || !data) return;
+    setViewportHeight(el.clientHeight);
+    if (gotoLine) el.scrollTop = Math.max(0, (gotoLine - 1) * LINE_HEIGHT - el.clientHeight / 2);
   }, [data, gotoLine]);
 
-  useEffect(() => {
-    return () => {
-      const el = scrollRef.current;
-      if (el) el.removeEventListener('scroll', onScroll);
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, [onScroll]);
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
 
   if (loading) return html`<div class="loading">Loading...</div>`;
   if (!data?.lines?.length) return html`<div class="empty-state"><span class="empty-state-title">File is empty</span></div>`;
@@ -68,9 +56,8 @@ export function FullFileViewer({ filePath, view, containerRef, gotoLine, readOnl
   const endIdx = Math.min(totalLines, Math.ceil((scrollTop + viewportHeight) / LINE_HEIGHT) + OVERSCAN);
   const offsetY = startIdx * LINE_HEIGHT;
 
-  // Line HTML is Pygments-generated (escaped server-side in highlight.py)
   return html`
-    <div class="diff-container" ref=${mergedRef}>
+    <div class="diff-container" ref=${mergeRef(scrollRef, containerRef)} onScroll=${onScroll}>
       <div style="height: ${totalHeight}px; position: relative;">
         <div style="transform: translateY(${offsetY}px); will-change: transform;">
           ${data.lines.slice(startIdx, endIdx).map(line => html`
