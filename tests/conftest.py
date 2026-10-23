@@ -4,8 +4,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 import diffui.git_utils
+from diffui.server.app import create_app
 
 _APP_V1 = "\n".join(f"line {i}" for i in range(1, 21)) + "\n"
 _APP_V2 = _APP_V1.replace("line 5", "line five").replace("line 12", "line twelve")
@@ -70,3 +72,16 @@ def temp_repo(tmp_path_factory) -> Path:
     (repo / "app.py").write_text(_APP_DIRTY)
     (repo / "untracked.txt").write_text("never committed\n")
     return repo
+
+
+@pytest.fixture(scope="class")
+def _server_app(temp_repo) -> TestClient:
+    diffui.git_utils.set_active_repo(temp_repo)
+    return TestClient(create_app([temp_repo]), base_url="http://localhost")
+
+
+def post_comment(client: TestClient, **fields) -> str:
+    """Add a comment on app.py line 1 unless `fields` say otherwise, and return its id."""
+    payload = {"file_path": "app.py", "line_index": 1, "comment": "check", **fields}
+    client.post("/api/comments", json=payload)
+    return client.get("/api/comments").json()[payload["file_path"]][-1]["id"]

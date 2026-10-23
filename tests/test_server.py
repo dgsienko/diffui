@@ -21,19 +21,7 @@ from diffui.server.routes_review import _process_status
 from diffui.server.theme_css import generate_css_vars
 from diffui.server.turns import TurnTracker, poll_once
 from diffui.themes.definitions import ALL_THEMES
-from tests.conftest import _git
-
-
-@pytest.fixture(scope="class")
-def _server_app(temp_repo):
-    set_active_repo(temp_repo)
-    return TestClient(create_app([temp_repo]), base_url="http://localhost")
-
-
-def _post_comment(client, **fields) -> str:
-    payload = {"file_path": "app.py", "line_index": 1, "comment": "check", **fields}
-    client.post("/api/comments", json=payload)
-    return client.get("/api/comments").json()[payload["file_path"]][-1]["id"]
+from tests.conftest import _git, post_comment
 
 
 class TestServerRoutes:
@@ -108,7 +96,7 @@ class TestServerRoutes:
             _server_app.put("/api/settings", json={key: original})
 
     def test_comment_crud(self, _server_app):
-        cid = _post_comment(_server_app, comment="test comment")
+        cid = post_comment(_server_app, comment="test comment")
         comment = _server_app.get("/api/comments").json()["app.py"][0]
         assert (comment["id"], comment["comment"], comment["status"]) == (cid, "test comment", "open")
         assert comment["timestamp"]
@@ -124,7 +112,7 @@ class TestServerRoutes:
         assert _server_app.get("/api/comments").json() == {}
 
     def test_comment_resolve_toggle(self, _server_app):
-        cid = _post_comment(_server_app)
+        cid = post_comment(_server_app)
 
         def status():
             return _server_app.get("/api/comments").json()["app.py"][0]["status"]
@@ -174,7 +162,7 @@ class TestServerRoutes:
         ],
     )
     def test_comment_fields_are_stored(self, _server_app, fields, stored):
-        _post_comment(_server_app, **fields)
+        post_comment(_server_app, **fields)
         comment = _server_app.get("/api/comments").json()["app.py"][0]
         assert {k: comment[k] for k in stored} == stored
 
@@ -246,9 +234,9 @@ class TestServerRoutes:
         assert "No explanation generated yet" in r.text
 
     def test_bulk_resolve_and_reopen_one_file(self, _server_app):
-        _post_comment(_server_app, line_index=1)
-        _post_comment(_server_app, line_index=2)
-        _post_comment(_server_app, file_path="extra.py")
+        post_comment(_server_app, line_index=1)
+        post_comment(_server_app, line_index=2)
+        post_comment(_server_app, file_path="extra.py")
 
         def statuses(path):
             return [c["status"] for c in _server_app.get("/api/comments").json()[path]]
@@ -263,8 +251,8 @@ class TestServerRoutes:
         assert statuses("app.py") == ["open", "open"]
 
     def test_bulk_resolve_without_a_file_covers_every_file(self, _server_app):
-        _post_comment(_server_app)
-        _post_comment(_server_app, file_path="extra.py")
+        post_comment(_server_app)
+        post_comment(_server_app, file_path="extra.py")
         assert _server_app.post("/api/comments/bulk-resolve", json={"action": "resolve"}).json()["count"] == 2
 
     def test_diff_context_widens_the_hunks(self, _server_app):
@@ -294,9 +282,9 @@ class TestServerRoutes:
         assert r.status_code == 400
 
     def test_review_summary_lists_open_comments_by_category(self, _server_app):
-        _post_comment(_server_app, comment="fix this bug", file_line_num=10, category="bug")
-        _post_comment(_server_app, comment="a nit", file_line_num=2, category="nit")
-        _post_comment(_server_app, comment="already handled", status="resolved")
+        post_comment(_server_app, comment="fix this bug", file_line_num=10, category="bug")
+        post_comment(_server_app, comment="a nit", file_line_num=2, category="nit")
+        post_comment(_server_app, comment="already handled", status="resolved")
         md = _server_app.get("/api/review-summary").json()["markdown"]
         assert "3 total, 2 open, 1 resolved" in md
         assert "### Bug\n\n- **app.py:10** — fix this bug" in md
@@ -304,7 +292,7 @@ class TestServerRoutes:
         assert "already handled" not in md
 
     def test_agent_prompt_with_comments(self, _server_app):
-        _post_comment(_server_app, comment="rename this variable", file_line_num=5, category="suggestion")
+        post_comment(_server_app, comment="rename this variable", file_line_num=5, category="suggestion")
         data = _server_app.post("/api/agent/prompt").json()
         assert data["ok"] is True
         assert "rename this variable" in data["prompt"]
@@ -515,12 +503,23 @@ def test_score_risk(path, adds, dels, expected):
 
 
 class TestExportJson:
-    def test_export_lists_the_files_the_ui_lists(self, _server_app, temp_repo, capsys):
+    def test_export_matches_the_files_comments_and_reviews_the_ui_shows(self, _server_app, capsys):
+        post_comment(_server_app)
+        post_comment(_server_app, file_path="extra.py", status="resolved")
+        _server_app.post("/api/reviewed/extra.py")
 
-        set_active_repo(temp_repo)
         export_json()
-        exported = [f["path"] for f in json.loads(capsys.readouterr().out)["files"]]
-        assert exported == [f["path"] for f in _server_app.get("/api/files").json()]
+
+        exported = json.loads(capsys.readouterr().out)
+        assert (exported["branch"], exported["main_branch"]) == ("feature", "main")
+        assert exported["summary"] == {
+            "total_files": 3,
+            "reviewed_files": 1,
+            "total_comments": 2,
+            "open_comments": 1,
+            "resolved_comments": 1,
+        }
+        assert [f["path"] for f in exported["files"]] == [f["path"] for f in _server_app.get("/api/files").json()]
 
 
 class TestPathContainment:
@@ -640,7 +639,7 @@ class TestApplySuggestion:
     )
     def test_refusals_leave_the_file_and_comment_alone(self, _server_app, app_py, fields, status, detail):
         before = app_py.read_text()
-        cid = _post_comment(_server_app, **fields)
+        cid = post_comment(_server_app, **fields)
         r = _server_app.post(f"/api/comments/app.py/{cid}/apply")
         assert (r.status_code, detail in r.json()["detail"]) == (status, True)
         assert app_py.read_text() == before
@@ -655,7 +654,7 @@ class TestApplySuggestion:
     )
     def test_replaces_the_line_and_resolves_the_comment(self, _server_app, app_py, fields):
         before = app_py.read_text()
-        cid = _post_comment(_server_app, file_line_num=1, suggestion="line one", **fields)
+        cid = post_comment(_server_app, file_line_num=1, suggestion="line one", **fields)
         assert _server_app.post(f"/api/comments/app.py/{cid}/apply").json() == {"ok": True}
         assert app_py.read_text() == before.replace("line 1\n", "line one\n", 1)
         assert _server_app.get("/api/comments").json()["app.py"][0]["status"] == "resolved"
@@ -711,7 +710,7 @@ def _agent(pane_id, cwd, status="idle"):
 class TestHerdr:
     def _paste(self, client, monkeypatch, agents):
         monkeypatch.setenv("HERDR_AGENTS", json.dumps(agents))
-        _post_comment(client, file_line_num=5, comment="end\x1b[201~\rrm -rf ~")
+        post_comment(client, file_line_num=5, comment="end\x1b[201~\rrm -rf ~")
         return client.post("/api/agent/paste").json()
 
     @pytest.mark.parametrize(
@@ -742,7 +741,7 @@ class TestHerdr:
 
     def test_prompt_names_the_pane_agent_only_inside_a_workspace(self, _server_app, temp_repo, fake_herdr, monkeypatch):
         monkeypatch.setenv("HERDR_AGENTS", json.dumps([_agent("w1:p1", temp_repo)]))
-        _post_comment(_server_app)
+        post_comment(_server_app)
         assert _server_app.post("/api/agent/prompt").json()["pane_agent"] == "claude"
         monkeypatch.delenv("HERDR_WORKSPACE_ID")
         assert _server_app.post("/api/agent/prompt").json()["pane_agent"] is None
@@ -754,7 +753,7 @@ class TestHerdr:
 
     def test_reviewing_a_file_reports_sidebar_counts(self, _server_app, fake_herdr):
 
-        _post_comment(_server_app)
+        post_comment(_server_app)
         _server_app.post("/api/reviewed/app.py")
         # The watcher sees reviewed.json change and runs this; TestClient never starts the watcher.
         _apply_state_updates(["files_changed"])

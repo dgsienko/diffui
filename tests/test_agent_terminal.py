@@ -5,7 +5,6 @@ import signal
 import subprocess
 import sys
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,6 +17,7 @@ from diffui.server.routes_agent_terminal import (
     _resize_pty,
     _write_pty,
 )
+from tests.conftest import post_comment
 
 
 @pytest.fixture(autouse=True)
@@ -103,78 +103,34 @@ class TestKillAgent:
         proc.kill.assert_called_once()
 
 
-@pytest.fixture(scope="class")
-def _server_app():
-    from diffui.git_utils import resolve_repo_root, set_active_repo
-    from diffui.server.app import create_app
-
-    root = resolve_repo_root(Path(__file__).parent.parent)
-    set_active_repo(root)
-    app = create_app([root])
-
-    from fastapi.testclient import TestClient
-
-    return TestClient(app, base_url="http://localhost")
-
-
 class TestStartAgentEndpoint:
     def test_already_running(self, _server_app):
         proc = MagicMock()
         proc.poll.return_value = None
         with patch.object(rat, "_agent_proc", proc):
-            r = _server_app.post("/api/agent/start")
-        assert r.status_code == 200
-        body = r.json()
+            body = _server_app.post("/api/agent/start").json()
         assert body["ok"] is False
         assert "already running" in body["error"].lower()
 
     def test_no_open_comments(self, _server_app):
-        with (
-            patch.object(rat, "_agent_proc", None),
-            patch.object(rat, "_build_agent_context", return_value=(None, "No open comments", "", 0)),
-        ):
-            r = _server_app.post("/api/agent/start")
-        assert r.status_code == 200
-        body = r.json()
+        assert _server_app.post("/api/agent/start").json() == {"ok": False, "error": "No open comments"}
+
+    def test_unknown_agent_cli(self, _server_app, monkeypatch):
+        monkeypatch.setattr(rat.app_state, "agent_cli", "bogus-agent")
+        post_comment(_server_app)
+        body = _server_app.post("/api/agent/start").json()
         assert body["ok"] is False
-        assert body["error"] == "No open comments"
+        assert "Unknown agent CLI: bogus-agent" in body["error"]
 
-    def test_unknown_agent_cli(self, _server_app):
-        with (
-            patch.object(rat, "_agent_proc", None),
-            patch.object(
-                rat,
-                "_build_agent_context",
-                return_value=("prompt text", "/repo", "branch", 1),
-            ),
-            patch.object(rat.app_state, "agent_cli", "bogus-agent"),
-        ):
-            r = _server_app.post("/api/agent/start")
-        assert r.status_code == 200
-        body = r.json()
-        assert body["ok"] is False
-        assert "Unknown agent CLI" in body["error"]
-        assert "bogus-agent" in body["error"]
+    def test_start_stores_the_prompt_for_the_websocket_to_spawn(self, _server_app, temp_repo, monkeypatch):
+        monkeypatch.setattr(rat.app_state, "agent_cli", "claude")
+        post_comment(_server_app, comment="needs a rename")
+        assert _server_app.post("/api/agent/start").json() == {"ok": True, "agent": "claude"}
+        assert "needs a rename" in rat._pending_start["prompt"]
+        assert rat._pending_start["repo_root"] == str(temp_repo)
 
-    def test_start_stores_pending(self, _server_app):
-        with (
-            patch.object(rat, "_agent_proc", None),
-            patch.object(
-                rat,
-                "_build_agent_context",
-                return_value=("prompt text", "/repo", "branch", 1),
-            ),
-            patch.object(rat.app_state, "agent_cli", "claude"),
-        ):
-            r = _server_app.post("/api/agent/start")
 
-        assert r.status_code == 200
-        body = r.json()
-        assert body == {"ok": True, "agent": "claude"}
-        assert rat._pending_start is not None
-        assert rat._pending_start["prompt"] == "prompt text"
-        assert rat._pending_start["repo_root"] == "/repo"
-
+class TestSpawnAgent:
     def test_spawned_agent_runs_in_its_own_session_on_a_sized_terminal(self, temp_repo):
         script = (
             "import os, sys; "
