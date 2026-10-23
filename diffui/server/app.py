@@ -22,6 +22,7 @@ from diffui.server.routes_search import router as search_router
 from diffui.server.routes_settings import router as settings_router
 from diffui.server.state import app_state
 from diffui.server.terminal_host import clear_status, report_status
+from diffui.server.theme_css import generate_css_vars
 from diffui.server.turns import router as turns_router
 from diffui.server.turns import start_turn_poller
 from diffui.themes import ALL_THEMES
@@ -100,8 +101,6 @@ def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:
 
     @app.get("/api/theme/css")
     def get_theme_css():
-        from diffui.server.theme_css import generate_css_vars
-
         return {"css": generate_css_vars(app_state.theme)}
 
     _index_html = (_STATIC_DIR / "index.html").read_text()

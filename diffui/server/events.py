@@ -11,11 +11,16 @@ from watchfiles import awatch
 
 from diffui.git_utils import (
     _comments_path,
+    get_diff_numstat,
+    get_file_mtime,
     get_git_dir,
     get_repo_root,
+    get_working_changed_files,
     load_comments,
+    save_reviewed,
 )
 from diffui.server import fff_index
+from diffui.server.routes_diff import clear_diff_cache
 from diffui.server.state import app_state
 from diffui.server.terminal_host import report_status
 
@@ -46,12 +51,9 @@ def _broadcast(events: list[str]) -> None:
                 pass
 
     for ws in list(_ws_clients):
-        try:
-            task = asyncio.create_task(ws.send_text(data))
-            _bg_tasks.add(task)
-            task.add_done_callback(_bg_tasks.discard)
-        except Exception:
-            _ws_clients.discard(ws)
+        task = asyncio.create_task(ws.send_text(data))
+        _bg_tasks.add(task)
+        task.add_done_callback(_bg_tasks.discard)
 
 
 def _classify_changes(changes: set[tuple], git_dir: str, comments_path: str) -> list[str]:
@@ -67,8 +69,6 @@ def _classify_changes(changes: set[tuple], git_dir: str, comments_path: str) -> 
 
 
 def _invalidate_stale_reviews() -> None:
-    from diffui.git_utils import get_file_mtime, save_reviewed
-
     stale = [p for p, t in app_state.reviewed.items() if get_file_mtime(p) != t]
     if stale:
         for p in stale:
@@ -83,8 +83,6 @@ def _apply_state_updates(events: list[str]) -> list[str]:
         prev_branch = app_state.branch_name
         prev_comments = app_state.comments
         app_state.reload_repo_state()
-        from diffui.server.routes_diff import clear_diff_cache
-
         clear_diff_cache()
         _invalidate_stale_reviews()
         if "files_changed" not in events:
@@ -97,8 +95,6 @@ def _apply_state_updates(events: list[str]) -> list[str]:
         if app_state.branch_name != prev_branch:
             restart_watcher()
     elif "files_changed" in events:
-        from diffui.git_utils import get_diff_numstat, get_working_changed_files
-
         app_state.numstat = get_diff_numstat(app_state.merge_base)
         app_state.working_files = get_working_changed_files()
         app_state.reload_last_turn()
@@ -160,15 +156,6 @@ async def _watch_loop(cancel: asyncio.Event) -> None:
 # --- SSE fallback ---
 
 
-async def _event_stream(queue: asyncio.Queue):
-    try:
-        while True:
-            msg = await queue.get()
-            yield msg
-    except asyncio.CancelledError:
-        pass
-
-
 @router.get("/events")
 async def sse_events():
     queue: asyncio.Queue = asyncio.Queue(maxsize=32)
@@ -177,8 +164,8 @@ async def sse_events():
     async def generate():
         try:
             yield 'data: {"events": ["connected"]}\n\n'
-            async for msg in _event_stream(queue):
-                yield msg
+            while True:
+                yield await queue.get()
         finally:
             _sse_clients.discard(queue)
 
@@ -206,10 +193,10 @@ async def websocket_endpoint(ws: WebSocket):
             data = await ws.receive_text()
             try:
                 msg = json.loads(data)
-                if msg.get("type") == "ping":
-                    await ws.send_text(json.dumps({"type": "pong"}))
-            except (json.JSONDecodeError, KeyError):
-                pass
+            except json.JSONDecodeError:
+                continue
+            if isinstance(msg, dict) and msg.get("type") == "ping":
+                await ws.send_text(json.dumps({"type": "pong"}))
     except WebSocketDisconnect:
         pass
     finally:

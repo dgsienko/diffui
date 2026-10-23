@@ -10,9 +10,12 @@ from diffui.git_utils import (
     current_branch,
     get_branch_commits,
     get_changed_files,
+    get_diff_numstat,
     get_main_branch,
     get_merge_base,
+    get_repo_root,
     get_tree_numstat,
+    get_working_changed_files,
     is_comment_open,
     load_comments,
     load_reviewed,
@@ -69,8 +72,6 @@ class AppState:
         self.merge_base = get_merge_base(main_branch)
         self.commits = get_branch_commits(self.merge_base)
         self.all_files = get_changed_files(self.merge_base)
-        from diffui.git_utils import get_diff_numstat, get_repo_root, get_working_changed_files
-
         self.numstat = get_diff_numstat(self.merge_base)
         self.working_files = get_working_changed_files()
         self.reload_last_turn()

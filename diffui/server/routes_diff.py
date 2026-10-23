@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import base64
+import mimetypes
 import threading
 from fnmatch import fnmatch
 
 from fastapi import APIRouter
 
 from diffui.git_utils import (
+    get_blame,
     get_commit_diff,
+    get_file_content,
     get_file_mtime,
     get_full_diff,
     get_repo_root,
@@ -16,7 +20,7 @@ from diffui.git_utils import (
     repo_relative,
     short_name,
 )
-from diffui.server.highlight import parse_diff_to_json
+from diffui.server.highlight import highlight_file_to_json, parse_diff_to_json
 from diffui.server.state import app_state
 
 LAST_TURN = "last-turn"
@@ -69,10 +73,7 @@ def _get_diff(path: str, view: str, context: int = 3, ignore_whitespace: bool = 
         if stale is not None:
             del _diff_cache[stale]
         if len(_diff_cache) >= _MAX_CACHE:
-            try:
-                del _diff_cache[next(iter(_diff_cache))]
-            except StopIteration:
-                pass
+            del _diff_cache[next(iter(_diff_cache))]
         _diff_cache[cache_key] = result
 
     return result
@@ -183,9 +184,6 @@ def get_diff(path: str, view: str = "all", context: int = 3, ignore_whitespace: 
 
 @router.get("/file/{path:path}")
 def get_file(path: str, view: str = "all", html: bool = True):
-    from diffui.git_utils import get_file_content
-    from diffui.server.highlight import highlight_file_to_json
-
     path = repo_relative(path)
     content = get_file_content(path)
     diff_text = _get_diff(path, view)
@@ -194,17 +192,11 @@ def get_file(path: str, view: str = "all", html: bool = True):
 
 @router.get("/blame/{path:path}")
 def get_blame_data(path: str):
-    from diffui.git_utils import get_blame
-
     return get_blame(repo_relative(path))
 
 
 @router.get("/preview/{path:path}")
 def get_preview(path: str):
-    import mimetypes
-
-    from diffui.git_utils import get_file_content, get_repo_root
-
     path = repo_relative(path)
     mime, _ = mimetypes.guess_type(path)
     if mime and mime.startswith("image/"):
@@ -214,8 +206,6 @@ def get_preview(path: str):
         size = full_path.stat().st_size
         if size > 10 * 1024 * 1024:
             return {"type": "image", "exists": True, "too_large": True}
-        import base64
-
         data = base64.b64encode(full_path.read_bytes()).decode()
         return {"type": "image", "exists": True, "data_url": f"data:{mime};base64,{data}"}
     content = get_file_content(path)

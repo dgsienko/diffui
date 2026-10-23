@@ -6,7 +6,9 @@ from fastapi import APIRouter, HTTPException
 
 from diffui.git_utils import (
     current_branch,
+    get_head_sha,
     get_main_branch,
+    get_remote_url,
     get_repo_root,
     repo_has_changes,
     set_active_repo,
@@ -14,6 +16,7 @@ from diffui.git_utils import (
 from diffui.server import fff_index
 from diffui.server.events import restart_watcher
 from diffui.server.models import RepoSwitch
+from diffui.server.routes_diff import clear_diff_cache
 from diffui.server.state import app_state
 from diffui.server.terminal_host import report_status
 
@@ -55,8 +58,6 @@ def switch_repo(body: RepoSwitch):
     app_state.active_repo_index = body.index
     set_active_repo(app_state.repos[body.index])
     app_state.reload_repo_state()
-    from diffui.server.routes_diff import clear_diff_cache
-
     clear_diff_cache()
     fff_index.close()
     restart_watcher()
@@ -66,8 +67,6 @@ def switch_repo(body: RepoSwitch):
 
 @router.get("/branch")
 def get_branch():
-    from diffui.git_utils import get_head_sha, get_remote_url
-
     return {
         "name": current_branch(),
         "main_branch": get_main_branch(),
