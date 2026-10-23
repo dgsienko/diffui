@@ -6,116 +6,153 @@
   <a href="#install">install</a> · <a href="#quick-start">quick start</a> · <a href="#ai-agent-integration">agents</a> · <a href="#terminal-ui">terminal UI</a> · <a href="#keybindings">keybindings</a> · <a href="#development">development</a>
 </p>
 
-A local code review UI tool with optional AI agent integration.
+A local code review UI for a git branch, with optional AI agent integration.
 
-Review any branch with syntax-highlighted diffs, inline comments, and risk scoring. If you have a coding agent installed locally, you can leave feedback directly on the diff, watch the agent respond, and review the next round of changes in a tight loop without leaving the browser. There is also an AI-powered explain feature that walks you through what the branch does.
+You get syntax-highlighted diffs, inline comment threads and risk scoring. If you have a coding agent installed, you can leave comments on the diff, send them to the agent, watch it respond, and review the next round of changes without leaving the page.
 
-Runs as a local web server with a Preact frontend. No build step and no accounts. Your code stays on your machine, with one exception: a markdown file containing a mermaid or plantuml block is rendered by kroki.io, so that block's source is sent there when you preview the file. Frontend libraries load from a CDN, so the first paint needs a network.
+Use it before you push. Review what your agent just wrote while nothing is on a remote yet, or look at your own branch in a real diff UI without opening a draft MR. GitHub or GitLab review still happens after.
 
-## Who is this for
-
-If you use Claude Code, Codex, Cursor, or similar tools, diffui beats scrolling terminal diffs or waiting for a pushed MR. Review locally, leave comments, and send feedback back to the agent before anything hits a remote.
-
-For reviewing your own work before pushing, it saves you opening a draft MR just to see your changes in a proper diff UI. Useful when your IDE's diff view doesn't cut it for larger changes, or when you want risk scoring, comment threads, or a cross-file overview.
-
-If you spend most of your time in a terminal, diffui fits that flow. It runs locally, prints a URL, and works well in terminal browsers or apps that support inline web content.
-
-Use diffui *before* pushing, to catch issues early and iterate with agents locally. GitHub/GitLab review still happens after.
+It runs as a local web server with a Preact frontend, or as a terminal UI with `diffui --tui`. There is no build step and no accounts. Your code stays on your machine with one exception: a markdown file with a mermaid or plantuml block is rendered by kroki.io, so that block's source is sent there when you preview the file. The web UI loads its frontend libraries from a CDN, so the first paint needs a network.
 
 ## Install
 
+diffui needs Python 3.10 or newer. There is no PyPI release, so install from GitHub:
+
 ```bash
+pipx install git+https://github.com/dgsienko/diffui
+```
+
+To work on diffui, install a clone in editable mode so the `diffui` command follows your checkout:
+
+```bash
+git clone https://github.com/dgsienko/diffui
+cd diffui
 pipx install -e .
 ```
 
 ## Quick start
 
-`cd` into any git repo on a feature branch and run:
+`cd` into a git repo on a feature branch and run:
 
 ```bash
 diffui
 ```
 
-This starts a local server and prints the URL. Open that URL via an external browser or within your terminal application (if supported). You'll see every file changed on the current branch (vs the merge base with `origin/main` or `origin/master`, falling back to the local branch when there's no remote) in a tabbed, syntax-highlighted diff viewer.
+This starts a server on a free local port and prints the URL. Open it in a browser, or in a terminal app that renders web content. You'll see every file changed on the branch, plus uncommitted and untracked files, in a syntax-highlighted diff.
 
-Sibling repos in the same parent directory are auto-discovered and available via a dropdown for easy repository switching.
+The branch is compared with its merge base against `main` or `master`. diffui uses the `origin/` copy when it exists and the local branch otherwise.
+
+When the parent directory holds several git repos, they show up in a dropdown for switching. To review specific repos, pass their paths:
+
+```bash
+diffui ~/code/api ~/code/web
+```
+
+diffui watches the repo with watchfiles and pushes changes to the page over a WebSocket (SSE as a fallback), so edits from an agent appear without a reload.
 
 ### CLI flags
 
 ```bash
-diffui --open        # Automatically open the URL in an external browser
-diffui --comments    # Dump all comments to stdout
-diffui --json        # Export review session as structured JSON
-diffui --tui         # Review in the terminal instead of the browser
+diffui --open        # Open the URL in your browser
+diffui --comments    # Print all comments to stdout
+diffui --json        # Print the review session as JSON
+diffui --tui         # Review in the terminal (see Terminal UI)
 ```
+
+## Web or terminal
+
+Both run the same local server and read the same state, so comments and reviewed files carry over between them. Press `o` in the TUI to open the current file in the browser.
+
+The browser has the agent terminal panel, Explain changes, markdown and mermaid preview, blame, the full file view, comments on part of a line, and Settings. The TUI keeps you in the terminal next to your agent, and it's the only one that searches the whole repo, not just the diff.
 
 ## Reviewing changes
 
-- Navigation: the explorer sidebar lists the changed files, grouped by directory, file type, or change status. Click a file or use the arrow keys to move through them in the order the sidebar shows. The Explorer button in the top bar hides and shows it. `]` jumps to the next unreviewed file.
-- Diff modes: toggle between unified diff, side-by-side split, or full file view using the segmented control in the file header above the diff. Whitespace, Hide reviewed, Blame, More context and Mark reviewed sit next to it.
-- View filter: a dropdown in the top bar switches between all branch changes, uncommitted working changes, the agent's last turn (see [Last turn](#last-turn)), or individual commits (most recent first).
-- Reviewing: press `r` or use the dedicated button to mark a file as reviewed. The top bar shows how many files you've reviewed next to the total added and removed lines. If a reviewed file changes on disk, it's automatically unmarked. When everything is reviewed, a completion screen appears with stats.
-- Hunk navigation: `j`/`k` to jump between hunks. Hunk headers show their own +/- counts and can be collapsed by clicking. The raw `diff --git`/`index`/`---`/`+++` lines are hidden. A rename, mode change, new or deleted file, or binary file gets one short line instead.
-- Search: `ctrl+f` to search within the current diff with match highlighting and navigation. `ctrl+g` to jump to a specific line. `ctrl+shift+f` (or the "Search files" button) to filter the file list.
-- Risk scoring: files are scored by risk factors (migrations, config changes, large deletions, test removal, high churn). Medium and high risk files show colored dots in the file tree, with the level in the tooltip. Sort by risk via the command palette.
+- The explorer sidebar lists the changed files, grouped by directory, file type or change status. Click a file or press the left and right arrow keys to move through them in the order the sidebar shows. The Explorer button in the top bar hides and shows it.
+- The view dropdown in the top bar switches between all branch changes, uncommitted changes, the agent's last turn (see [Last turn](#last-turn)), and single commits, most recent first.
+- A segmented control in the file header switches between unified, split and full file views. Whitespace, Hide reviewed, Blame, More context and Mark reviewed sit next to it.
+- Press `r` to mark a file reviewed. The top bar shows reviewed files out of the total, next to the added and removed line counts. If a reviewed file changes on disk, it is unmarked. When everything is reviewed, a completion screen shows your stats. `]` jumps to the next unreviewed file.
+- `j` and `k` jump between hunks. Click a hunk header to collapse it. The raw `diff --git`, `index`, `---` and `+++` lines are hidden, and a rename, mode change, new or deleted file, or binary file gets one short line.
+- `ctrl+f` searches within the diff and highlights the matches. `ctrl+g` jumps to a line. `ctrl+shift+f`, or the Search files button, filters the file list.
+- Files are scored for risk from their path and size: migration, infra, schema and deploy paths, config files, large deletions, high churn and test removal. Medium and high risk files get a colored dot in the file tree, with the level in the tooltip. `s` sorts by risk.
+- A `.diffuiignore` file in the repo root hides matching files from the file list and from search. It takes one glob per line, and `#` starts a comment. `diffui --json` still lists them.
 
 ## Comments
 
-Right-click a line or press `c` to leave a comment. Comments support:
+Right-click a line, or hover it and press `c`, to leave a comment.
 
-- Text selection: highlight text, within a line or across several, and click the floating "Comment" button to leave a comment that references that exact span; the referenced text stays highlighted in the diff (works in unified and split views)
-- Categories: tag as bug, suggestion, nit, or question (colored badges)
-- Code suggestions: attach a proposed code change with inline before/after preview and an Apply button that patches the file. Apply refuses if the line has changed since you wrote the comment, or if the comment covers more than one line
-- Threads: reply to comments; named authors (user vs agent) with color-coded identities
-- Resolution: resolve/reopen with a toggle; resolved comments appear dimmed
-- Navigation: `n`/`p` to jump between comments across files
-- Comments panel: click "Comments" in the top bar to see all open comments grouped by file
-- Bulk resolve: resolve all comments in a file or globally from the command palette or comments panel
-- Export: `Shift+S` copies a formatted markdown review summary to clipboard with stats and open comments by category
+- Select text within a line or across several, then click the floating Comment button. The comment references that exact span, and the span stays highlighted in the diff. This works in unified and split views.
+- Tag a comment as bug, suggestion, nit or question.
+- A suggestion carries a proposed replacement, with an inline before and after preview and an Apply button that patches the file and resolves the comment. Apply refuses if the line changed since you wrote the comment, or if the comment covers more than one line.
+- Replies form a thread. User and agent replies show their author in different colors.
+- Resolve or reopen a thread with its toggle. Resolved comments are dimmed.
+- `n` and `p` jump between comments across files.
+- The Comments button in the top bar opens a panel of open comments grouped by file. Resolve all comments in a file, or everywhere, from the panel or the command palette.
+- `S` copies a markdown review summary to the clipboard, with file and comment counts, open comments by category, and the status of each file.
 
 ## AI agent integration
 
-Comments are stored at `~/.config/diffui/{repo}/{branch}/comments.json` as structured JSON (file path, line number, diff context, comment text, author, category, code suggestion, and resolution status). AI agents can read and reply to this file directly.
+Comments are stored at `~/.config/diffui/{repo}/{branch}/comments.json`. Each one has the file path, line number, diff context, comment text, author, category, suggestion and status. An agent can read that file and reply to it directly.
 
-- Send to agent: click the button in the top bar to spawn your configured agent CLI (Claude Code, Codex, OpenCode, or Cursor Agent) with a context file containing full diffs, review state, and existing comment threads. An interactive terminal panel slides up from the bottom, streaming the agent's full TUI output in real time. You can answer permission prompts, navigate multi-choice menus, and interact with the agent directly. The terminal shows elapsed time and detects when the agent goes idle. diffui auto-refreshes as the agent makes changes.
-- Explain changes: click the button in the top bar to generate a self-contained HTML walkthrough of the branch (TL;DR, file-by-file analysis, architecture notes, risk flags).
+- Send to agent builds a prompt from your open comments and writes a context file with the full diffs of the commented files, the review state and the existing threads. It then starts your configured agent CLI in a terminal panel that slides up from the bottom of the page. The panel streams the agent's full TUI, so you can answer permission prompts and use its menus. It shows elapsed time and notices when the agent goes idle. The page refreshes as the agent edits.
+- Explain changes starts the agent CLI in the background to write a self-contained HTML walkthrough of the branch: TL;DR, motivation, file-by-file analysis, architecture notes, risk flags and where to focus.
 
-Both actions are also available in the command palette (`ctrl+k`).
+Both are also in the command palette (`ctrl+k`, or `cmd+k` on macOS). Pick the agent in Settings (gear icon): Claude Code, Codex, OpenCode or Cursor Agent.
 
-Or tell your agent directly: "Go address the diffui comments."
-
-Configure your preferred agent CLI in Settings (gear icon).
+You can also point your own agent at the comments file.
 
 ### Running inside herdr
 
-When you start the `diffui` server in a [herdr](https://herdr.dev) pane, Send to agent in the browser pastes the prompt into the agent already running in that workspace, so you keep its session and context. It picks the agent working in the same repo, or the first agent in the workspace if none is. herdr then focuses that pane, and you can add to the prompt before pressing Enter. diffui won't paste while the agent is sitting at a permission prompt, because Claude Code throws the paste away there.
+When you start `diffui` in a [herdr](https://herdr.dev) pane, Send to agent pastes the prompt into the agent already running in that workspace, so you keep its session and context. diffui needs `herdr` on your PATH and detects the pane from `HERDR_WORKSPACE_ID`.
 
-Inside herdr, diffui also tracks agent turns for the [Last turn](#last-turn) scope.
+It picks the agent working in the same repo, or the first agent in the workspace if none is. herdr focuses that pane, and you can add to the prompt before pressing Enter. diffui won't paste while the agent is at a permission prompt, because Claude Code throws the paste away there.
 
-diffui also reports two values for the workspace's row in herdr's sidebar: `$comments` (like `3 open`) and `$reviewed` (like `☑ 12/20`). Add them to your herdr config to show them:
+diffui also reports two values for the workspace's row in herdr's sidebar: `$comments` (like `3 open`) and `$reviewed` (like `☑ 12/20`). Add them to a row in your herdr config:
 
 ```toml
 [ui.sidebar.spaces]
 rows = [
   ["state_icon", "workspace"],
-  ["branch", "git_status"],
   ["$comments", "$reviewed"],
 ]
 ```
 
+diffui clears both values when it exits.
+
+### Last turn
+
+Last turn shows what the agent changed since its latest turn began. It needs diffui in a herdr pane and an agent working in the same repo in any herdr workspace.
+
+The server polls `herdr agent list` every second. When an agent in the repo goes from idle or done to working, it saves the worktree as a git tree, untracked files included. It builds that tree in a temporary index, so your index and files stay untouched. The tree is stored under `refs/worktree/diffui/last-turn`, so it survives a restart, and each linked worktree keeps its own. The scope diffs that tree against the worktree as it is now.
+
+Without herdr, or before an agent has started a turn, the scope says "No agent turn seen yet". The snapshot is taken when the poll first sees `working`, so a change made before that is already in it and does not show. A turn that changes nothing still replaces the previous baseline.
+
 ## Terminal UI
 
-`diffui --tui` runs the review loop in the terminal, so it fits in a herdr split next to the coding agent. It starts the same server on a free port and talks to it over HTTP, which means comments, reviewed state and risk scores are the ones the browser shows. Press `o` to open the web UI at the current file.
+`diffui --tui` runs the review loop in the terminal, so it fits in a herdr split next to your coding agent. It starts the same server on a free port and talks to it over HTTP. Comments, reviewed state, risk scores and your theme are the ones the browser shows. Press `o` to open the web UI at the current file.
 
-The TUI covers the file list, a unified or split diff with syntax highlighting, comment threads, reviewed state, diff scopes, search, find in file, and Send to agent. The file list sits on the right of the diff. Inside herdr, Send to agent pastes the prompt into the workspace's agent pane. Anywhere else it shows the prompt so you can copy it with `c`. Explain changes, markdown and mermaid preview, blame and the agent terminal stay in the browser.
+The TUI covers the file list, a unified or split diff with syntax highlighting, comment threads, reviewed state, diff scopes, search, find in file and Send to agent. Explain changes, markdown and mermaid preview, blame and the agent terminal stay in the browser.
+
+The file list sits on the right of the diff. Under 110 columns it stacks below the diff, and `z` hides it.
+
+To open it from a herdr key, add this to your herdr config. It splits the focused pane and starts the TUI in that pane's directory, and it needs `jq`. `q` quits the TUI and leaves the pane as a shell.
+
+```toml
+[[keys.command]]
+key = "prefix+d"
+type = "shell"
+command = 'p=$(herdr pane split "$HERDR_ACTIVE_PANE_ID" --direction right --no-focus | jq -r .result.pane.pane_id) && herdr pane run "$p" "cd \"$HERDR_ACTIVE_PANE_CWD\" && diffui --tui"'
+description = "review this repo in diffui"
+```
+
+Inside herdr, `A` pastes the prompt into the workspace's agent pane. Anywhere else it shows the prompt, and `c` copies it.
 
 | Key | Action |
 | --- | --- |
 | `left` / `right`, `h` / `l` | Previous / next file |
 | `k` / `j` | Previous / next hunk |
 | `p` / `n` | Previous / next comment thread |
-| `up` / `down`, `pgup` / `pgdn`, `g` / `G` | Move the cursor |
-| `r` | Mark the file reviewed or unreviewed, then open the next unreviewed file |
+| `up` / `down`, `pgup` / `pgdn`, `ctrl+u` / `ctrl+d`, `g` / `G` | Move the cursor |
+| `r` | Mark the file reviewed or unreviewed. Marking it reviewed opens the next unreviewed file |
 | `]` | Next unreviewed file |
 | `s` | Sort files by risk |
 | `u` / `b` / `t` | Scope: uncommitted changes / everything on the branch / the agent's last turn |
@@ -136,18 +173,18 @@ The TUI covers the file list, a unified or split diff with syntax highlighting, 
 | `?` | Help |
 | `q` | Quit |
 
-The footer's first hints follow the cursor: `c` Comment and `v` Select range on a line, `c` Comment on N lines and `esc` Clear with a range, `c` Reply and `x` Resolve on a thread.
+The footer shows the keys that fit the row under the cursor.
 
-Clicking a file opens it, and clicking a diff row selects it. Hovering a row swaps its line number for a `[+]`. Clicking the number column opens the comment box for that line in one click, and dragging down it comments on the range. `ctrl+s` saves the comment. A range comment is stored the way a multi-line text selection is in the browser, so the web UI highlights the same lines.
+Clicking a file opens it, and clicking a diff row selects it. Hovering a row swaps its line number for a `[+]`. Click the number column to open the comment box for that line, or drag down it to comment on a range. `ctrl+s` saves the comment. A range comment is stored the way a multi-line text selection is in the browser, so the web UI highlights the same lines.
 
 ### Scopes
 
 The header shows the current scope. The browser has the same choices in its view dropdown.
 
-- Uncommitted (`u`): staged and unstaged changes plus new files.
-- Branch (`b`): everything since the branch left its base, commits included. This is the default.
-- Last turn (`t`): changes since the agent's latest turn started. See [Last turn](#last-turn).
-- Commit (`C`): the changes of one commit.
+- Uncommitted (`u`) is staged and unstaged changes plus new files.
+- Branch (`b`) is everything since the branch left its base, commits included. This is the default.
+- Last turn (`t`) is the changes since the agent's latest turn started. See [Last turn](#last-turn).
+- Commit (`C`) is the changes of one commit.
 
 ### Search and find
 
@@ -161,26 +198,20 @@ The header shows the current scope. The browser has the same choices in its view
 
 `|` puts the old file on the left and the new one on the right, with their own line numbers and tints. It needs a diff pane 100 columns wide. In a narrower pane the TUI stays unified and says so, and hiding the file list with `z` often makes room. A comment on a row goes against the new line, or the old line when it was removed, which is what the browser's split view stores. On a row that replaces one line with another, click the left or right number column, or press `tab`, to choose the side.
 
-### Last turn
-
-Last turn needs diffui to run in a herdr pane and an agent to work in the same repo in any herdr workspace. The server polls `herdr agent list` every second. When an agent inside the repo goes from idle or done to working, it saves the worktree as a git tree, untracked files included, built in a temporary index so your index and files are untouched. The tree is stored under `refs/worktree/diffui/last-turn`, so it survives a restart, and each linked worktree keeps its own. The scope diffs that tree against the worktree as it is now.
-
-Without herdr, or before an agent has started a turn, the scope says "No agent turn seen yet". herdr reports `working` a moment after the agent starts writing, so a change in that gap is already in the saved tree and does not show. A turn that changes nothing still replaces the previous baseline.
-
 ## Display
 
-- 16 color themes, with Graphite as the default: Graphite, Catppuccin Mocha/Latte, GitHub Dark, Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night, Rose Pine, Rose Pine Moon, Monokai Pro, Kanagawa, Everforest, Ayu Dark
-- Blame gutter: toggleable git blame showing author and age
-- Markdown/image preview: rendered preview for `.md` files, inline display for images. Markdown is sanitized before rendering, and diagram blocks go to kroki.io
-- Font size and line wrap: adjustable in settings or via command palette
-- Ignore whitespace: toggle via the file header button or `w` key
-- Open in editor: `ctrl+click` a line to open it in VS Code, Cursor, Vim, or Neovim (configurable in settings)
+- 16 color themes, with Graphite as the default: Graphite, Catppuccin Mocha, Catppuccin Latte, GitHub Dark, Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night, Rosé Pine, Rosé Pine Moon, Monokai Pro, Kanagawa, Everforest and Ayu Dark.
+- The blame gutter shows the author and age of each line.
+- `.md` files get a rendered preview and images show inline. Markdown is sanitized before rendering, and diagram blocks go to kroki.io.
+- Font size and line wrap are in Settings and the command palette.
+- `w` or the Whitespace button toggles ignore whitespace.
+- `ctrl+click` (`cmd+click` on macOS) a line to open it in VS Code, Cursor, Vim or Neovim. Pick the editor in Settings.
 
 ## Keybindings
 
 | Key | Action |
 | --- | --- |
-| `ctrl+k` | Command palette |
+| `ctrl+k` / `cmd+k` | Command palette |
 | `?` | Keyboard shortcuts overlay |
 | `left` / `right` | Previous / next file |
 | `j` / `k` | Next / previous hunk |
@@ -196,34 +227,27 @@ Without herdr, or before an agent has started a turn, the scope says "No agent t
 | `y` | Copy file path |
 | `Y` | Copy GitLab link |
 | `ctrl+f` | Search in diff |
-| `ctrl+g` | Go to line |
+| `ctrl+g` / `cmd+g` | Go to line |
 | `ctrl+shift+f` | Search files |
-| `ctrl+click` | Open in editor |
+| `ctrl+click` / `cmd+click` | Open in editor |
 | `right-click` | Comment on line (shows the native menu when text is selected, so you can copy) |
 | select text | Floating "Comment" button to comment on the exact substring |
 | `escape` | Close panel or dialog |
 
-All shortcuts can be rebound in Settings.
+Most shortcuts are ignored while a dialog is open. `r`, `a`, `c`, `y`, `s`, `S`, `b` and `]` can be rebound in Settings. The terminal UI keys are in [Terminal UI](#terminal-ui).
 
 ## State
 
-All state lives in `~/.config/diffui/`. Nothing is written to repo directories.
+Review state lives in `~/.config/diffui/`:
 
-- `settings.json`: theme, editor, agent CLI, display name (global)
-- `{repo}/{branch}/reviewed.json`: review status (per-branch)
-- `{repo}/{branch}/comments.json`: comments (per-branch)
-- `{repo}/{branch}/session.json`: UI session state (per-branch)
+- `settings.json` holds theme, editor, agent CLI, display name, font size, line wrap and rebound keys. It is global.
+- `{repo}/{branch}/reviewed.json` holds review status.
+- `{repo}/{branch}/comments.json` holds comments.
+- `{repo}/{branch}/session.json` holds UI session state: the active file, diff mode, scroll positions and the explorer and reviewed-file toggles.
 
-## Other features
+`{repo}` is the repo's full path with `/` replaced by `_`, and `{branch}` is the branch name the same way.
 
-- `.diffuiignore` file to hide files from review (still visible to agents)
-- Whole-repo file and text search in the terminal UI, built on the fff index
-- `diffui --json` for programmatic agent workflows
-- Auto-refresh via WebSocket (SSE fallback) powered by watchfiles; the terminal UI uses the SSE stream
-- Virtual scrolling for large files
-- Session persistence (active file, scroll positions, UI state)
-- Context-aware keybindings (suppressed when dialogs are open)
-- Untracked files shown alongside committed changes
+Three things live elsewhere. The last-turn baseline is a git ref in the repo's own git directory. The agent context file (`diffui-agent-context-{branch}.md`) and the Explain output (`diffui-explain-{branch}.html`) go to your system temp directory, and diffui deletes them when it exits. The one working tree write is Apply on a suggestion.
 
 ## Development
 
@@ -231,7 +255,10 @@ All state lives in `~/.config/diffui/`. Nothing is written to repo directories.
 pip install -e ".[dev]"
 pytest
 ruff check .
+ruff format --check .
 ```
+
+AGENTS.md has the architecture.
 
 ## License
 
