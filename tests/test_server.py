@@ -6,6 +6,7 @@ import pathlib
 
 import pytest
 
+from diffui.server.routes_diff import _order_files
 from diffui.server.theme_css import generate_css_vars
 from diffui.themes.definitions import ALL_THEMES, CATPPUCCIN_MOCHA, GITHUB_DARK
 
@@ -770,6 +771,17 @@ class TestServerRoutes:
         second = _server_app.get(f"/api/diff/{path}?view=all").json()
         assert first == second
 
+    @pytest.mark.parametrize("route", ["diff", "file"])
+    def test_html_off_drops_only_the_html(self, _server_app, route):
+        def lines(data):
+            return data["lines"] if route == "file" else [ln for h in data["hunks"] for ln in h["lines"]]
+
+        with_html = lines(_server_app.get(f"/api/{route}/app.py?view=all").json())
+        without = lines(_server_app.get(f"/api/{route}/app.py?view=all&html=0").json())
+        assert with_html and all("html" in ln for ln in with_html)
+        assert not any("html" in ln for ln in without)
+        assert [{k: v for k, v in ln.items() if k != "html"} for ln in with_html] == without
+
     def test_clear_diff_cache_empties_cache(self, _server_app):
         from diffui.server.routes_diff import _diff_cache, clear_diff_cache
 
@@ -1364,6 +1376,161 @@ class TestHerdr:
         finally:
             _server_app.post("/api/reviewed/app.py")
             _delete_app_py_comments(_server_app)
+
+
+def _entry(path: str, risk: int = 0) -> dict:
+    return {"path": path, "dir": path.rpartition("/")[0] or ".", "risk_score": risk}
+
+
+def test_order_files_mirrors_the_web_tree():
+    files = [_entry("a/z.py"), _entry("b/y.py", 5), _entry("top.py", 3), _entry("a/b/x.py")]
+    assert [f["path"] for f in _order_files(files, "tree")] == ["top.py", "a/z.py", "a/b/x.py", "b/y.py"]
+    assert [f["path"] for f in _order_files(files, "risk")] == ["b/y.py", "top.py", "a/z.py", "a/b/x.py"]
+
+
+class TestSearch:
+    def test_matches_file_names_and_content_of_the_view(self, _server_app):
+        r = _server_app.get("/api/search", params={"q": "EXTRA"}).json()
+        assert r["files"] == [{"path": "extra.py", "changed": True}]
+        assert r["hits"] == []
+
+        r = _server_app.get("/api/search", params={"q": "line five"}).json()
+        assert r["hits"] == [{"path": "app.py", "line": 5, "text": "line five", "changed": True}]
+
+        # Content comes from the working tree, so an untracked file is searched too.
+        r = _server_app.get("/api/search", params={"q": "never committed"}).json()
+        assert [(h["path"], h["line"]) for h in r["hits"]] == [("untracked.txt", 1)]
+
+    def test_search_is_scoped_to_the_view(self, _server_app):
+        r = _server_app.get("/api/search", params={"q": "value", "view": "working"}).json()
+        assert r["hits"] == []
+        assert _server_app.get("/api/search", params={"q": "value"}).json()["hits"][0]["path"] == "extra.py"
+
+    @pytest.mark.parametrize(("scope", "query"), [("changed", "line"), ("all", "render")])
+    def test_hits_are_capped(self, _server_app, monkeypatch, scope, query):
+        monkeypatch.setattr("diffui.server.routes_search.MAX_HITS", 3)
+        r = _server_app.get("/api/search", params={"q": query, "scope": scope}).json()
+        assert len(r["hits"]) == 3
+        assert r["truncated"] is True
+
+    def test_empty_query_finds_nothing(self, _server_app):
+        assert _server_app.get("/api/search", params={"q": ""}).json() == {"files": [], "hits": [], "truncated": False}
+
+
+class TestWholeRepoSearch:
+    def test_all_scope_finds_files_outside_the_diff_and_marks_the_changed_ones(self, _server_app):
+        def search(q, scope="all"):
+            return _server_app.get("/api/search", params={"q": q, "scope": scope}).json()
+
+        assert search("rendrer")["files"] == [{"path": "renderer.py", "changed": False}]
+        assert search("RENDER_25")["hits"] == [
+            {"path": "renderer.py", "line": 25, "text": "def render_25(): ...", "changed": False}
+        ]
+        assert search("extrra")["files"] == [{"path": "extra.py", "changed": True}]
+        assert [(h["path"], h["changed"]) for h in search("line five")["hits"]] == [("app.py", True)]
+
+        assert search("rendrer", scope="changed")["files"] == []
+        assert search("extrra", scope="changed")["files"] == [{"path": "extra.py", "changed": True}]
+
+    @pytest.fixture
+    def own_repo(self, tmp_path, temp_repo):
+        from fastapi.testclient import TestClient
+
+        from diffui.git_utils import set_active_repo
+        from diffui.server.app import create_app
+        from tests.conftest import _git
+
+        (tmp_path / ".gitignore").write_text("generated/\n")
+        (tmp_path / "generated").mkdir()
+        (tmp_path / "generated" / "out.py").write_text("needle\n")
+        (tmp_path / "blob.bin").write_bytes(b"\0needle")
+        (tmp_path / "keep.py").write_text("needle\n")
+        for args in (("init", "-q", "-b", "main"), ("add", "-A"), ("commit", "-qm", "init")):
+            _git(tmp_path, *args)
+        set_active_repo(tmp_path)
+        yield TestClient(create_app([tmp_path]), base_url="http://localhost"), tmp_path
+        set_active_repo(temp_repo)
+        create_app([temp_repo])
+
+    def test_files_written_after_the_first_search_are_found(self, own_repo):
+        from diffui.server.events import _apply_state_updates
+
+        client, repo = own_repo
+
+        def search(q):
+            return client.get("/api/search", params={"q": q, "scope": "all"}).json()
+
+        assert [h["path"] for h in search("needle")["hits"]] == ["keep.py"]
+
+        (repo / "later.py").write_text("needle again\n")
+        _apply_state_updates(["files_changed"])
+        assert [h["path"] for h in search("needle")["hits"]] == ["keep.py", "later.py"]
+        assert [f["path"] for f in search("laterr")["files"]] == ["later.py"]
+
+        (repo / "later.py").unlink()
+        _apply_state_updates(["files_changed"])
+        assert [h["path"] for h in search("needle")["hits"]] == ["keep.py"]
+
+
+@pytest.mark.parametrize(
+    ("samples", "starts"),
+    [
+        pytest.param([["idle"], ["working"]], [1], id="rest-to-work"),
+        pytest.param([[], ["working"]], [1], id="no-agent-then-work"),
+        pytest.param([["working"], ["working"], ["idle"], ["working"]], [3], id="already-working-when-first-seen"),
+        pytest.param([["idle"], ["blocked"], ["working"]], [], id="work-after-a-prompt-is-the-same-turn"),
+        pytest.param([["idle", "working"], ["idle", "working"]], [], id="two-agents-one-turn"),
+    ],
+)
+def test_turn_tracker_starts_on_the_rest_to_work_edge(samples, starts):
+    from diffui.server.turns import TurnTracker
+
+    tracker = TurnTracker()
+    assert [i for i, statuses in enumerate(samples) if tracker.observe(statuses)] == starts
+
+
+class TestLastTurn:
+    def _git(self, repo, *args):
+        import subprocess
+
+        return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout
+
+    def test_lists_only_files_changed_since_the_turn_started(self, _server_app, temp_repo, fake_herdr, monkeypatch):
+        from diffui.server.events import _apply_state_updates
+        from diffui.server.turns import TurnTracker, poll_once
+
+        reason = _server_app.get("/api/last-turn").json()["reason"]
+        assert reason.startswith("No agent turn seen yet")
+        assert _server_app.get("/api/files?view=last-turn").json() == []
+
+        tracker = TurnTracker()
+        index_before = self._git(temp_repo, "ls-files", "--stage")
+        staged_before = self._git(temp_repo, "diff", "--cached")
+        for status in ("idle", "working"):
+            monkeypatch.setenv("HERDR_AGENTS", json.dumps([_agent("w1:p2", temp_repo, status)]))
+            started = poll_once(tracker)
+        assert started is True
+        assert _server_app.get("/api/last-turn").json()["reason"] == "Nothing has changed since the last turn started"
+
+        extra, fresh = temp_repo / "extra.py", temp_repo / "fresh.txt"
+        try:
+            extra.write_text("VALUE = 1\nVALUE = 2\n")
+            fresh.write_text("brand new\n")
+            _apply_state_updates(["files_changed"])
+
+            files = _server_app.get("/api/files?view=last-turn").json()
+            assert [(f["path"], f["adds"], f["dels"]) for f in files] == [("extra.py", 1, 0), ("fresh.txt", 1, 0)]
+            assert _server_app.get("/api/last-turn").json()["reason"] is None
+            diff = _server_app.get("/api/diff/extra.py?view=last-turn").json()
+            assert [ln["text"] for h in diff["hunks"] for ln in h["lines"] if ln["type"] == "add"] == ["+VALUE = 2"]
+            assert self._git(temp_repo, "ls-files", "--stage") == index_before
+            assert self._git(temp_repo, "diff", "--cached") == staged_before
+        finally:
+            extra.write_text("VALUE = 1\n")
+            fresh.unlink(missing_ok=True)
+            self._git(temp_repo, "update-ref", "-d", "refs/worktree/diffui/last-turn")
+            _apply_state_updates(["files_changed"])
+        assert _server_app.get("/api/files?view=last-turn").json() == []
 
 
 class TestLocalOriginOnly:

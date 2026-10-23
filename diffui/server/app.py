@@ -10,6 +10,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocketClose
 
 from diffui.git_utils import PathOutsideRepo
+from diffui.server import fff_index
 from diffui.server.events import router as events_router
 from diffui.server.events import start_poller
 from diffui.server.herdr import clear_status, report_status
@@ -18,8 +19,11 @@ from diffui.server.routes_diff import router as diff_router
 from diffui.server.routes_repo import router as repo_router
 from diffui.server.routes_review import router as review_router
 from diffui.server.routes_review import shutdown as review_shutdown
+from diffui.server.routes_search import router as search_router
 from diffui.server.routes_settings import router as settings_router
 from diffui.server.state import app_state
+from diffui.server.turns import router as turns_router
+from diffui.server.turns import start_turn_poller
 from diffui.themes import ALL_THEMES
 
 
@@ -56,9 +60,13 @@ class _LocalOriginOnly:
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     start_poller()
+    turn_poller = start_turn_poller()
     report_status()
     yield
+    if turn_poller:
+        turn_poller.cancel()
     review_shutdown()
+    fff_index.close()
     clear_status()
 
 
@@ -74,6 +82,8 @@ def create_app(repos: list[Path], active_index: int = 0) -> FastAPI:
     app.include_router(comments_router)
     app.include_router(review_router)
     app.include_router(settings_router)
+    app.include_router(search_router)
+    app.include_router(turns_router)
     app.include_router(events_router)
 
     from diffui.server.routes_agent_terminal import router as agent_terminal_router

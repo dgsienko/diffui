@@ -15,6 +15,7 @@ from diffui.git_utils import (
     get_repo_root,
     load_comments,
 )
+from diffui.server import fff_index
 from diffui.server.herdr import report_status
 from diffui.server.state import app_state
 
@@ -76,6 +77,8 @@ def _invalidate_stale_reviews() -> None:
 
 
 def _apply_state_updates(events: list[str]) -> list[str]:
+    if "git_changed" in events or "files_changed" in events:
+        fff_index.mark_stale()
     if "git_changed" in events:
         prev_branch = app_state.branch_name
         prev_comments = app_state.comments
@@ -98,6 +101,7 @@ def _apply_state_updates(events: list[str]) -> list[str]:
 
         app_state.numstat = get_diff_numstat(app_state.merge_base)
         app_state.working_files = get_working_changed_files()
+        app_state.reload_last_turn()
         _invalidate_stale_reviews()
 
     # reload_repo_state() already re-read them, so only load on the standalone path.

@@ -1,7 +1,7 @@
 # diffui
 
 UI for reviewing AI agent diffs. FastAPI backend + Preact frontend,
-no build step required.
+no build step required, plus a Textual terminal client of the same API.
 
 ## Tech Stack
 
@@ -13,6 +13,8 @@ no build step required.
 - xterm.js for interactive agent terminal (loaded via ESM importmap)
 - Git operations via `subprocess` (no gitpython dependency)
 - PTY-based agent process management (`pty` + `select` stdlib)
+- Textual + httpx for the terminal UI (`diffui --tui`)
+- fff-search (Rust file finder) for whole-repo search
 - Installed globally via `pipx install -e .`
 
 ## Architecture
@@ -28,7 +30,7 @@ diffui/
 │   ├── app.py          # App factory: mounts routes, static files, starts watcher
 │   ├── events.py       # WebSocket + SSE endpoints, watchfiles-based filesystem
 │   │                   #   watcher with 400ms debounce
-│   ├── herdr.py        # herdr CLI calls: agent paste, sidebar status
+│   ├── herdr.py        # herdr CLI calls: agent paste, sidebar status, agent list
 │   ├── highlight.py    # Pygments-to-HTML adapter, word highlight overlay
 │   ├── routes_comments.py  # Comment CRUD, suggestion apply endpoint
 │   ├── routes_diff.py      # Diff, files, blame, preview, risk scoring
@@ -37,10 +39,25 @@ diffui/
 │   │                       #   orchestration (thread-safe process management)
 │   ├── routes_agent_terminal.py # PTY-based interactive agent terminal,
 │   │                       #   WebSocket streaming, idle detection
+│   ├── fff_index.py        # Resident fff index of the active repo behind /api/search
+│   ├── routes_search.py    # /api/search: file names and content, in a view or the whole repo
 │   ├── routes_settings.py  # Settings, editor open, session persistence
 │   ├── models.py       # Pydantic request models for all endpoints
 │   ├── state.py        # AppState singleton: shared server state
+│   ├── turns.py        # Last-turn tracking: herdr agent poll, start snapshot
 │   └── theme_css.py    # generate_css_vars(theme): CSS custom properties
+├── tui/                # Textual client (`diffui --tui`), a thin client of server/
+│   ├── app.py          # DiffuiApp: key bindings, scopes, review actions, SSE-driven refresh
+│   ├── client.py       # LocalServer (uvicorn in a thread) and ApiClient (httpx)
+│   ├── diffview.py     # DiffView: virtual-scrolled diff with inline threads, cursor, mouse
+│   ├── rows.py         # Row and build_rows: unified rows and split old/new pairs
+│   ├── unified.py      # Strip for one unified line row
+│   ├── split.py        # Strip for one split line row
+│   ├── style.py        # Style cache, tints, code segments with find highlights
+│   ├── find.py         # Find (matches over rows) and the FindBar widget
+│   ├── search.py       # SearchScreen: names and content, Changed or All files
+│   ├── filelist.py     # FileList: tree or risk-ordered files
+│   └── screens.py      # Help, comment composer, agent prompt and commit picker
 ├── static/             # Preact frontend (no build step, ESM imports via importmap)
 │   ├── app.js          # Root component, state management, keyboard shortcuts,
 │   │                   #   WebSocket client, session restore
@@ -74,8 +91,8 @@ diffui/
   `repo_relative()`, which checks the same way and returns the original string.
   Joining `get_repo_root()` with a request value by hand reaches any file on the
   machine, because pathlib returns an absolute right-hand operand whole.
-- Revisions from a client: a `view` that is neither `all` nor `working` is
-  looked up in `app_state.commits` before it reaches `git diff`. Git reads a
+- Revisions from a client: a `view` that is none of `all`, `working` or `last-turn`
+  is looked up in `app_state.commits` before it reaches `git diff`. Git reads a
   leading `--` as an option, so an unchecked value can write files.
 - Branch-scoped state: reviewed status, comments, and session stored
   at `~/.config/diffui/{repo}/{branch}/`. `get_repo_root()` and
@@ -150,6 +167,49 @@ diffui/
   and reviewed counts to the herdr sidebar after each state change, and
   `clear_status` removes them on shutdown. Tests run a fake `herdr` from
   `PATH`.
+- Last turn: `view=last-turn` diffs the tree saved when an agent's latest turn
+  started against the worktree as it is now. `turns.py` polls `herdr agent list`
+  every second, only when `HERDR_WORKSPACE_ID` is set and `herdr` is on `PATH`,
+  and counts the agents whose `foreground_cwd` (else `cwd`) is inside the repo,
+  in any workspace. `TurnTracker` fires on the sample where the repo goes from
+  resting (`idle`, `done`, or no agent) to `working`. A `blocked` or unknown
+  agent is mid-turn, so working after it starts nothing, and the first sample
+  after startup never fires. On the edge `snapshot_worktree` copies the real
+  index to a temp file, runs `git add -A` and `git write-tree` against the copy,
+  and `write_turn_tree` stores the tree under `refs/worktree/diffui/last-turn`,
+  which is per linked worktree and survives a restart. `AppState.last_turn`
+  holds the base tree, a fresh tree of the worktree and `git diff --numstat`
+  between them, and `reload_last_turn` rebuilds it from `reload_repo_state` and
+  every `files_changed` event, so the file list and each diff come from one pair
+  of trees, untracked files included. `GET /api/last-turn` returns the reason an
+  empty view is empty ("No agent turn seen yet", or that nothing changed).
+  Limits: herdr flips to `working` a moment after the agent starts writing, and
+  the poll adds up to a second, so those first writes sit in the base tree and
+  do not show. A turn that changes nothing still replaces the previous base.
+- Search: `GET /api/search?q=&view=&scope=` returns `files` (names matching `q` as a
+  substring or in-order letters, best first), `hits` (`path`, `line`, `text`,
+  read from the working tree, case-insensitive, at most `MAX_HITS` = 200) and
+  `truncated`. It covers the files `view_files(view)` lists, minus
+  `.diffuiignore` matches, and skips binary and over 1 MB files. Names also match
+  fuzzily through fff, so a typo still finds its file, in the order fff ranks them.
+  `scope=all` searches the whole repo through fff, and `files` are then
+  `{path, changed}` and each hit carries `changed`, whether `view` lists the file.
+  `scope=changed`, the default, keeps the plain shape. fff skips `.gitignore`d
+  and binary files and does not apply `.diffuiignore`.
+- fff index: `fff_index.finder()` hands out one `FileFinder` for the active repo
+  under a lock, since sync routes run in a threadpool. It is built on the first
+  search that needs it, never at startup, with `watch=False`, because `events.py`
+  already watches the tree. `_apply_state_updates` calls `mark_stale()` on
+  `files_changed` and `git_changed`, and the next `finder()` runs `scan_files()`
+  before it hands the index out, so an idle repo costs no rescans. The index is
+  dropped when the repo changes (`switch_repo`, or a different `get_repo_root()`)
+  and closed in the lifespan shutdown. A write is missed by a search that arrives
+  inside the 400 ms debounce before the event, and the next keystroke finds it.
+  A lowercase query matches case-insensitively under fff's smart case, so
+  `/api/search` lowercases it, and `multi_grep` takes it as plain text where
+  `grep` would read a `*.py` word as a path filter. fff's fuzzy name match
+  returns something for almost any query, so `_fuzzy_names` keeps only scores
+  within 75% of the best and above 8 per character of the longest word.
 - Markdown is sanitized: `renderMd` in `lib/markdown.js` runs marked's output
   through an allowlist of tags, attributes and URL schemes before it reaches
   `dangerouslySetInnerHTML`. marked emits raw HTML, and comment bodies, agent
@@ -213,6 +273,77 @@ diffui/
   activation on file tree items, focus trapping in settings dialog, `:focus-visible` outlines on all buttons,
   bold color-coded `+`/`-` diff prefixes for color-blind users.
 
+### Terminal UI Patterns
+
+- Thin client: the TUI holds no review logic. Comments, reviewed state, risk
+  scores, file order, next-unreviewed, the agent prompt, the herdr paste and the
+  herdr status all stay in `server/`. When the TUI needs data the API lacks, add
+  or extend an endpoint. Pygments highlighting of the `text` the diff endpoint
+  returns is the one thing computed client-side, because it is presentation.
+- `LocalServer` runs `create_app` under uvicorn in a background thread so the
+  lifespan starts the watcher and herdr reporting. The client must use
+  `http://localhost:<port>`, which `_LocalOriginOnly` accepts.
+- Layout: the diff is on the left and `FileList` on the right. `z` hides the
+  list. `DiffuiApp.view` is the scope (`all`, `working`, `last-turn` or a commit
+  sha) and goes to `/api/files`, `/api/files/next-unreviewed`, `/api/diff` and
+  `/api/search` as `view`. `u`, `b` and `t` switch it and `C` picks a commit.
+  The header shows it, and an empty last-turn scope shows the server's reason.
+- File order: `/api/files?order=tree|risk` mirrors `treeOrder()` in
+  `FileTree.js`, and `/api/files/next-unreviewed` gives the file the web UI
+  advances to after Mark reviewed. `hide_ignored` drops `.diffuiignore` matches.
+  Each entry carries `dir` and `open_comment_count`.
+- `DiffView` is a `ScrollView` that renders rows on demand. Pygments runs on a
+  row the first time it is drawn, so a few thousand lines open at once.
+  A comment's `line_index` is the diff line's `index`, the same anchor the web
+  UI uses. Threads whose line left the diff are listed after the last hunk.
+- Live updates come from the `/api/events` SSE stream. The TUI refetches files,
+  the diff or comments per event, so an agent writing `comments.json` shows up
+  without a keypress.
+- Open in browser writes `activeFile` to `/api/session`, which the web UI
+  restores on load.
+- Range comments send what the web UI sends for a selection across lines:
+  `line_index` is the first diff line's `index`, `sel_end_index` the last,
+  `sel_start` 0, `sel_end` the last line's text length, and `selected_text` the
+  lines joined by newlines. Threads anchor under the first line. A single line
+  sends none of the selection fields.
+- Split view: `build_rows(..., split=True)` pairs a run of removes with the run
+  of adds that follows, as `splitHunkLines` does in `SplitDiffViewer.js`. A split
+  `Row` has `old` and `new` (a context line is both), and `row.line` is the new
+  one when there is one. `DiffView.target` picks the line a comment goes against:
+  `side` is None for the keyboard (new), set by `tab` or by where the pointer
+  pressed. The new side matches what the web split view sends, and the old side
+  is used for a removed line. A range follows one side and sorts its lines by
+  `index`, since paired rows are not in diff order. Split needs
+  `SPLIT_MIN_WIDTH` columns in the diff pane. Below that, `|` keeps unified and
+  says so, and a resize that crosses the width rebuilds the rows. Long lines are
+  cut at the side's edge, because split has no horizontal scroll.
+- Find in file is client-side: `Find` matches `code_of(line)` of each row,
+  case-insensitive, and `code_segments` draws the spans. Once the bar closes
+  with a query still set, `n` / `N` step the matches and `esc` clears them. The
+  `find_step` and `clear_find` bindings sit before the thread ones, and
+  `check_action` enables them only while matches show, so `n` is next thread
+  otherwise. Search is `SearchScreen`, which calls `/api/search` 150 ms after the
+  last keystroke. A hit opens the file and `DiffView.goto_line` moves to the
+  nearest new-side line when the diff does not show the hit's line. `tab` in the
+  overlay switches `scope` between `changed` and `all`.
+- Files outside the diff: a result whose path is not in the view's file list
+  sets `DiffuiApp.browsing`, and `_load_diff` takes the file from `/api/file`
+  (its `text` per line, since `html` is for the web UI) and wraps it as one hunk
+  of context lines. `DiffView.readonly` then has `context` return `readonly`,
+  which matches no `c`, `x` or `v` binding, and turns off hover, gutter presses,
+  range selection and split. `check_action` hides Reviewed and Hunks.
+  `_refresh_files` leaves a browsed file open on file events and stops browsing
+  once the file joins the diff. A scope change, or `left` / `right`, returns to
+  the diff's files.
+- Hover and drag state live in `DiffView` (`hover`, `range_start`). Hover changes
+  refresh only the affected rows. A press on the number column captures the
+  mouse so the drag keeps tracking outside the widget, and the `Click` that
+  follows the release is swallowed so it cannot open a second composer.
+- The footer's leading hints come from `DiffuiApp.check_action`: bindings share
+  a key and differ in their `'range'`, `'thread'`, `'line'` or `'none'`
+  parameter, and `DiffView.context` picks the one shown. `ContextFooter` fills
+  in the line count, because a `Binding` description is fixed text.
+
 ### Design System
 
 All frontend changes must follow these rules:
@@ -269,6 +400,7 @@ After making changes, always:
 pipx install -e .                    # Install (editable)
 diffui                               # Start server (from any git repo)
 diffui --open                        # Start + open in browser
+diffui --tui                         # Terminal UI in the current pane
 diffui --comments                    # Dump comments to stdout
 diffui --json                        # Export review session as JSON
 pytest                               # Run tests
@@ -278,7 +410,7 @@ ruff check diffui/ tests/           # Lint
 ## Testing
 
 Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
-`themes/`) and the web server (`server/`).
+`themes/`), the web server (`server/`) and the terminal UI (`tui/`).
 
 - `tests/test_diff.py`: line classification, number parsing,
   hunk splitting, prefix stripping, lexer selection, token color,
@@ -314,7 +446,20 @@ Tests cover the pure-function layers (`diff.py`, `git_utils.py`,
   whitespace, pydantic validation, font/wrap/keybinding settings,
   _build_agent_context, _process_status, explain view with temp files,
   repo switch, working files view, diff context/whitespace params,
-  editor open endpoint
+  editor open endpoint, `_order_files` for tree and risk order, `/api/search` (names, content, view scope, cap, typo
+  names, whole-repo scope with `changed` marks, a file written after the first
+  search),
+  `TurnTracker` edges, and last-turn (start snapshot through `poll_once`, only
+  later changes listed, the real index untouched)
+- `tests/test_tui.py`: runs the real `DiffuiApp` under `App.run_test()` against
+  a `LocalServer` on the `temp_repo` fixture. Covers file keys in tree order,
+  a comment added from the keyboard stored at the right line, Mark reviewed
+  advancing to the next unreviewed file, an external `comments.json` write
+  refreshing the view, scope keys, search opening a file at a hit, find stepping
+  matches, search over all files opening a file outside the diff read-only, and
+  split view pairing lines and storing comments from either side. Tests drive
+  the app with `asyncio.run` and poll with `until()`, since the server reaches
+  the view through the watcher and SSE.
 - `tests/test_themes.py`: all themes have valid hex colors,
   unique names, syntax maps; Graphite first and the default when no theme is
   saved; theme state get/set

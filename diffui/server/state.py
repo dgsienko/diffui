@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 from diffui.git_utils import (
@@ -10,12 +12,26 @@ from diffui.git_utils import (
     get_changed_files,
     get_main_branch,
     get_merge_base,
+    get_tree_numstat,
     is_comment_open,
     load_comments,
     load_reviewed,
     load_settings,
+    read_turn_tree,
+    snapshot_worktree,
 )
 from diffui.themes import ALL_THEMES, DEFAULT_THEME, get_current_theme, set_current_theme
+
+log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class LastTurn:
+    """The tree an agent's latest turn started from, the worktree's tree now, and what differs between them."""
+
+    base: str
+    now: str
+    stats: dict[str, tuple[int, int]]
 
 
 class AppState:
@@ -27,6 +43,8 @@ class AppState:
         self.all_files: list[str] = []
         self.working_files: list[str] = []
         self.numstat: dict[str, tuple[int, int]] = {}
+        self._last_turn: LastTurn | None = None
+        self._last_turn_stale = True
         self.reviewed: dict[str, float] = {}
         self.comments: dict[str, list[dict]] = {}
         self.current_view: str = "all"
@@ -58,10 +76,31 @@ class AppState:
 
         self.numstat = get_diff_numstat(self.merge_base)
         self.working_files = get_working_changed_files()
+        self.reload_last_turn()
         self.reviewed = load_reviewed()
         self.comments = load_comments()
         self.current_view = "all"
         self._load_ignore_patterns(get_repo_root())
+
+    def reload_last_turn(self) -> None:
+        self._last_turn_stale = True
+
+    @property
+    def last_turn(self) -> LastTurn | None:
+        # Snapshotting runs `git add -A` over the worktree, so it waits until a client asks
+        # for the last-turn view; file events while an agent writes only mark it stale.
+        if self._last_turn_stale:
+            self._last_turn_stale = False
+            self._last_turn = None
+            base = read_turn_tree()
+            if base is not None:
+                try:
+                    now = snapshot_worktree()
+                except RuntimeError:
+                    log.exception("could not snapshot the worktree for last-turn")
+                else:
+                    self._last_turn = LastTurn(base, now, get_tree_numstat(base, now))
+        return self._last_turn
 
     def _load_ignore_patterns(self, repo_root: Path) -> None:
         ignore_file = repo_root / ".diffuiignore"

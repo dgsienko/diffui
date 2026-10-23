@@ -114,6 +114,12 @@ def main() -> None:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
+    if "--tui" in sys.argv:
+        from diffui.tui import run
+
+        run(repos, active_index)
+        return
+
     from diffui.server.app import create_app
 
     port = _find_free_port()

@@ -37,6 +37,7 @@ def temp_repo(tmp_path_factory) -> Path:
     _git(repo, "init", "-q", "-b", "main")
     (repo / "README.md").write_text("# fixture repo\n")
     (repo / "app.py").write_text(_APP_V1)
+    (repo / "renderer.py").write_text("".join(f"def render_{i}(): ...\n" for i in range(1, 41)))
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "initial commit")
 

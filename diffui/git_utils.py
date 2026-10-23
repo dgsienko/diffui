@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import functools
 import json
+import os
+import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -92,12 +95,12 @@ def repo_has_changes(repo_root: Path) -> bool:
     return bool(_git_at(repo_root, "ls-files", "--others", "--exclude-standard").stdout.strip())
 
 
-def _git(*args: str) -> subprocess.CompletedProcess[str]:
+def _git(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     cmd = ["git"]
     if _active_repo_root:
         cmd.extend(["-C", str(_active_repo_root)])
     cmd.extend(args)
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=GIT_TIMEOUT)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=GIT_TIMEOUT, env=env)
 
 
 def get_git_dir() -> Path:
@@ -221,12 +224,18 @@ def _diff_untracked(path: str) -> str:
     return header + body
 
 
-def get_commit_diff(commit_sha: str, path: str, context: int = 3, *, ignore_whitespace: bool = False) -> str:
+def _path_diff(
+    a: str, b: str, path: str, context: int, ignore_whitespace: bool, *flags: str
+) -> subprocess.CompletedProcess[str]:
     ws = ["-w"] if ignore_whitespace else []
-    result = _git("diff", f"-U{context}", *ws, f"{commit_sha}~1", commit_sha, "--", path)
+    return _git("diff", f"-U{context}", *ws, *flags, a, b, "--", path)
+
+
+def get_commit_diff(commit_sha: str, path: str, context: int = 3, *, ignore_whitespace: bool = False) -> str:
+    result = _path_diff(f"{commit_sha}~1", commit_sha, path, context, ignore_whitespace)
     if result.returncode != 0:
         empty_tree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-        return _git("diff", f"-U{context}", *ws, empty_tree, commit_sha, "--", path).stdout
+        return _path_diff(empty_tree, commit_sha, path, context, ignore_whitespace).stdout
     return result.stdout
 
 
@@ -235,16 +244,19 @@ def get_changed_files(merge_base: str) -> list[str]:
     return [f for f in result.stdout.strip().splitlines() if f]
 
 
-def get_diff_numstat(merge_base: str) -> dict[str, tuple[int, int]]:
-    result = _git("diff", "--numstat", merge_base)
+def _parse_numstat(stdout: str) -> dict[str, tuple[int, int]]:
     stats: dict[str, tuple[int, int]] = {}
-    for line in result.stdout.strip().splitlines():
+    for line in stdout.strip().splitlines():
         parts = line.split("\t", 2)
         if len(parts) == 3:
             adds = int(parts[0]) if parts[0] != "-" else 0
             dels = int(parts[1]) if parts[1] != "-" else 0
             stats[parts[2]] = (adds, dels)
     return stats
+
+
+def get_diff_numstat(merge_base: str) -> dict[str, tuple[int, int]]:
+    return _parse_numstat(_git("diff", "--numstat", merge_base).stdout)
 
 
 def get_working_changed_files() -> list[str]:
@@ -257,6 +269,42 @@ def get_working_changed_files() -> list[str]:
             if f:
                 files.add(f)
     return sorted(files)
+
+
+# Per-worktree, so two linked worktrees of one repo keep separate baselines.
+TURN_REF = "refs/worktree/diffui/last-turn"
+
+
+def snapshot_worktree() -> str:
+    """The worktree as a git tree, untracked files included, built in a copy of the index so the real one is untouched."""
+    index = _git("rev-parse", "--git-path", "index").stdout.strip()
+    with tempfile.TemporaryDirectory(prefix="diffui-index-") as tmp:
+        temp_index = Path(tmp) / "index"
+        if index and (real := get_repo_root() / index).exists():
+            shutil.copyfile(real, temp_index)
+        env = {**os.environ, "GIT_INDEX_FILE": str(temp_index)}
+        for args in (("add", "-A"), ("write-tree",)):
+            result = _git(*args, env=env)
+            if result.returncode != 0:
+                raise RuntimeError(f"git {args[0]} failed: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+def read_turn_tree() -> str | None:
+    result = _git("rev-parse", "--verify", "--quiet", f"{TURN_REF}^{{tree}}")
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def write_turn_tree(tree: str) -> None:
+    _git("update-ref", TURN_REF, tree)
+
+
+def get_tree_numstat(base: str, now: str) -> dict[str, tuple[int, int]]:
+    return _parse_numstat(_git("diff", "--numstat", "--no-renames", base, now).stdout)
+
+
+def get_tree_diff(base: str, now: str, path: str, context: int = 3, *, ignore_whitespace: bool = False) -> str:
+    return _path_diff(base, now, path, context, ignore_whitespace, "--no-renames").stdout
 
 
 class PathOutsideRepo(ValueError):

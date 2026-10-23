@@ -36,8 +36,9 @@ function DiffSkeleton() {
   `;
 }
 
-function EmptyState({ files, visibleFiles, fileFilter, showReviewed }) {
+function EmptyState({ files, visibleFiles, fileFilter, showReviewed, emptyReason }) {
   if (files.length === 0) {
+    if (emptyReason) return html`<div class="empty-state"><span class="empty-state-title">No last-turn changes</span><span class="empty-state-hint">${emptyReason}</span></div>`;
     return html`<div class="empty-state"><span class="empty-state-title">No changes on this branch</span><span class="empty-state-hint">This branch has no diff against the merge base</span></div>`;
   }
   if (visibleFiles.length === 0) {
@@ -65,6 +66,7 @@ function App() {
   const [activeFile, setActiveFile] = useState(null);
   const [diffData, setDiffData] = useState(null);
   const [view, setView] = useState('all');
+  const [emptyReason, setEmptyReason] = useState(null);
   const [commits, setCommits] = useState([]);
   const [branch, setBranch] = useState(null);
   const [comments, setComments] = useState({});
@@ -168,6 +170,11 @@ function App() {
     const res = await safeFetch(`/api/files?view=${currentView}`);
     const data = await res.json();
     setFiles(data);
+    if (currentView === 'last-turn' && data.length === 0) {
+      setEmptyReason((await (await safeFetch('/api/last-turn')).json()).reason);
+    } else {
+      setEmptyReason(null);
+    }
     const current = activeFileRef.current;
     if (data.length > 0 && (!current || !data.find(f => f.path === current))) {
       const firstUnreviewed = data.find(f => !f.reviewed);
@@ -1033,7 +1040,7 @@ function App() {
           ${loading
             ? html`<${DiffSkeleton} />`
             : !activeFile
-              ? html`<${EmptyState} files=${files} visibleFiles=${visibleFiles} fileFilter=${fileFilter} showReviewed=${showReviewed} />`
+              ? html`<${EmptyState} files=${files} visibleFiles=${visibleFiles} fileFilter=${fileFilter} showReviewed=${showReviewed} emptyReason=${emptyReason} />`
               : previewing
                 ? html`<${PreviewViewer} containerRef=${diffRef} filePath=${activeFile} />`
                 : diffMode === 'file'
