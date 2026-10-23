@@ -107,16 +107,22 @@ def word_diff_ranges(old_line: str, new_line: str) -> tuple[list[tuple[int, int]
 
 
 def pair_diff_lines(lines: list[str]) -> dict[int, list[tuple[int, int]]]:
+    def is_remove(line: str) -> bool:
+        return line.startswith("-") and not is_meta_line(line)
+
+    def is_add(line: str) -> bool:
+        return line.startswith("+") and not is_meta_line(line)
+
     paired: dict[int, list[tuple[int, int]]] = {}
     i = 0
     while i < len(lines):
-        if lines[i].startswith("-") and not lines[i].startswith("---"):
+        if is_remove(lines[i]):
             removes = []
-            while i < len(lines) and lines[i].startswith("-") and not lines[i].startswith("---"):
+            while i < len(lines) and is_remove(lines[i]):
                 removes.append(i)
                 i += 1
             adds = []
-            while i < len(lines) and lines[i].startswith("+") and not lines[i].startswith("+++"):
+            while i < len(lines) and is_add(lines[i]):
                 adds.append(i)
                 i += 1
             for r_idx, a_idx in zip(removes, adds, strict=False):

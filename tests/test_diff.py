@@ -180,6 +180,15 @@ def test_word_diff_ranges(old, new, ranges):
         pytest.param(
             ["-removed1", "-removed2", "+added1"], {0: [(0, 8)], 2: [(0, 6)]}, id="surplus-removal-stays-plain"
         ),
+        pytest.param(
+            ["@@ -1 +1 @@", "--- old comment", "+-- new comment"], {1: [(3, 6)], 2: [(3, 6)]}, id="removed-dash-comment"
+        ),
+        pytest.param(["@@ -1 +1 @@", "-i", "+++i"], {1: [(0, 1)], 2: [(0, 3)]}, id="added-line-starting-with-plusses"),
+        pytest.param(
+            ["--- a/f.lua", "+++ b/f.lua", "@@ -1 +1 @@", "-old", "+new"],
+            {3: [(0, 3)], 4: [(0, 3)]},
+            id="file-headers-stay-plain",
+        ),
     ],
 )
 def test_pair_diff_lines(lines, paired):
