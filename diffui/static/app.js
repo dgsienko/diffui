@@ -240,6 +240,7 @@ function App() {
     setDiffData(null);
     setView('all');
     diffCache.current.clear();
+    blameCache.current.clear();
     scrollPositions.current.clear();
     await Promise.all([fetchRepos(), fetchBranch(), fetchCommits(), fetchFiles('all'), fetchComments()]);
     setLoading(false);

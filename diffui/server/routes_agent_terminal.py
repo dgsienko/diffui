@@ -61,10 +61,6 @@ def _spawn_agent(rows: int, cols: int) -> dict:
         return {"ok": False, "error": "No pending agent start"}
 
     pty_fd, child_fd = pty.openpty()
-    child_tty = os.ttyname(child_fd)
-    tty.setraw(child_fd)
-    _resize_pty(pty_fd, rows, cols)
-
     env = {**os.environ, "TERM": "xterm-256color", "COLUMNS": str(cols), "LINES": str(rows)}
 
     def _child_setup():
@@ -73,6 +69,9 @@ def _spawn_agent(rows: int, cols: int) -> dict:
         os.close(ctty)
 
     try:
+        child_tty = os.ttyname(child_fd)
+        tty.setraw(child_fd)
+        _resize_pty(pty_fd, rows, cols)
         proc = subprocess.Popen(
             [*pending["cmd"], pending["prompt"]],
             cwd=pending["repo_root"],

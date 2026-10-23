@@ -154,7 +154,8 @@ class TestSpawnAgent:
         assert result["ok"] is True
         assert output.decode().split() == ["True", "100", "30", "100", "30", "the-prompt"]
 
-    def test_failed_spawn_closes_both_pty_fds(self):
+    @pytest.mark.parametrize("failing", ["subprocess.Popen", "tty.setraw"])
+    def test_failed_spawn_closes_both_pty_fds(self, failing):
         rat._pending_start = {"prompt": "test", "repo_root": "/repo", "agent": "claude", "cmd": ["claude"]}
         opened = []
         real_openpty = pty.openpty
@@ -166,7 +167,7 @@ class TestSpawnAgent:
         try:
             with (
                 patch.object(rat.pty, "openpty", side_effect=record_openpty),
-                patch.object(rat.subprocess, "Popen", side_effect=OSError("no exec")),
+                patch(f"diffui.server.routes_agent_terminal.{failing}", side_effect=OSError("spawn failed")),
                 pytest.raises(OSError),
             ):
                 rat._spawn_agent(24, 80)
