@@ -1,8 +1,7 @@
 import { h } from 'preact';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'preact/hooks';
 import htm from 'htm';
-import { CommentBox } from './CommentBox.js';
-import { CommentDisplay } from './CommentDisplay.js';
+import { CommentThread, LineCommentBox, SelectionCommentButton } from './CommentThread.js';
 import { LineActions } from './LineActions.js';
 import { mergeRef, highlightRanges, commentsByLine, NO_COMMENTS, useRangeSelection } from '../lib/utils.js';
 
@@ -122,7 +121,7 @@ function hunkStats(lines) {
   return { adds, dels };
 }
 
-function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, commentingSelection, filePath, blameData, collapseAll }) {
+function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, actions, commentingLine, setCommentingLine, commentingSelection, filePath, blameData, collapseAll }) {
   const [collapsed, setCollapsed] = useState(false);
   const stats = useMemo(() => hunkStats(hunk.lines), [hunk.lines]);
 
@@ -154,28 +153,15 @@ function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onOpenInEdi
               blame=${blameData && line.new_num ? blameData[parseInt(line.new_num) - 1] : null}
               commentRanges=${commentRanges}
             />
-            ${lineComments.map(c => html`
-              <${CommentDisplay}
-                key=${c.id || (c.line_index + '-' + c.comment)}
-                comment=${c}
-                onDelete=${() => onDeleteComment(filePath, c.id)}
-                onEdit=${(text) => onEditComment(filePath, c.id, text)}
-                onReply=${(text) => onReplyComment(filePath, c.id, text)}
-                onResolve=${() => onResolveComment(filePath, c.id)}
-                onApplySuggestion=${onApplySuggestion}
-              />
-            `)}
+            <${CommentThread} filePath=${filePath} comments=${lineComments} actions=${actions} />
             ${commentingLine === line.index && html`
-              <${CommentBox}
-                lineText=${line.text}
-                selectedText=${commentingSelection && commentingSelection.lineIndex === line.index ? commentingSelection.selectedText : ''}
-                onSubmit=${(text, category, suggestion) => {
-                  const lineNum = parseInt(line.new_num) || parseInt(line.old_num) || null;
-                  const sel = commentingSelection && commentingSelection.lineIndex === line.index ? commentingSelection : null;
-                  onAddComment(filePath, line.index, line.text, lineNum, text, category, suggestion, sel);
-                  setCommentingLine(null);
-                }}
-                onCancel=${() => setCommentingLine(null)}
+              <${LineCommentBox}
+                filePath=${filePath}
+                line=${line}
+                lineNum=${parseInt(line.new_num) || parseInt(line.old_num) || null}
+                selection=${commentingSelection && commentingSelection.lineIndex === line.index ? commentingSelection : null}
+                actions=${actions}
+                onClose=${() => setCommentingLine(null)}
               />
             `}
           `;
@@ -185,7 +171,7 @@ function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onOpenInEdi
   `;
 }
 
-export function DiffViewer({ data, comments, searchTerm, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, onOpenInEditor, onLineHover, showBlame, containerRef, collapseAll }) {
+export function DiffViewer({ data, comments, searchTerm, actions, onOpenInEditor, onLineHover, showBlame, containerRef, collapseAll }) {
   const [commentingLine, setCommentingLine] = useState(null);
   const [blameData, setBlameData] = useState(null);
   const blameCache = useRef(new Map());
@@ -242,14 +228,7 @@ export function DiffViewer({ data, comments, searchTerm, onAddComment, onDeleteC
 
   return html`
     <div class="diff-container" ref=${mergeRef(containerRef, localContainerRef)}>
-      ${selMenu && html`
-        <button
-          class="selection-comment-btn"
-          style=${{ left: selMenu.x + 'px', top: selMenu.y + 'px' }}
-          onMouseDown=${(e) => e.preventDefault()}
-          onClick=${handleCommentSelection}
-        >Comment</button>
-      `}
+      <${SelectionCommentButton} selMenu=${selMenu} onClick=${handleCommentSelection} />
       ${data.file_note && html`<div class="diff-file-note">${data.file_note}</div>`}
       ${data.hunks.map((hunk, i) => html`
         <${Hunk}
@@ -265,12 +244,7 @@ export function DiffViewer({ data, comments, searchTerm, onAddComment, onDeleteC
           onCtrlClick=${handleCtrlClick}
           onOpenInEditor=${onOpenInEditor ? handleCtrlClick : null}
           onLineHover=${handleLineHover}
-          onAddComment=${onAddComment}
-          onDeleteComment=${onDeleteComment}
-          onEditComment=${onEditComment}
-          onReplyComment=${onReplyComment}
-          onResolveComment=${onResolveComment}
-          onApplySuggestion=${onApplySuggestion}
+          actions=${actions}
           blameData=${showBlame ? blameData : null}
           collapseAll=${collapseAll}
         />

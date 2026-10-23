@@ -1,8 +1,7 @@
 import { h } from 'preact';
 import { useState, useRef, useMemo } from 'preact/hooks';
 import htm from 'htm';
-import { CommentBox } from './CommentBox.js';
-import { CommentDisplay } from './CommentDisplay.js';
+import { CommentThread, LineCommentBox, SelectionCommentButton } from './CommentThread.js';
 import { mergeRef, highlightRanges, commentsByLine, NO_COMMENTS, useRangeSelection } from '../lib/utils.js';
 
 const html = htm.bind(h);
@@ -56,7 +55,7 @@ function SplitLine({ line, side, onRightClick, commentRanges }) {
   `;
 }
 
-export function SplitDiffViewer({ data, comments, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, containerRef }) {
+export function SplitDiffViewer({ data, comments, actions, containerRef }) {
   const [commentingLine, setCommentingLine] = useState(null);
   const leftRef = useRef(null);
   const rightRef = useRef(null);
@@ -91,14 +90,7 @@ export function SplitDiffViewer({ data, comments, onAddComment, onDeleteComment,
 
   return html`
     <div class="split-container" ref=${mergeRef(containerRef, localContainerRef)}>
-      ${selMenu && html`
-        <button
-          class="selection-comment-btn"
-          style=${{ left: selMenu.x + 'px', top: selMenu.y + 'px' }}
-          onMouseDown=${(e) => e.preventDefault()}
-          onClick=${handleCommentSelection}
-        >Comment</button>
-      `}
+      <${SelectionCommentButton} selMenu=${selMenu} onClick=${handleCommentSelection} />
       ${data.file_note && html`<div class="diff-file-note">${data.file_note}</div>`}
       <div class="split-panes">
         <div class="split-pane" ref=${leftRef} onScroll=${() => syncScroll(leftRef, rightRef)}>
@@ -109,27 +101,15 @@ export function SplitDiffViewer({ data, comments, onAddComment, onDeleteComment,
               const lineComments = line && line.type === 'remove' ? entry.comments : [];
               return html`
                 <${SplitLine} line=${line} side="left" onRightClick=${handleRightClick} commentRanges=${entry.ranges} />
-                ${lineComments.map(c => html`
-                  <${CommentDisplay}
-                    key=${c.id || c.line_index}
-                    comment=${c}
-                    onDelete=${() => onDeleteComment(data.file_path, c.id)}
-                    onEdit=${(text) => onEditComment(data.file_path, c.id, text)}
-                    onReply=${(text) => onReplyComment(data.file_path, c.id, text)}
-                    onResolve=${() => onResolveComment(data.file_path, c.id)}
-                    onApplySuggestion=${onApplySuggestion}
-                  />
-                `)}
+                <${CommentThread} filePath=${data.file_path} comments=${lineComments} actions=${actions} />
                 ${commentingLine === line?.index && line?.type === 'remove' && html`
-                  <${CommentBox}
-                    lineText=${line.text}
-                    selectedText=${selectionFor(line)?.selectedText || ''}
-                    onSubmit=${(text, category, suggestion) => {
-                      const lineNum = parseInt(line.old_num) || null;
-                      onAddComment(data.file_path, line.index, line.text, lineNum, text, category, suggestion, selectionFor(line));
-                      setCommentingLine(null);
-                    }}
-                    onCancel=${() => setCommentingLine(null)}
+                  <${LineCommentBox}
+                    filePath=${data.file_path}
+                    line=${line}
+                    lineNum=${parseInt(line.old_num) || null}
+                    selection=${selectionFor(line)}
+                    actions=${actions}
+                    onClose=${() => setCommentingLine(null)}
                   />
                 `}
               `;
@@ -145,27 +125,15 @@ export function SplitDiffViewer({ data, comments, onAddComment, onDeleteComment,
                 const entry = entryFor(line);
                 return html`
                   <${SplitLine} line=${line} side="right" onRightClick=${handleRightClick} commentRanges=${entry.ranges} />
-                  ${entry.comments.map(c => html`
-                    <${CommentDisplay}
-                      key=${c.id || c.line_index}
-                      comment=${c}
-                      onDelete=${() => onDeleteComment(data.file_path, c.id)}
-                      onEdit=${(text) => onEditComment(data.file_path, c.id, text)}
-                      onReply=${(text) => onReplyComment(data.file_path, c.id, text)}
-                      onResolve=${() => onResolveComment(data.file_path, c.id)}
-                      onApplySuggestion=${onApplySuggestion}
-                    />
-                  `)}
+                  <${CommentThread} filePath=${data.file_path} comments=${entry.comments} actions=${actions} />
                   ${commentingLine === line?.index && line?.type !== 'remove' && html`
-                    <${CommentBox}
-                      lineText=${line.text}
-                      selectedText=${selectionFor(line)?.selectedText || ''}
-                      onSubmit=${(text, category, suggestion) => {
-                        const lineNum = parseInt(line.new_num) || parseInt(line.old_num) || null;
-                        onAddComment(data.file_path, line.index, line.text, lineNum, text, category, suggestion, selectionFor(line));
-                        setCommentingLine(null);
-                      }}
-                      onCancel=${() => setCommentingLine(null)}
+                    <${LineCommentBox}
+                      filePath=${data.file_path}
+                      line=${line}
+                      lineNum=${parseInt(line.new_num) || parseInt(line.old_num) || null}
+                      selection=${selectionFor(line)}
+                      actions=${actions}
+                      onClose=${() => setCommentingLine(null)}
                     />
                   `}
                 `;

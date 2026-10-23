@@ -456,6 +456,15 @@ function App() {
     }
   }, [fetchComments, fetchFiles, fetchDiff]);
 
+  const commentActions = {
+    onAddComment: handleAddComment,
+    onDeleteComment: handleDeleteComment,
+    onEditComment: handleEditComment,
+    onReplyComment: handleReplyComment,
+    onResolveComment: handleResolveComment,
+    onApplySuggestion: handleApplySuggestion,
+  };
+
   const handleOpenInEditor = useCallback(async (filePath, lineNum) => {
     await sendJson('/api/editor/open', 'POST', { file_path: filePath, line_num: lineNum });
   }, []);
@@ -1034,12 +1043,7 @@ function App() {
                       containerRef=${diffRef}
                       data=${diffData}
                       comments=${comments}
-                      onAddComment=${handleAddComment}
-                      onDeleteComment=${handleDeleteComment}
-                      onEditComment=${handleEditComment}
-                      onReplyComment=${handleReplyComment}
-                      onResolveComment=${handleResolveComment}
-                      onApplySuggestion=${handleApplySuggestion}
+                      actions=${commentActions}
                     />`
                   : diffData
                     ? html`<${DiffViewer}
@@ -1047,12 +1051,7 @@ function App() {
                         data=${diffData}
                         comments=${comments}
                         searchTerm=${searchTerm}
-                        onAddComment=${handleAddComment}
-                        onDeleteComment=${handleDeleteComment}
-                        onEditComment=${handleEditComment}
-                        onReplyComment=${handleReplyComment}
-                        onResolveComment=${handleResolveComment}
-                        onApplySuggestion=${handleApplySuggestion}
+                        actions=${commentActions}
                         onOpenInEditor=${handleOpenInEditor}
                         onLineHover=${(num) => { hoveredLineRef.current = num; }}
                         showBlame=${showBlame}
