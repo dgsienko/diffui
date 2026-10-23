@@ -256,10 +256,13 @@ Three things live elsewhere. The last-turn baseline is a git ref in the repo's o
 
 ```bash
 pip install -e ".[dev]"
+git config core.hooksPath .githooks   # once per clone
 pytest
 ruff check .
 ruff format --check .
 ```
+
+`.githooks/pre-push` runs ruff and pytest, then `scripts/check_suite.py`. That script asks a headless `claude` session to review the branch against `origin/main` with the skills in `.claude/skills/` (check-docs, check-scope, check-tests) and blocks the push on a `:warning:` finding. It skips itself when `claude` isn't installed or gives no verdict. `SKIP=check-suite git push` skips it on purpose. The hooks path is relative, so one `git config` covers every worktree of the clone.
 
 AGENTS.md has the architecture.
 
