@@ -47,11 +47,7 @@ def _append_output(data: bytes) -> None:
 def _pending_is_stale() -> bool:
     if _pending_start is None:
         return True
-    return time.monotonic() - _pending_start.get("created", 0.0) > _PENDING_TTL
-
-
-def _flush_buffer() -> bytes:
-    return b"".join(_output_buffer)
+    return time.monotonic() - _pending_start["created"] > _PENDING_TTL
 
 
 def _is_running() -> bool:
@@ -188,7 +184,7 @@ async def agent_ws(ws: WebSocket):
     if _agent_proc is not None and _agent_pty_fd is not None:
         pty_fd = _agent_pty_fd
         proc = _agent_proc
-        replay = _flush_buffer()
+        replay = b"".join(_output_buffer)
         if replay:
             await ws.send_json({"type": "output", "data": replay.decode("utf-8", errors="replace")})
         await ws.send_json({"type": "started", "pid": proc.pid})

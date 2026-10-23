@@ -8,60 +8,26 @@ from diffui.git_utils import load_session, repo_path, save_session, save_setting
 from diffui.server.models import EditorOpen, SessionUpdate, SettingsUpdate
 from diffui.server.state import app_state
 from diffui.server.theme_css import generate_css_vars
-from diffui.themes import ALL_THEMES, set_current_theme
+from diffui.themes import ALL_THEMES
 
 router = APIRouter(prefix="/api")
 
 
 @router.get("/settings")
 def get_settings():
-    return {
-        "theme": ALL_THEMES[app_state.theme_index].name,
-        "theme_index": app_state.theme_index,
-        "editor": app_state.editor,
-        "view_mode": app_state.view_mode,
-        "user_name": app_state.user_name,
-        "agent_cli": app_state.agent_cli,
-        "font_size": app_state.font_size,
-        "word_wrap": app_state.word_wrap,
-        "keybindings": app_state.keybindings,
-    }
+    return {**app_state.settings(), "theme_index": app_state.theme_index}
 
 
 @router.put("/settings")
 def update_settings(body: SettingsUpdate):
-    if body.theme_index is not None:
-        idx = body.theme_index
-        if 0 <= idx < len(ALL_THEMES):
-            app_state.theme_index = idx
-            set_current_theme(ALL_THEMES[idx])
-    if body.editor is not None:
-        app_state.editor = body.editor
-    if body.view_mode is not None:
-        app_state.view_mode = body.view_mode
-    if body.user_name is not None:
-        app_state.user_name = body.user_name
-    if body.agent_cli is not None:
-        app_state.agent_cli = body.agent_cli
-    if body.font_size is not None:
-        app_state.font_size = body.font_size
-    if body.word_wrap is not None:
-        app_state.word_wrap = body.word_wrap
-    if body.keybindings is not None:
-        app_state.keybindings = body.keybindings
+    updates = body.model_dump(exclude_none=True)
+    idx = updates.pop("theme_index", None)
+    if idx is not None and 0 <= idx < len(ALL_THEMES):
+        app_state.theme_index = idx
+    for key, value in updates.items():
+        setattr(app_state, key, value)
 
-    save_settings(
-        {
-            "theme": ALL_THEMES[app_state.theme_index].name,
-            "editor": app_state.editor,
-            "view_mode": app_state.view_mode,
-            "user_name": app_state.user_name,
-            "agent_cli": app_state.agent_cli,
-            "font_size": app_state.font_size,
-            "word_wrap": app_state.word_wrap,
-            "keybindings": app_state.keybindings,
-        }
-    )
+    save_settings(app_state.settings())
     return {"ok": True, "css": generate_css_vars(app_state.theme)}
 
 

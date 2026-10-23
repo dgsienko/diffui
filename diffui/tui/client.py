@@ -12,7 +12,7 @@ from urllib.parse import quote
 import httpx
 import uvicorn
 
-from diffui.cli import _find_free_port
+from diffui.cli import find_free_port
 from diffui.diff import resolve_line_num
 from diffui.server.app import create_app
 
@@ -37,10 +37,10 @@ def _json(response: httpx.Response):
 
 
 class LocalServer:
-    """The FastAPI app on a free port, served from a background thread so the lifespan (watcher, host status) runs."""
+    """Served from a background thread so the lifespan (watcher, host status) runs."""
 
     def __init__(self, repos: list[Path], active_index: int = 0) -> None:
-        self.port = _find_free_port()
+        self.port = find_free_port()
         config = uvicorn.Config(
             create_app(repos, active_index=active_index),
             host="127.0.0.1",
@@ -117,7 +117,7 @@ class ApiClient:
         return _json(await self._post(f"/api/reviewed/{quote(path)}"))["reviewed"]
 
     async def add_comment(self, path: str, line: dict, text: str, covered: list[dict] | None = None) -> None:
-        """`covered` is the range's diff lines, starting at `line`. It sends the fields the web UI sends for a multi-line selection."""
+        """`covered` is the range's diff lines, starting at `line`."""
         body = {
             "file_path": path,
             "line_index": line["index"],

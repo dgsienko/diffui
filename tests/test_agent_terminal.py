@@ -16,7 +16,6 @@ import pytest
 import diffui.server.routes_agent_terminal as rat
 from diffui.server.routes_agent_terminal import (
     _BUFFER_MAX_BYTES,
-    _flush_buffer,
     _is_running,
     _kill_agent,
     _read_pty,
@@ -45,23 +44,13 @@ def _reset_module_state():
         rat._pending_start = saved_pending
 
 
-class TestFlushBuffer:
-    def test_empty_buffer(self):
-        rat._output_buffer.clear()
-        assert _flush_buffer() == b""
-
-    def test_small_buffer_joined(self):
-        rat._output_buffer.clear()
-        rat._output_buffer.append(b"hello ")
-        rat._output_buffer.append(b"world")
-        assert _flush_buffer() == b"hello world"
-
+class TestAppendOutput:
     def test_buffer_stays_under_max_as_output_arrives(self):
         rat._output_buffer.clear()
         chunk = b"x" * 1000
         for _ in range(_BUFFER_MAX_BYTES // len(chunk) + 10):
             rat._append_output(chunk)
-        result = _flush_buffer()
+        result = b"".join(rat._output_buffer)
         assert len(result) <= _BUFFER_MAX_BYTES
         assert result.endswith(chunk)
 

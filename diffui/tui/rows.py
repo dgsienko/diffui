@@ -38,20 +38,26 @@ class Row:
             return ("thread", self.thread.get("id"))
         return (self.kind, self.text)
 
+    def mirrored(self) -> bool:
+        """A split row's context line, shown on both sides."""
+        return self.old is not None and self.old is self.new
+
     def lines(self) -> list[dict]:
         """The distinct diff lines the row shows."""
         if self.old is None and self.new is None:
             return [self.line] if self.line else []
-        return [self.old] if self.old is self.new else [ln for ln in (self.old, self.new) if ln]
+        return [self.old] if self.mirrored() else [ln for ln in (self.old, self.new) if ln]
 
     def sides(self) -> list[tuple[str, dict]]:
-        """(side, line) pairs for find: unified rows have one side, split rows up to two."""
+        """(side, line) pairs for find: unified rows have one side, split rows up to two, a mirrored line its new side."""
         if self.old is None and self.new is None:
             return [("u", self.line)] if self.line else []
+        if self.mirrored():
+            return [("new", self.new)]
         return [(side, ln) for side, ln in (("old", self.old), ("new", self.new)) if ln]
 
     def paired(self) -> bool:
-        return self.old is not None and self.new is not None and self.old is not self.new
+        return self.old is not None and self.new is not None and not self.mirrored()
 
     def tokens_of(self, line: dict, lexer, syntax: dict) -> Tokens:
         cached = self.tokens.get(line["index"])

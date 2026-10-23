@@ -28,13 +28,12 @@ class Find:
             return
         pattern = re.compile(re.escape(query), re.IGNORECASE)
         for i, row in enumerate(rows):
-            # A context line shows on both sides of a split row but counts once.
-            mirrored = row.kind == "line" and row.old is not None and row.old is row.new
-            for side, line in [("new", row.new)] if mirrored else row.sides():
+            for side, line in row.sides():
                 for m in pattern.finditer(code_of(line)):
                     self._cells.setdefault((i, side), []).append((m.start(), m.end(), len(self.matches)))
                     self.matches.append((i, side, m.start(), m.end()))
-            if mirrored and (i, "new") in self._cells:
+            # A context line shows on both sides of a split row but counts once.
+            if row.mirrored() and (i, "new") in self._cells:
                 self._cells[(i, "old")] = self._cells[(i, "new")]
         if keep is not None:
             self.current = next((n for n in range(len(self.matches)) if self.identity(rows, n) == keep), -1)
@@ -73,7 +72,7 @@ class _FindInput(Input):
 
 
 class FindBar(Horizontal):
-    """The find-in-file bar under the diff. enter and shift+enter step through the matches, esc closes it."""
+    """The find-in-file bar under the diff."""
 
     def compose(self) -> ComposeResult:
         yield Static("Find", id="find-label")

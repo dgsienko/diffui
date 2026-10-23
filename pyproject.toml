@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "diffui"
-version = "0.11.0"
+version = "0.11.1"
 description = "UI for reviewing AI agent diffs"
 requires-python = ">=3.10"
 dependencies = [
@@ -50,6 +50,3 @@ ignore = [
     "SIM108", # ternary instead of if/else (readability preference)
     "SIM105", # contextlib.suppress — try/except/pass is clearer for single-line cases
 ]
-
-[tool.ruff.lint.isort]
-known-first-party = ["diffui"]

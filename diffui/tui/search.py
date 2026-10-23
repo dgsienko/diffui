@@ -23,7 +23,7 @@ _NOT_IN_DIFF = "  not in diff"
 
 
 class SearchScreen(ModalScreen[Target | None]):
-    """Search the files in the current view, or the whole repo, by name and content. Enter opens the file, at the line for a content hit."""
+    """Search file names and content."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "dismiss_search", show=False),
