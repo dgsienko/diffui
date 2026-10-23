@@ -1371,7 +1371,7 @@ class TestHerdr:
                 "--token",
                 "comments=1 open",
                 "--token",
-                f"reviewed=1/{total} reviewed",
+                f"reviewed=☑ 1/{total}",
             ]
         finally:
             _server_app.post("/api/reviewed/app.py")
