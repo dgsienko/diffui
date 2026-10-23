@@ -30,7 +30,7 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
         [
             ("u", "Uncommitted changes"),
             ("b", "Everything on the branch"),
-            ("t", "Changes since the agent's last turn started (needs herdr)"),
+            ("t", "Changes since the agent's last turn started (needs an agent pane)"),
             ("C", "Pick one commit"),
         ],
     ),
@@ -121,7 +121,7 @@ class ComposeScreen(ModalScreen[str | None]):
 
 
 class AgentScreen(ModalScreen[bool]):
-    """The prompt the server built. Inside herdr, enter pastes it into the workspace's agent pane."""
+    """The prompt the server built. With an agent pane to paste into, enter pastes it there."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape,q", "cancel", show=False),
@@ -134,7 +134,7 @@ class AgentScreen(ModalScreen[bool]):
         self._data = data
 
     def compose(self) -> ComposeResult:
-        agent = self._data.get("herdr_agent")
+        agent = self._data.get("pane_agent")
         count = self._data["comment_count"]
         if agent:
             title = f"Paste {count} open comment(s) into {agent}"
@@ -144,7 +144,7 @@ class AgentScreen(ModalScreen[bool]):
         else:
             title = f"{count} open comment(s) for the agent"
             hint = (
-                "Not inside herdr, so nothing is pasted. Copy this prompt into your agent with c. "
+                "No agent pane found, so nothing is pasted. Copy this prompt into your agent with c. "
                 f"Context file: {self._data.get('context_path', '')}. Esc closes."
             )
         with Vertical(classes="dialog"):
@@ -153,7 +153,7 @@ class AgentScreen(ModalScreen[bool]):
             yield Static(hint, classes="hint", markup=False)
 
     def action_paste(self) -> None:
-        self.dismiss(bool(self._data.get("herdr_agent")))
+        self.dismiss(bool(self._data.get("pane_agent")))
 
     def action_copy(self) -> None:
         self.app.copy_to_clipboard(self._data["prompt"])

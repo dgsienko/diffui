@@ -13,9 +13,9 @@ from diffui.git_utils import (
 )
 from diffui.server import fff_index
 from diffui.server.events import restart_watcher
-from diffui.server.herdr import report_status
 from diffui.server.models import RepoSwitch
 from diffui.server.state import app_state
+from diffui.server.terminal_host import report_status
 
 router = APIRouter(prefix="/api")
 

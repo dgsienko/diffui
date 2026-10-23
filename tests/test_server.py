@@ -1349,6 +1349,16 @@ class TestHerdr:
         assert text.count("\x1b[201~") == 1
         assert ["agent", "focus", target] in fake_herdr()
 
+    def test_prompt_names_the_pane_agent_only_inside_a_workspace(self, _server_app, temp_repo, fake_herdr, monkeypatch):
+        monkeypatch.setenv("HERDR_AGENTS", json.dumps([_agent("w1:p1", temp_repo)]))
+        _server_app.post("/api/comments", json={"file_path": "app.py", "line_index": 1, "comment": "check"})
+        try:
+            assert _server_app.post("/api/agent/prompt").json()["pane_agent"] == "claude"
+            monkeypatch.delenv("HERDR_WORKSPACE_ID")
+            assert _server_app.post("/api/agent/prompt").json()["pane_agent"] is None
+        finally:
+            _delete_app_py_comments(_server_app)
+
     def test_paste_refuses_blocked_agent(self, _server_app, temp_repo, fake_herdr, monkeypatch):
         r = self._paste(_server_app, monkeypatch, [_agent("w1:p1", temp_repo, "blocked")])
         assert r["ok"] is False

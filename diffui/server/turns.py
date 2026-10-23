@@ -8,7 +8,7 @@ import logging
 from fastapi import APIRouter
 
 from diffui.git_utils import get_repo_root, snapshot_worktree, write_turn_tree
-from diffui.server import herdr
+from diffui.server import terminal_host
 from diffui.server.events import _bg_tasks, _broadcast
 from diffui.server.routes_diff import clear_diff_cache
 from diffui.server.state import app_state
@@ -48,11 +48,11 @@ def start_turn() -> None:
 
 
 def poll_once(tracker: TurnTracker) -> bool:
-    agents = herdr.repo_agents(get_repo_root())
-    if agents is None:
+    statuses = terminal_host.repo_agent_statuses(get_repo_root())
+    if statuses is None:
         tracker.lost()
         return False
-    if not tracker.observe([a.get("agent_status", "unknown") for a in agents]):
+    if not tracker.observe(statuses):
         return False
     start_turn()
     return True
@@ -64,7 +64,9 @@ def last_turn():
     turn = app_state.last_turn
     if turn is None:
         tail = (
-            "" if herdr.available() else ". Last turn needs diffui in a herdr pane with an agent working in this repo"
+            ""
+            if terminal_host.available()
+            else f". Last turn needs diffui in a {terminal_host.NAME} pane with an agent working in this repo"
         )
         return {"reason": "No agent turn seen yet" + tail}
     return {"reason": None if turn.stats else "Nothing has changed since the last turn started"}
@@ -86,7 +88,7 @@ async def _poll_loop() -> None:
 
 
 def start_turn_poller() -> asyncio.Task | None:
-    if not herdr.available():
+    if not terminal_host.available():
         return None
     task = asyncio.get_running_loop().create_task(_poll_loop())
     _bg_tasks.add(task)

@@ -16,8 +16,8 @@ from diffui.git_utils import (
     load_comments,
 )
 from diffui.server import fff_index
-from diffui.server.herdr import report_status
 from diffui.server.state import app_state
+from diffui.server.terminal_host import report_status
 
 log = logging.getLogger(__name__)
 

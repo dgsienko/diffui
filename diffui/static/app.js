@@ -565,9 +565,9 @@ function App() {
     setShowAgentConfirm(data);
   }, []);
 
-  const handleConfirmAgent = useCallback(async (herdrAgent) => {
+  const handleConfirmAgent = useCallback(async (paneAgent) => {
     setShowAgentConfirm(null);
-    if (herdrAgent) {
+    if (paneAgent) {
       const r = await safeFetch('/api/agent/paste', { method: 'POST' });
       const data = await r.json();
       showToast(data.ok ? `Pasted into ${data.agent}. Press Enter there to send.` : data.error, data.ok ? 'success' : 'error');
@@ -1168,7 +1168,7 @@ function App() {
     ${showAgentConfirm && html`
       <${AgentConfirmDialog}
         agentCli=${showAgentConfirm.agent_cli}
-        herdrAgent=${showAgentConfirm.herdr_agent}
+        paneAgent=${showAgentConfirm.pane_agent}
         commentCount=${showAgentConfirm.comment_count}
         onConfirm=${handleConfirmAgent}
         onCancel=${() => setShowAgentConfirm(null)}

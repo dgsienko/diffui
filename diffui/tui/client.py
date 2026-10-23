@@ -37,7 +37,7 @@ def _json(response: httpx.Response):
 
 
 class LocalServer:
-    """The FastAPI app on a free port, served from a background thread so the lifespan (watcher, herdr status) runs."""
+    """The FastAPI app on a free port, served from a background thread so the lifespan (watcher, host status) runs."""
 
     def __init__(self, repos: list[Path], active_index: int = 0) -> None:
         self.port = _find_free_port()
