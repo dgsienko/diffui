@@ -504,41 +504,11 @@ function App() {
     if (settings.keybindings !== undefined) setKeybindings(settings.keybindings);
   }, []);
 
-  const pollTimers = useRef([]);
+  const pollTimer = useRef(null);
   const dismissTimer = useRef(null);
-  useEffect(() => () => { pollTimers.current.forEach(clearInterval); clearTimeout(dismissTimer.current); }, []);
+  useEffect(() => () => { clearInterval(pollTimer.current); clearTimeout(dismissTimer.current); }, []);
 
   const [taskStatus, setTaskStatus] = useState(null);
-
-  const runAsyncTask = useCallback(async (runUrl, statusUrl, setRunning, { label, doneMsg, failMsg }) => {
-    const r = await fetch(runUrl, { method: 'POST' });
-    const data = await r.json();
-    if (!data.ok) { showToast(data.error || 'Failed to start', 'error'); return data; }
-    setRunning(true);
-    const startTime = Date.now();
-    setTaskStatus({ label, startTime, status: 'running' });
-    const poll = setInterval(async () => {
-      try {
-        const s = await fetch(statusUrl);
-        const status = await s.json();
-        if (!status.running) {
-          clearInterval(poll);
-          pollTimers.current = pollTimers.current.filter(t => t !== poll);
-          setRunning(false);
-          const ok = status.exit_code === 0;
-          const msg = ok ? (typeof doneMsg === 'function' ? doneMsg(data) : doneMsg) : failMsg;
-          setTaskStatus({ label, startTime, status: ok ? 'done' : 'failed', message: msg, endTime: Date.now() });
-          dismissTimer.current = setTimeout(() => setTaskStatus(s => s?.startTime === startTime ? null : s), 10000);
-        }
-      } catch {
-        clearInterval(poll);
-        setRunning(false);
-        setTaskStatus({ label, startTime, status: 'failed', message: 'Lost connection', endTime: Date.now() });
-      }
-    }, 3000);
-    pollTimers.current.push(poll);
-    return data;
-  }, []);
 
   const [agentRunning, setAgentRunning] = useState(false);
   const [showAgentConfirm, setShowAgentConfirm] = useState(null);
@@ -582,10 +552,33 @@ function App() {
   }, []);
 
   const [explainRunning, setExplainRunning] = useState(false);
-  const handleExplain = useCallback(() => runAsyncTask(
-    '/api/explain', '/api/explain/status', setExplainRunning,
-    { label: 'Generating explanation', doneMsg: () => ({ text: 'Explanation ready', url: `${location.origin}/api/explain/view` }), failMsg: 'Explanation generation failed' },
-  ), [runAsyncTask]);
+  const handleExplain = useCallback(async () => {
+    const r = await fetch('/api/explain', { method: 'POST' });
+    const data = await r.json();
+    if (!data.ok) { showToast(data.error || 'Failed to start', 'error'); return; }
+    setExplainRunning(true);
+    const label = 'Generating explanation';
+    const startTime = Date.now();
+    setTaskStatus({ label, startTime, status: 'running' });
+    pollTimer.current = setInterval(async () => {
+      try {
+        const s = await fetch('/api/explain/status');
+        const status = await s.json();
+        if (!status.running) {
+          clearInterval(pollTimer.current);
+          setExplainRunning(false);
+          const ok = status.exit_code === 0;
+          const message = ok ? { text: 'Explanation ready', url: `${location.origin}/api/explain/view` } : 'Explanation generation failed';
+          setTaskStatus({ label, startTime, status: ok ? 'done' : 'failed', message, endTime: Date.now() });
+          dismissTimer.current = setTimeout(() => setTaskStatus(s => s?.startTime === startTime ? null : s), 10000);
+        }
+      } catch {
+        clearInterval(pollTimer.current);
+        setExplainRunning(false);
+        setTaskStatus({ label, startTime, status: 'failed', message: 'Lost connection', endTime: Date.now() });
+      }
+    }, 3000);
+  }, []);
 
   const handleCopyPath = useCallback(() => {
     const af = activeFileRef.current;
