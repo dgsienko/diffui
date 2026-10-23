@@ -27,6 +27,9 @@ def diffui_config_root(tmp_path_factory):
     mp.setattr(diffui.git_utils, "_CONFIG_ROOT", root)
     # A suite run from a herdr pane would otherwise write to the live sidebar.
     mp.delenv("HERDR_WORKSPACE_ID", raising=False)
+    # A pre-push hook in a linked worktree exports GIT_DIR, which points the temp repos' git calls at the checkout.
+    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+        mp.delenv(var, raising=False)
     yield root
     mp.undo()
 
