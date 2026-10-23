@@ -59,6 +59,12 @@ diffui --json        # Print the review session as JSON
 diffui --tui         # Review in the terminal (see Terminal UI)
 ```
 
+## Web or terminal
+
+Both run the same local server and read the same state, so comments and reviewed files carry over between them. Press `o` in the TUI to open the current file in the browser.
+
+The browser has the agent terminal panel, Explain changes, markdown and mermaid preview, blame, the full file view, comments on part of a line, and Settings. The TUI keeps you in the terminal next to your agent, and it's the only one that searches the whole repo, not just the diff.
+
 ## Reviewing changes
 
 - The explorer sidebar lists the changed files, grouped by directory, file type or change status. Click a file or press the left and right arrow keys to move through them in the order the sidebar shows. The Explorer button in the top bar hides and shows it.
@@ -127,6 +133,16 @@ Without herdr, or before an agent has started a turn, the scope says "No agent t
 The TUI covers the file list, a unified or split diff with syntax highlighting, comment threads, reviewed state, diff scopes, search, find in file and Send to agent. Explain changes, markdown and mermaid preview, blame and the agent terminal stay in the browser.
 
 The file list sits on the right of the diff. Under 110 columns it stacks below the diff, and `z` hides it.
+
+To open it from a herdr key, add this to your herdr config. It splits the focused pane and starts the TUI in that pane's directory, and it needs `jq`. `q` quits the TUI and leaves the pane as a shell.
+
+```toml
+[[keys.command]]
+key = "prefix+d"
+type = "shell"
+command = 'p=$(herdr pane split "$HERDR_ACTIVE_PANE_ID" --direction right --no-focus | jq -r .result.pane.pane_id) && herdr pane run "$p" "cd \"$HERDR_ACTIVE_PANE_CWD\" && diffui --tui"'
+description = "review this repo in diffui"
+```
 
 Inside herdr, `A` pastes the prompt into the workspace's agent pane. Anywhere else it shows the prompt, and `c` copies it.
 
