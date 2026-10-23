@@ -80,6 +80,7 @@ function App() {
   const [commentsPulse, setCommentsPulse] = useState(false);
   const diffRef = useRef(null);
   const diffCache = useRef(new Map());
+  const blameCache = useRef(new Map());
   const scrollPositions = useRef(new Map());
   const hoveredLineRef = useRef(null);
   const scrollToLineRef = useRef(null);
@@ -199,6 +200,7 @@ function App() {
   const handleLiveEvents = useCallback((events) => {
     if (events.includes('git_changed') || events.includes('files_changed')) {
       diffCache.current.clear();
+      blameCache.current.clear();
       saveScrollPosition();
       fetchFiles();
       fetchCommits();
@@ -566,6 +568,7 @@ function App() {
                         onOpenInEditor=${handleOpenInEditor}
                         onLineHover=${(num) => { hoveredLineRef.current = num; }}
                         showBlame=${showBlame}
+                        blameCache=${blameCache}
                         collapseAll=${collapseAll}
                       />`
                     : html`<${DiffSkeleton} />`
