@@ -34,6 +34,21 @@ def diffui_config_root(tmp_path_factory):
     mp.undo()
 
 
+@pytest.fixture(autouse=True)
+def _isolate_repo_state():
+    """Comments, reviewed marks and the active repo are process-wide, so one test's leftovers would reach the next."""
+    from diffui.server.state import app_state
+
+    active = diffui.git_utils._active_repo_root
+    yield
+    if active is not None:
+        diffui.git_utils.set_active_repo(active)
+    app_state.comments = {}
+    app_state.reviewed = {}
+    diffui.git_utils.save_comments({})
+    diffui.git_utils.save_reviewed({})
+
+
 @pytest.fixture(scope="session")
 def temp_repo(tmp_path_factory) -> Path:
     repo = tmp_path_factory.mktemp("diffui-repo")
