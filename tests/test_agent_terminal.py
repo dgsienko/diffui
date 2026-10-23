@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import signal
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -48,89 +51,56 @@ class TestAppendOutput:
         assert result.endswith(chunk)
 
 
-class TestReadPty:
-    def test_data_available(self):
-        with (
-            patch.object(rat.select, "select", return_value=([5], [], [])),
-            patch.object(rat.os, "read", return_value=b"data") as mock_read,
-        ):
-            assert _read_pty(5, timeout=0.1) == b"data"
-            mock_read.assert_called_once_with(5, 16384)
+class TestPtyHelpers:
+    def test_read_returns_available_bytes_or_none(self):
+        r, w = os.pipe()
+        try:
+            assert _read_pty(r, timeout=0.01) is None
+            os.write(w, b"data")
+            assert _read_pty(r, timeout=1) == b"data"
+        finally:
+            os.close(r)
+            os.close(w)
 
-    def test_no_data_timeout(self):
-        with patch.object(rat.select, "select", return_value=([], [], [])):
-            assert _read_pty(5, timeout=0.1) is None
-
-    def test_oserror_returns_none(self):
-        with patch.object(rat.select, "select", side_effect=OSError("boom")):
-            assert _read_pty(5) is None
-
-
-class TestWritePty:
-    def test_normal_write_encodes(self):
-        with patch.object(rat.os, "write") as mock_write:
-            _write_pty(7, "hi")
-            mock_write.assert_called_once_with(7, b"hi")
-
-    def test_oserror_swallowed(self):
-        with patch.object(rat.os, "write", side_effect=OSError("closed")):
-            _write_pty(7, "hi")  # must not raise
-
-
-class TestResizePty:
-    def test_oserror_swallowed(self):
-        with patch("fcntl.ioctl", side_effect=OSError("bad fd")):
-            _resize_pty(9, 40, 120)  # must not raise
+    def test_closed_descriptors_are_swallowed(self):
+        r, w = os.pipe()
+        os.close(r)
+        try:
+            assert _read_pty(r) is None
+            _write_pty(w, "hi")
+            _resize_pty(r, 40, 120)
+        finally:
+            os.close(w)
 
 
 class TestKillAgent:
     def test_no_process_returns_none(self):
-        rat._agent_proc = None
         assert _kill_agent() is None
 
-    def test_terminates_cleanly(self):
+    @pytest.mark.parametrize("fd_already_closed", [False, True])
+    def test_terminates_the_process_and_releases_the_pty(self, fd_already_closed):
+        proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        r, w = os.pipe()
+        os.close(w)
+        if fd_already_closed:
+            os.close(r)
+        rat._agent_proc, rat._agent_pty_fd = proc, r
+
+        assert _kill_agent() == -signal.SIGTERM
+
+        assert proc.poll() is not None
+        assert (rat._agent_proc, rat._agent_pty_fd) == (None, None)
+        with pytest.raises(OSError):
+            os.fstat(r)
+
+    def test_kills_a_process_that_ignores_terminate(self):
         proc = MagicMock()
-        proc.wait.return_value = 0
-        proc.returncode = 0
-        rat._agent_proc = proc
-        rat._agent_pty_fd = 12
-
-        with patch.object(rat.os, "close") as mock_close:
-            code = _kill_agent()
-
-        assert code == 0
-        proc.terminate.assert_called_once()
-        proc.kill.assert_not_called()
-        mock_close.assert_called_once_with(12)
-        assert rat._agent_proc is None
-        assert rat._agent_pty_fd is None
-
-    def test_needs_kill_after_timeout(self):
-        proc = MagicMock()
-        proc.wait.side_effect = [rat.subprocess.TimeoutExpired("cmd", 5), None]
+        proc.wait.side_effect = [subprocess.TimeoutExpired("cmd", 5), None]
         proc.returncode = -9
         rat._agent_proc = proc
-        rat._agent_pty_fd = None
 
-        code = _kill_agent()
-
-        assert code == -9
-        proc.terminate.assert_called_once()
+        assert _kill_agent() == -9
         proc.kill.assert_called_once()
-        assert proc.wait.call_count == 2
-
-    def test_close_oserror_swallowed(self):
-        proc = MagicMock()
-        proc.wait.return_value = 0
-        proc.returncode = 0
-        rat._agent_proc = proc
-        rat._agent_pty_fd = 3
-
-        with patch.object(rat.os, "close", side_effect=OSError("already closed")):
-            code = _kill_agent()
-
-        assert code == 0
-        assert rat._agent_pty_fd is None
 
 
 @pytest.fixture(scope="class")
@@ -327,14 +297,11 @@ class TestAgentWebSocket:
 
 
 class TestPendingStart:
-    def test_missing_pending_is_stale(self):
-        rat._pending_start = None
-        assert rat._pending_is_stale() is True
-
-    def test_fresh_pending_is_not_stale(self):
-        rat._pending_start = {"created": time.monotonic()}
-        assert rat._pending_is_stale() is False
-
-    def test_abandoned_pending_goes_stale(self):
-        rat._pending_start = {"created": time.monotonic() - rat._PENDING_TTL - 1}
-        assert rat._pending_is_stale() is True
+    @pytest.mark.parametrize(
+        ("age", "stale"),
+        [(None, True), (0, False), (rat._PENDING_TTL + 1, True)],
+        ids=["missing", "fresh", "abandoned"],
+    )
+    def test_pending_start_goes_stale_after_its_ttl(self, age, stale):
+        rat._pending_start = None if age is None else {"created": time.monotonic() - age}
+        assert rat._pending_is_stale() is stale
