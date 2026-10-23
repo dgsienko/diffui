@@ -25,6 +25,7 @@ import { GoToLineDialog } from './components/GoToLineDialog.js';
 import { SearchDialog } from './components/SearchDialog.js';
 import { shortName, mod, nearestNewLine, isOpen, clampFont } from './lib/utils.js';
 import { kb } from './lib/keys.js';
+import { sendJson, commentUrl } from './lib/api.js';
 
 const html = htm.bind(h);
 
@@ -337,11 +338,7 @@ function App() {
 
   const handleRepoSwitch = useCallback(async (index) => {
     setLoading(true);
-    await fetch('/api/repo/switch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ index }),
-    });
+    await sendJson('/api/repo/switch', 'POST', { index });
     setActiveFile(null);
     setBrowsing(false);
     setDiffData(null);
@@ -398,63 +395,45 @@ function App() {
   }, [fetchFiles, handleFileSelect]);
 
   const handleAddComment = useCallback(async (filePath, lineIndex, lineText, fileLineNum, commentText, category, suggestion, selection) => {
-    await fetch('/api/comments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        file_path: filePath,
-        line_index: lineIndex,
-        line_text: lineText,
-        file_line_num: fileLineNum,
-        comment: commentText,
-        category: category || '',
-        suggestion: suggestion || '',
-        selected_text: selection?.selectedText || '',
-        sel_start: selection?.selStart ?? null,
-        sel_end: selection?.selEnd ?? null,
-        sel_end_index: selection?.endLineIndex ?? null,
-      }),
+    await sendJson('/api/comments', 'POST', {
+      file_path: filePath,
+      line_index: lineIndex,
+      line_text: lineText,
+      file_line_num: fileLineNum,
+      comment: commentText,
+      category: category || '',
+      suggestion: suggestion || '',
+      selected_text: selection?.selectedText || '',
+      sel_start: selection?.selStart ?? null,
+      sel_end: selection?.selEnd ?? null,
+      sel_end_index: selection?.endLineIndex ?? null,
     });
     showToast(`Comment added to ${shortName(filePath)}`, 'success');
     await Promise.all([fetchComments(), fetchFiles()]);
   }, [fetchComments, fetchFiles]);
 
   const handleDeleteComment = useCallback(async (filePath, commentId) => {
-    await fetch(`/api/comments/${encodeURIComponent(filePath)}/${commentId}`, { method: 'DELETE' });
+    await fetch(commentUrl(filePath, commentId), { method: 'DELETE' });
     await Promise.all([fetchComments(), fetchFiles()]);
   }, [fetchComments, fetchFiles]);
 
   const handleEditComment = useCallback(async (filePath, commentId, newText) => {
-    await fetch(`/api/comments/${encodeURIComponent(filePath)}/${commentId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ comment: newText }),
-    });
+    await sendJson(commentUrl(filePath, commentId), 'PUT', { comment: newText });
     await fetchComments();
   }, [fetchComments]);
 
   const handleReplyComment = useCallback(async (filePath, commentId, text) => {
-    await fetch(`/api/comments/${encodeURIComponent(filePath)}/${commentId}/reply`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
+    await sendJson(commentUrl(filePath, commentId, '/reply'), 'POST', { text });
     await fetchComments();
   }, [fetchComments]);
 
   const handleResolveComment = useCallback(async (filePath, commentId) => {
-    await fetch(`/api/comments/${encodeURIComponent(filePath)}/${commentId}/resolve`, {
-      method: 'POST',
-    });
+    await fetch(commentUrl(filePath, commentId, '/resolve'), { method: 'POST' });
     await fetchComments();
   }, [fetchComments]);
 
   const handleBulkResolve = useCallback(async (filePath) => {
-    const r = await fetch('/api/comments/bulk-resolve', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file_path: filePath || null, action: 'resolve' }),
-    });
+    const r = await sendJson('/api/comments/bulk-resolve', 'POST', { file_path: filePath || null, action: 'resolve' });
     const data = await r.json();
     if (data.count > 0) {
       showToast(`Resolved ${data.count} comment${data.count === 1 ? '' : 's'}`, 'success');
@@ -465,9 +444,7 @@ function App() {
   }, [fetchComments, fetchFiles]);
 
   const handleApplySuggestion = useCallback(async (filePath, commentId) => {
-    const r = await fetch(`/api/comments/${encodeURIComponent(filePath)}/${commentId}/apply`, {
-      method: 'POST',
-    });
+    const r = await fetch(commentUrl(filePath, commentId, '/apply'), { method: 'POST' });
     const data = await r.json();
     if (data.ok) {
       showToast('Suggestion applied', 'success');
@@ -480,22 +457,14 @@ function App() {
   }, [fetchComments, fetchFiles, fetchDiff]);
 
   const handleOpenInEditor = useCallback(async (filePath, lineNum) => {
-    await fetch('/api/editor/open', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file_path: filePath, line_num: lineNum }),
-    });
+    await sendJson('/api/editor/open', 'POST', { file_path: filePath, line_num: lineNum });
   }, []);
 
   const handleSettingsChange = useCallback(async (settings) => {
     if (settings.font_size !== undefined) setFontSize(settings.font_size);
     if (settings.word_wrap !== undefined) setWordWrap(settings.word_wrap);
     if (settings.keybindings !== undefined) setKeybindings(settings.keybindings);
-    const res = await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
-    });
+    const res = await sendJson('/api/settings', 'PUT', settings);
     const data = await res.json();
     if (data.css) setThemeCss(data.css);
   }, []);
@@ -768,16 +737,12 @@ function App() {
     saveTimerRef.current = setTimeout(() => {
       const scrollObj = {};
       scrollPositions.current.forEach((v, k) => { scrollObj[k] = v; });
-      fetch('/api/session', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          activeFile: browsingRef.current ? undefined : activeFile,
-          diffMode,
-          showFileTree,
-          showReviewed,
-          scrollPositions: scrollObj,
-        }),
+      sendJson('/api/session', 'PUT', {
+        activeFile: browsingRef.current ? undefined : activeFile,
+        diffMode,
+        showFileTree,
+        showReviewed,
+        scrollPositions: scrollObj,
       }).catch(() => {});
     }, 1000);
   }, [activeFile, diffMode, showFileTree, showReviewed]);
