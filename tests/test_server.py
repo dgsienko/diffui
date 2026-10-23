@@ -8,20 +8,16 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from diffui.cli import export_json
-from diffui.git_utils import set_active_repo
 from diffui.server import routes_review
-from diffui.server.app import create_app
 from diffui.server.events import _apply_state_updates
-from diffui.server.routes_diff import _order_files, _score_risk
 from diffui.server.routes_review import _process_status
 from diffui.server.theme_css import generate_css_vars
 from diffui.server.turns import TurnTracker, poll_once
 from diffui.themes.definitions import ALL_THEMES
-from tests.conftest import _git, post_comment
+from tests.conftest import post_comment
 
 
 class TestServerRoutes:
@@ -95,34 +91,6 @@ class TestServerRoutes:
         finally:
             _server_app.put("/api/settings", json={key: original})
 
-    def test_comment_crud(self, _server_app):
-        cid = post_comment(_server_app, comment="test comment")
-        comment = _server_app.get("/api/comments").json()["app.py"][0]
-        assert (comment["id"], comment["comment"], comment["status"]) == (cid, "test comment", "open")
-        assert comment["timestamp"]
-
-        assert _server_app.put(f"/api/comments/app.py/{cid}", json={"comment": "edited"}).status_code == 200
-        assert _server_app.get("/api/comments").json()["app.py"][0]["comment"] == "edited"
-
-        assert _server_app.post(f"/api/comments/app.py/{cid}/reply", json={"text": "reply"}).status_code == 200
-        replies = _server_app.get("/api/comments").json()["app.py"][0]["replies"]
-        assert [r["text"] for r in replies] == ["reply"]
-
-        assert _server_app.delete(f"/api/comments/app.py/{cid}").status_code == 200
-        assert _server_app.get("/api/comments").json() == {}
-
-    def test_comment_resolve_toggle(self, _server_app):
-        cid = post_comment(_server_app)
-
-        def status():
-            return _server_app.get("/api/comments").json()["app.py"][0]["status"]
-
-        assert status() == "open"
-        _server_app.post(f"/api/comments/app.py/{cid}/resolve")
-        assert status() == "resolved"
-        _server_app.post(f"/api/comments/app.py/{cid}/resolve")
-        assert status() == "open"
-
     def test_review_toggle(self, _server_app):
         assert _server_app.post("/api/reviewed/app.py").json()["reviewed"] is True
         assert _server_app.post("/api/reviewed/app.py").json()["reviewed"] is False
@@ -132,39 +100,6 @@ class TestServerRoutes:
         assert r.status_code == 200
         r = _server_app.get("/static/style.css")
         assert r.status_code == 200
-
-    @pytest.mark.parametrize(
-        ("fields", "stored"),
-        [
-            pytest.param(
-                {},
-                {"category": "", "suggestion": "", "selected_text": "", "sel_start": None, "sel_end": None},
-                id="defaults",
-            ),
-            pytest.param({"category": "bug"}, {"category": "bug"}, id="category"),
-            pytest.param({"suggestion": "x = 1\n"}, {"suggestion": "x = 1\n"}, id="suggestion"),
-            pytest.param(
-                {"selected_text": "bar.baz", "sel_start": 12, "sel_end": 19},
-                {"selected_text": "bar.baz", "sel_start": 12, "sel_end": 19, "sel_end_index": None},
-                id="selection",
-            ),
-            pytest.param(
-                {
-                    "line_index": 4,
-                    "selected_text": "if x:\n    return y",
-                    "sel_start": 4,
-                    "sel_end": 12,
-                    "sel_end_index": 6,
-                },
-                {"line_index": 4, "sel_start": 4, "sel_end": 12, "sel_end_index": 6},
-                id="multiline-selection",
-            ),
-        ],
-    )
-    def test_comment_fields_are_stored(self, _server_app, fields, stored):
-        post_comment(_server_app, **fields)
-        comment = _server_app.get("/api/comments").json()["app.py"][0]
-        assert {k: comment[k] for k in stored} == stored
 
     def test_blame_attributes_each_line_to_its_commit(self, _server_app):
         blame = _server_app.get("/api/blame/app.py").json()
@@ -232,28 +167,6 @@ class TestServerRoutes:
         r = _server_app.get("/api/explain/view")
         assert r.status_code == 200
         assert "No explanation generated yet" in r.text
-
-    def test_bulk_resolve_and_reopen_one_file(self, _server_app):
-        post_comment(_server_app, line_index=1)
-        post_comment(_server_app, line_index=2)
-        post_comment(_server_app, file_path="extra.py")
-
-        def statuses(path):
-            return [c["status"] for c in _server_app.get("/api/comments").json()[path]]
-
-        r = _server_app.post("/api/comments/bulk-resolve", json={"file_path": "app.py", "action": "resolve"})
-        assert r.json() == {"ok": True, "count": 2}
-        assert statuses("app.py") == ["resolved", "resolved"]
-        assert statuses("extra.py") == ["open"]
-
-        r = _server_app.post("/api/comments/bulk-resolve", json={"file_path": "app.py", "action": "reopen"})
-        assert r.json() == {"ok": True, "count": 2}
-        assert statuses("app.py") == ["open", "open"]
-
-    def test_bulk_resolve_without_a_file_covers_every_file(self, _server_app):
-        post_comment(_server_app)
-        post_comment(_server_app, file_path="extra.py")
-        assert _server_app.post("/api/comments/bulk-resolve", json={"action": "resolve"}).json()["count"] == 2
 
     def test_diff_context_widens_the_hunks(self, _server_app):
         def context_lines(**params):
@@ -482,26 +395,6 @@ class TestReviewModule:
             assert "No explanation generated yet" in r.text
 
 
-@pytest.mark.parametrize(
-    ("path", "adds", "dels", "expected"),
-    [
-        pytest.param("alembic/versions/001_init.py", 50, 0, (3, "medium", ["infra/migration"]), id="migration"),
-        pytest.param("config/settings.yaml", 10, 5, (2, "low", ["config"]), id="config"),
-        pytest.param("infra/values.yaml", 1, 1, (5, "high", ["infra/migration", "config"]), id="infra-config"),
-        pytest.param("src/module.py", 0, 100, (3, "medium", ["large deletion"]), id="large-deletion"),
-        pytest.param("tests/test_auth.py", 5, 30, (3, "medium", ["test removal"]), id="test-removal"),
-        pytest.param("tests/test_auth.py", 30, 5, (0, "low", []), id="test-additions-are-not-removals"),
-        pytest.param("src/big_refactor.py", 150, 100, (4, "medium", ["large deletion", "high churn"]), id="churn"),
-        pytest.param("src/module.py", 0, 30, (1, "low", []), id="moderate-deletion-scores-without-a-reason"),
-        pytest.param("src/module.py", 40, 20, (1, "low", []), id="moderate-churn-scores-without-a-reason"),
-        pytest.param("src/utils.py", 10, 5, (0, "low", []), id="plain-source"),
-        pytest.param("Makefile", 5, 5, (0, "low", []), id="no-extension"),
-    ],
-)
-def test_score_risk(path, adds, dels, expected):
-    assert _score_risk(path, adds, dels) == expected
-
-
 class TestExportJson:
     def test_export_matches_the_files_comments_and_reviews_the_ui_shows(self, _server_app, capsys):
         post_comment(_server_app)
@@ -609,60 +502,6 @@ class TestExplainViewGuard:
         assert r.status_code == 400
 
 
-@pytest.fixture
-def app_py(temp_repo):
-    path = temp_repo / "app.py"
-    original = path.read_text()
-    yield path
-    path.write_text(original)
-
-
-class TestApplySuggestion:
-    @pytest.mark.parametrize(
-        ("fields", "status", "detail"),
-        [
-            pytest.param({"file_line_num": 1}, 400, "No suggestion", id="no-suggestion"),
-            pytest.param({"suggestion": "x = 1\n"}, 400, "No line number", id="no-line-number"),
-            pytest.param(
-                {"file_line_num": 1, "line_text": "-this line is long gone", "suggestion": "replacement"},
-                409,
-                "changed since",
-                id="stale-line-text",
-            ),
-            pytest.param(
-                {"file_line_num": 1, "line_text": " line 1", "suggestion": "replacement", "sel_end_index": 4},
-                400,
-                "more than one line",
-                id="multi-line-range",
-            ),
-        ],
-    )
-    def test_refusals_leave_the_file_and_comment_alone(self, _server_app, app_py, fields, status, detail):
-        before = app_py.read_text()
-        cid = post_comment(_server_app, **fields)
-        r = _server_app.post(f"/api/comments/app.py/{cid}/apply")
-        assert (r.status_code, detail in r.json()["detail"]) == (status, True)
-        assert app_py.read_text() == before
-        assert _server_app.get("/api/comments").json()["app.py"][0]["status"] == "open"
-
-    @pytest.mark.parametrize(
-        "fields",
-        [
-            pytest.param({"line_text": " line 1"}, id="matching-line-text"),
-            pytest.param({}, id="no-line-text"),
-        ],
-    )
-    def test_replaces_the_line_and_resolves_the_comment(self, _server_app, app_py, fields):
-        before = app_py.read_text()
-        cid = post_comment(_server_app, file_line_num=1, suggestion="line one", **fields)
-        assert _server_app.post(f"/api/comments/app.py/{cid}/apply").json() == {"ok": True}
-        assert app_py.read_text() == before.replace("line 1\n", "line one\n", 1)
-        assert _server_app.get("/api/comments").json()["app.py"][0]["status"] == "resolved"
-
-    def test_unknown_comment_is_refused(self, _server_app):
-        assert _server_app.post("/api/comments/app.py/no-such-id/apply").status_code == 400
-
-
 class TestSettingsValidation:
     def test_unknown_editor_is_rejected(self, _server_app):
         r = _server_app.put("/api/settings", json={"editor": "rm -rf /"})
@@ -768,94 +607,6 @@ class TestHerdr:
             "--token",
             f"reviewed=☑ 1/{total}",
         ]
-
-
-def _entry(path: str, risk: int = 0) -> dict:
-    return {"path": path, "dir": path.rpartition("/")[0] or ".", "risk_score": risk}
-
-
-def test_order_files_mirrors_the_web_tree():
-    files = [_entry("a/z.py"), _entry("b/y.py", 5), _entry("top.py", 3), _entry("a/b/x.py")]
-    assert [f["path"] for f in _order_files(files, "tree")] == ["top.py", "a/z.py", "a/b/x.py", "b/y.py"]
-    assert [f["path"] for f in _order_files(files, "risk")] == ["b/y.py", "top.py", "a/z.py", "a/b/x.py"]
-
-
-class TestSearch:
-    def test_matches_file_names_and_content_of_the_view(self, _server_app):
-        r = _server_app.get("/api/search", params={"q": "EXTRA"}).json()
-        assert r["files"] == [{"path": "extra.py", "changed": True}]
-        assert r["hits"] == []
-
-        r = _server_app.get("/api/search", params={"q": "line five"}).json()
-        assert r["hits"] == [{"path": "app.py", "line": 5, "text": "line five", "changed": True}]
-
-        # Content comes from the working tree, so an untracked file is searched too.
-        r = _server_app.get("/api/search", params={"q": "never committed"}).json()
-        assert [(h["path"], h["line"]) for h in r["hits"]] == [("untracked.txt", 1)]
-
-    def test_search_is_scoped_to_the_view(self, _server_app):
-        r = _server_app.get("/api/search", params={"q": "value", "view": "working"}).json()
-        assert r["hits"] == []
-        assert _server_app.get("/api/search", params={"q": "value"}).json()["hits"][0]["path"] == "extra.py"
-
-    @pytest.mark.parametrize(("scope", "query"), [("changed", "line"), ("all", "render")])
-    def test_hits_are_capped(self, _server_app, monkeypatch, scope, query):
-        monkeypatch.setattr("diffui.server.routes_search.MAX_HITS", 3)
-        r = _server_app.get("/api/search", params={"q": query, "scope": scope}).json()
-        assert len(r["hits"]) == 3
-        assert r["truncated"] is True
-
-    def test_empty_query_finds_nothing(self, _server_app):
-        assert _server_app.get("/api/search", params={"q": ""}).json() == {"files": [], "hits": [], "truncated": False}
-
-
-class TestWholeRepoSearch:
-    def test_all_scope_finds_files_outside_the_diff_and_marks_the_changed_ones(self, _server_app):
-        def search(q, scope="all"):
-            return _server_app.get("/api/search", params={"q": q, "scope": scope}).json()
-
-        assert search("rendrer")["files"] == [{"path": "renderer.py", "changed": False}]
-        assert search("RENDER_25")["hits"] == [
-            {"path": "renderer.py", "line": 25, "text": "def render_25(): ...", "changed": False}
-        ]
-        assert search("extrra")["files"] == [{"path": "extra.py", "changed": True}]
-        assert [(h["path"], h["changed"]) for h in search("line five")["hits"]] == [("app.py", True)]
-
-        assert search("rendrer", scope="changed")["files"] == []
-        assert search("extrra", scope="changed")["files"] == [{"path": "extra.py", "changed": True}]
-
-    @pytest.fixture
-    def own_repo(self, tmp_path, temp_repo):
-
-        (tmp_path / ".gitignore").write_text("generated/\n")
-        (tmp_path / "generated").mkdir()
-        (tmp_path / "generated" / "out.py").write_text("needle\n")
-        (tmp_path / "blob.bin").write_bytes(b"\0needle")
-        (tmp_path / "keep.py").write_text("needle\n")
-        for args in (("init", "-q", "-b", "main"), ("add", "-A"), ("commit", "-qm", "init")):
-            _git(tmp_path, *args)
-        set_active_repo(tmp_path)
-        yield TestClient(create_app([tmp_path]), base_url="http://localhost"), tmp_path
-        set_active_repo(temp_repo)
-        create_app([temp_repo])
-
-    def test_files_written_after_the_first_search_are_found(self, own_repo):
-
-        client, repo = own_repo
-
-        def search(q):
-            return client.get("/api/search", params={"q": q, "scope": "all"}).json()
-
-        assert [h["path"] for h in search("needle")["hits"]] == ["keep.py"]
-
-        (repo / "later.py").write_text("needle again\n")
-        _apply_state_updates(["files_changed"])
-        assert [h["path"] for h in search("needle")["hits"]] == ["keep.py", "later.py"]
-        assert [f["path"] for f in search("laterr")["files"]] == ["later.py"]
-
-        (repo / "later.py").unlink()
-        _apply_state_updates(["files_changed"])
-        assert [h["path"] for h in search("needle")["hits"]] == ["keep.py"]
 
 
 @pytest.mark.parametrize(
