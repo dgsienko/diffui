@@ -14,7 +14,7 @@ from pathlib import Path
 
 from diffui.server.state import app_state
 
-NAME = "herdr"  # for user-facing copy that has to say what is required
+NAME = "herdr"  # shown to users in messages that say which host diffui must run in
 _SOURCE = "diffui"
 _PASTE_START = "\x1b[200~"
 _PASTE_END = "\x1b[201~"
