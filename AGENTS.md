@@ -86,6 +86,7 @@ diffui/
 - `treeOrder()` in `FileTree.js` gives the file order that prev/next file and next-unreviewed follow. `_order_files` in `routes_diff.py` mirrors it for the TUI. Sort by risk turns the tree into one flat list.
 - The top bar holds navigation and global actions. `FileHeader` above the active viewer holds the per-file ones (view mode, whitespace, blame, resolve all, Mark reviewed).
 - `FullFileViewer` renders a window of lines. Hunk blocks use `content-visibility: auto`.
+- Search is `SearchDialog`, opened with `/` or the command palette. It calls `/api/search` 150ms after the last keystroke, aborts the request it replaces, and `tab` switches `scope`. `handleSearchOpen` in `app.js` opens a hit in the diff and scrolls to the line the diff shows nearest to it (`nearestNewLine`). A file outside the diff sets `browsing` and opens in `FullFileViewer` with `readOnly`, because the server reports an unchanged file as all added. `browsing` swaps `FileHeader` for a short one, makes `handleToggleReview` return, stops `fetchFiles` from resetting the active file, and keeps `activeFile` out of the session save. It ends when the file joins the diff or another file is picked.
 - Keep the accessibility basics: `role="treeitem"` on tree items, focus trapping in the settings dialog, `:focus-visible` outlines on buttons, and `+`/`-` prefixes next to the diff colors.
 
 ### Design system

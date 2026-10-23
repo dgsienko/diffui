@@ -63,7 +63,7 @@ diffui --tui         # Review in the terminal (see Terminal UI)
 
 Both run the same local server and read the same state, so comments and reviewed files carry over between them. Press `o` in the TUI to open the current file in the browser.
 
-The browser has the agent terminal panel, Explain changes, markdown and mermaid preview, blame, the full file view, comments on part of a line, and Settings. The TUI keeps you in the terminal next to your agent, and it's the only one that searches the whole repo, not just the diff.
+The browser has the agent terminal panel, Explain changes, markdown and mermaid preview, blame, the full file view, comments on part of a line, and Settings. The TUI keeps you in the terminal next to your agent. Both search the whole repo, not just the diff.
 
 ## Reviewing changes
 
@@ -73,6 +73,7 @@ The browser has the agent terminal panel, Explain changes, markdown and mermaid 
 - Press `r` to mark a file reviewed. The top bar shows reviewed files out of the total, next to the added and removed line counts. If a reviewed file changes on disk, it is unmarked. When everything is reviewed, a completion screen shows your stats. `]` jumps to the next unreviewed file.
 - `j` and `k` jump between hunks. Click a hunk header to collapse it. The raw `diff --git`, `index`, `---` and `+++` lines are hidden, and a rename, mode change, new or deleted file, or binary file gets one short line.
 - `ctrl+f` searches within the diff and highlights the matches. `ctrl+g` jumps to a line. `ctrl+shift+f`, or the Search files button, filters the file list.
+- `/` opens a search over file names and text. It starts on the files in the current scope, and `tab` switches to the whole repo, which skips `.gitignore`d and binary files. Results group by file with line numbers, up to 200 lines. Enter opens the file at that line, and when the diff does not show the line, the view goes to the nearest one it does. Files that are not in the diff are dimmed and marked "not in diff". They open read-only in the file view, with no comments and no Mark reviewed, and picking a file from the explorer returns to the diff. The terminal UI has the same search, described in [Search and find](#search-and-find).
 - Files are scored for risk from their path and size: migration, infra, schema and deploy paths, config files, large deletions, high churn and test removal. Medium and high risk files get a colored dot in the file tree, with the level in the tooltip. `s` sorts by risk.
 - A `.diffuiignore` file in the repo root hides matching files from the file list and from search. It takes one glob per line, and `#` starts a comment. `diffui --json` still lists them.
 
@@ -229,6 +230,7 @@ The header shows the current scope. The browser has the same choices in its view
 | `ctrl+f` | Search in diff |
 | `ctrl+g` / `cmd+g` | Go to line |
 | `ctrl+shift+f` | Search files |
+| `/` | Search file names and text, in the scope's files or the whole repo (`tab` switches) |
 | `ctrl+click` / `cmd+click` | Open in editor |
 | `right-click` | Comment on line (shows the native menu when text is selected, so you can copy) |
 | select text | Floating "Comment" button to comment on the exact substring |
