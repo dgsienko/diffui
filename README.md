@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/dgsienko/diffui)](https://github.com/dgsienko/diffui/releases/latest)
 
 <p align="center">
-  <a href="#install">install</a> | <a href="#quick-start">quick start</a> | <a href="#ai-agent-integration">agents</a> | <a href="#terminal-ui">terminal UI</a> | <a href="#keybindings">keybindings</a> | <a href="#development">development</a>
+  <a href="#install">install</a> · <a href="#quick-start">quick start</a> · <a href="#ai-agent-integration">agents</a> · <a href="#terminal-ui">terminal UI</a> · <a href="#keybindings">keybindings</a> · <a href="#development">development</a>
 </p>
 
 A local code review UI for a git branch, with optional AI agent integration.
