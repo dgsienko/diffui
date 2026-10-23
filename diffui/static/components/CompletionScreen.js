@@ -4,7 +4,7 @@ import htm from 'htm';
 const html = htm.bind(h);
 
 export function CompletionScreen({ fileCount, commentStats, onDismiss }) {
-  const { total: totalComments, open: openComments } = commentStats || { total: 0, open: 0 };
+  const { total: totalComments, open: openComments } = commentStats;
 
   return html`
     <div class="completion-screen" onClick=${onDismiss}>

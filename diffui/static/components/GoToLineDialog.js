@@ -21,7 +21,7 @@ export function GoToLineDialog({ onSubmit, onClose }) {
   };
 
   return html`
-    <div class="goto-line-overlay" onClick=${(e) => { if (e.target.classList.contains('goto-line-overlay')) onClose(); }}>
+    <div class="goto-line-overlay" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="goto-line-dialog">
         <input
           ref=${ref}

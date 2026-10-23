@@ -31,7 +31,7 @@ const SHORTCUTS = [
 
 export function ShortcutOverlay({ onClose, keybindings = {} }) {
   return html`
-    <div class="shortcut-overlay" onClick=${(e) => { if (e.target.classList.contains('shortcut-overlay')) onClose(); }}>
+    <div class="shortcut-overlay" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="shortcut-panel">
         <div class="shortcut-title">Keyboard Shortcuts</div>
         <div class="shortcut-grid">

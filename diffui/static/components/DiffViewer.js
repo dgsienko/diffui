@@ -58,7 +58,7 @@ function BlameCell({ blame }) {
   return html`<span class="blame-cell" title=${blame.author + ' · ' + blame.sha}><span class="blame-name">${name}</span><span class="blame-age">${label}</span></span>`;
 }
 
-function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, blame, commentRanges }) {
+function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onLineHover, blame, commentRanges }) {
   const typeClass = {
     add: 'add',
     remove: 'remove',
@@ -91,8 +91,8 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor,
       data-line-index=${line.index}
       onClick=${handleClick}
       onContextMenu=${handleContext}
-      onMouseEnter=${() => onLineHover && onLineHover(line)}
-      onMouseLeave=${() => onLineHover && onLineHover(null)}
+      onMouseEnter=${() => onLineHover(line)}
+      onMouseLeave=${() => onLineHover(null)}
     >
       ${blame && html`<${BlameCell} blame=${blame} />`}
       <div class="diff-gutter">
@@ -105,7 +105,7 @@ function DiffLine({ line, searchTerm, onRightClick, onCtrlClick, onOpenInEditor,
       ${line.type !== 'meta' && html`
         <${LineActions}
           onComment=${() => onRightClick(line)}
-          onOpenInEditor=${onOpenInEditor && line.new_num ? () => onCtrlClick(parseInt(line.new_num) || 1) : null}
+          onOpenInEditor=${line.new_num ? () => onCtrlClick(parseInt(line.new_num) || 1) : null}
         />
       `}
     </div>
@@ -121,7 +121,7 @@ function hunkStats(lines) {
   return { adds, dels };
 }
 
-function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, actions, commentingLine, setCommentingLine, commentingSelection, filePath, blameData, collapseAll }) {
+function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onLineHover, actions, commentingLine, setCommentingLine, commentingSelection, filePath, blameData, collapseAll }) {
   const [collapsed, setCollapsed] = useState(false);
   const stats = useMemo(() => hunkStats(hunk.lines), [hunk.lines]);
 
@@ -148,7 +148,6 @@ function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onOpenInEdi
               searchTerm=${searchTerm}
               onRightClick=${onRightClick}
               onCtrlClick=${onCtrlClick}
-              onOpenInEditor=${onOpenInEditor}
               onLineHover=${onLineHover}
               blame=${blameData && line.new_num ? blameData[parseInt(line.new_num) - 1] : null}
               commentRanges=${commentRanges}
@@ -206,7 +205,7 @@ export function DiffViewer({ data, comments, searchTerm, actions, onOpenInEditor
 
   const handleLineHover = (line) => {
     hoveredLineRef.current = line;
-    if (onLineHover) onLineHover(line ? (parseInt(line.new_num) || parseInt(line.old_num) || null) : null);
+    onLineHover(line ? (parseInt(line.new_num) || parseInt(line.old_num) || null) : null);
   };
 
   useEffect(() => {
@@ -221,10 +220,6 @@ export function DiffViewer({ data, comments, searchTerm, actions, onOpenInEditor
   const handleCtrlClick = (lineNum) => {
     if (data?.file_path) onOpenInEditor(data.file_path, lineNum);
   };
-
-  if (!data || !data.hunks) {
-    return html`<div class="empty-state"><span class="empty-state-title">No diff data</span></div>`;
-  }
 
   return html`
     <div class="diff-container" ref=${mergeRef(containerRef, localContainerRef)}>
@@ -242,7 +237,6 @@ export function DiffViewer({ data, comments, searchTerm, actions, onOpenInEditor
           commentingSelection=${commentingSelection}
           onRightClick=${handleRightClick}
           onCtrlClick=${handleCtrlClick}
-          onOpenInEditor=${onOpenInEditor ? handleCtrlClick : null}
           onLineHover=${handleLineHover}
           actions=${actions}
           blameData=${showBlame ? blameData : null}

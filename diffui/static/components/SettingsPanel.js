@@ -35,7 +35,6 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
   const [settings, setSettings] = useState(null);
   const [themes, setThemes] = useState([]);
   const [showKeybindings, setShowKeybindings] = useState(false);
-  const [localBindings, setLocalBindings] = useState(keybindings || {});
   const [capturingKey, setCapturingKey] = useState(null);
   const captureBtnRef = useRef(null);
   const panelRef = useRef(null);
@@ -44,10 +43,6 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
     fetch('/api/settings').then(r => r.json()).then(setSettings);
     fetch('/api/themes').then(r => r.json()).then(setThemes);
   }, []);
-
-  useEffect(() => {
-    setLocalBindings(keybindings || {});
-  }, [keybindings]);
 
   useEffect(() => {
     if (capturingKey && captureBtnRef.current) captureBtnRef.current.focus();
@@ -89,23 +84,21 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
       return;
     }
     if (e.key === 'Backspace') {
-      const next = { ...localBindings };
+      const next = { ...keybindings };
       delete next[keyId];
-      setLocalBindings(next);
       setCapturingKey(null);
       onChange({ keybindings: next });
       return;
     }
-    if (e.key.length === 1 || e.key === '[' || e.key === ']') {
-      const next = { ...localBindings, [keyId]: e.key };
-      setLocalBindings(next);
+    if (e.key.length === 1) {
+      const next = { ...keybindings, [keyId]: e.key };
       setCapturingKey(null);
       onChange({ keybindings: next });
     }
   };
 
   return html`
-    <div class="settings-overlay" onClick=${(e) => { if (e.target.classList.contains('settings-overlay')) onClose(); }}>
+    <div class="settings-overlay" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div class="settings-panel" ref=${panelRef} role="dialog" aria-label="Settings">
         <div class="settings-title">Settings</div>
 
@@ -184,7 +177,7 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
                   onClick=${() => setCapturingKey(capturingKey === k.id ? null : k.id)}
                   onKeyDown=${(e) => { if (capturingKey === k.id) handleKeyCapture(e, k.id); }}
                 >
-                  ${capturingKey === k.id ? 'Press key...' : html`<kbd>${kb(localBindings, k.id)}</kbd>`}
+                  ${capturingKey === k.id ? 'Press key...' : html`<kbd>${kb(keybindings, k.id)}</kbd>`}
                 </button>
               </div>
             `)}
