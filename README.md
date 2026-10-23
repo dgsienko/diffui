@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/dgsienko/diffui)](https://github.com/dgsienko/diffui/releases/latest)
 
 <p align="center">
-  <a href="#install">install</a> · <a href="#quick-start">quick start</a> · <a href="#ai-agent-integration">agents</a> · <a href="#terminal-ui">terminal UI</a> · <a href="#keybindings">keybindings</a> · <a href="#development">development</a>
+  <a href="#install">install</a> | <a href="#quick-start">quick start</a> | <a href="#ai-agent-integration">agents</a> | <a href="#terminal-ui">terminal UI</a> | <a href="#keybindings">keybindings</a> | <a href="#development">development</a>
 </p>
 
 A local code review UI for a git branch, with optional AI agent integration.
@@ -13,7 +13,7 @@ You get syntax-highlighted diffs, inline comment threads and risk scoring. If yo
 
 Use it before you push. Review what your agent just wrote while nothing is on a remote yet, or look at your own branch in a real diff UI without opening a draft MR. GitHub or GitLab review still happens after.
 
-It runs as a local web server with a Preact frontend, or as a terminal UI with `diffui --tui`. There is no build step and no accounts. Your code stays on your machine with one exception: a markdown file with a mermaid or plantuml block is rendered by kroki.io, so that block's source is sent there when you preview the file. The web UI loads its frontend libraries from a CDN, so the first paint needs a network.
+It runs as a local web server with a Preact frontend, or as a terminal UI with `diffui --tui`. There is no build step and no accounts. Your code stays on your machine with one exception: a markdown file with a diagram block (mermaid, plantuml, graphviz, d2 and others) is rendered by kroki.io, so that block's source is sent there when you preview the file. The web UI loads its frontend libraries from a CDN, so the first paint needs a network.
 
 ## Install
 
@@ -76,7 +76,7 @@ The browser has the agent terminal panel, Explain changes, markdown and mermaid 
 - `ctrl+f` searches within the diff and highlights the matches. `ctrl+g` jumps to a line. `ctrl+shift+f`, or the Search files button, filters the file list.
 - `/` opens a search over file names and text. It starts on the files in the current scope, and `tab` switches to the whole repo, which skips `.gitignore`d and binary files. Results group by file with line numbers, up to 200 lines. Enter opens the file at that line, and when the diff does not show the line, the view goes to the nearest one it does. Files that are not in the diff are dimmed and marked "not in diff". They open read-only in the file view, with no comments and no Mark reviewed, and picking a file from the explorer returns to the diff. The terminal UI has the same search, described in [Search and find](#search-and-find).
 - Files are scored for risk from their path and size: migration, infra, schema and deploy paths, config files, large deletions, high churn and test removal. Medium and high risk files get a colored dot in the file tree, with the level in the tooltip. `s` sorts by risk.
-- A `.diffuiignore` file in the repo root hides matching files from the file list and from search. It takes one glob per line, and `#` starts a comment. `diffui --json` still lists them.
+- A `.diffuiignore` file in the repo root hides matching files from the file list and from changed-scope search. Searching the whole repo does not apply it. It takes one glob per line, and `#` starts a comment. `diffui --json` still lists them.
 
 ## Comments
 
