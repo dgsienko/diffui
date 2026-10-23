@@ -23,7 +23,7 @@ import { CommentsPanel } from './components/CommentsPanel.js';
 import { FileFilterBar } from './components/FileFilterBar.js';
 import { GoToLineDialog } from './components/GoToLineDialog.js';
 import { SearchDialog } from './components/SearchDialog.js';
-import { shortName, mod, nearestNewLine } from './lib/utils.js';
+import { shortName, mod, nearestNewLine, isOpen, clampFont } from './lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -125,6 +125,8 @@ function App() {
   const dialogOpenRef = useRef(false);
   const ignoreWsRef = useRef(false);
   ignoreWsRef.current = ignoreWhitespace;
+  const sortByRiskRef = useRef(false);
+  sortByRiskRef.current = sortByRisk;
 
   const fetchTheme = useCallback(async () => {
     const res = await safeFetch('/api/theme/css');
@@ -234,24 +236,21 @@ function App() {
 
   useEffect(() => {
     Promise.all([fetchTheme(), fetchRepos(), fetchBranch(), fetchCommits(), fetchFiles(), fetchComments()]).then(async () => {
-      try {
-        const [sessionRes, settingsRes] = await Promise.all([fetch('/api/session'), fetch('/api/settings')]);
-        const session = await sessionRes.json();
-        const settings = await settingsRes.json();
-        if (session.activeFile) setActiveFile(session.activeFile);
-        if (session.diffMode) setDiffMode(session.diffMode);
-        if (session.showFileTree !== undefined) setShowFileTree(session.showFileTree);
-        if (session.showReviewed !== undefined) setShowReviewed(session.showReviewed);
-        if (session.scrollPositions) {
-          for (const [k, v] of Object.entries(session.scrollPositions)) {
-            scrollPositions.current.set(k, v);
-          }
+      const [session, settings] = await Promise.all(['/api/session', '/api/settings'].map(u => fetch(u).then(r => r.json()))).catch(() => []);
+      if (!session) return;
+      if (session.activeFile) setActiveFile(session.activeFile);
+      if (session.diffMode) setDiffMode(session.diffMode);
+      if (session.showFileTree !== undefined) setShowFileTree(session.showFileTree);
+      if (session.showReviewed !== undefined) setShowReviewed(session.showReviewed);
+      if (session.scrollPositions) {
+        for (const [k, v] of Object.entries(session.scrollPositions)) {
+          scrollPositions.current.set(k, v);
         }
-        if (settings.font_size) setFontSize(settings.font_size);
-        if (settings.word_wrap !== undefined) setWordWrap(settings.word_wrap);
-        if (settings.keybindings) setKeybindings(settings.keybindings);
-        if (session.activeFile) fetchDiff(session.activeFile);
-      } catch {}
+      }
+      if (settings.font_size) setFontSize(settings.font_size);
+      if (settings.word_wrap !== undefined) setWordWrap(settings.word_wrap);
+      if (settings.keybindings) setKeybindings(settings.keybindings);
+      if (session.activeFile) fetchDiff(session.activeFile);
     });
   }, []);
 
@@ -310,20 +309,16 @@ function App() {
 
     const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProto}//${location.host}/api/ws`;
-    try {
-      const ws = new WebSocket(wsUrl);
-      ws.onopen = () => setWsConnected(true);
-      ws.onclose = () => { setWsConnected(false); connectSSE(); };
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.events) handleEvents(msg.events);
-        } catch {}
-      };
-      cleanup = () => { ws.close(); setWsConnected(false); };
-    } catch {
-      connectSSE();
-    }
+    const ws = new WebSocket(wsUrl);
+    ws.onopen = () => setWsConnected(true);
+    ws.onclose = () => { setWsConnected(false); connectSSE(); };
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.events) handleEvents(msg.events);
+      } catch {}
+    };
+    cleanup = () => { ws.close(); setWsConnected(false); };
 
     const repoInterval = setInterval(fetchRepos, 30000);
     return () => { cleanup(); clearInterval(repoInterval); clearTimeout(commentsPulseTimer.current); };
@@ -492,6 +487,9 @@ function App() {
   }, []);
 
   const handleSettingsChange = useCallback(async (settings) => {
+    if (settings.font_size !== undefined) setFontSize(settings.font_size);
+    if (settings.word_wrap !== undefined) setWordWrap(settings.word_wrap);
+    if (settings.keybindings !== undefined) setKeybindings(settings.keybindings);
     const res = await fetch('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -499,9 +497,6 @@ function App() {
     });
     const data = await res.json();
     if (data.css) setThemeCss(data.css);
-    if (settings.font_size !== undefined) setFontSize(settings.font_size);
-    if (settings.word_wrap !== undefined) setWordWrap(settings.word_wrap);
-    if (settings.keybindings !== undefined) setKeybindings(settings.keybindings);
   }, []);
 
   const pollTimer = useRef(null);
@@ -516,9 +511,7 @@ function App() {
   const [agentCliName, setAgentCliName] = useState('agent');
 
   const handleSendToAgent = useCallback(async () => {
-    const hasOpen = Object.values(commentsRef.current).some(
-      arr => arr.some(c => (c.status || 'open') !== 'resolved')
-    );
+    const hasOpen = Object.values(commentsRef.current).some(arr => arr.some(isOpen));
     if (!hasOpen) { showToast('No open comments to send', 'error'); return; }
     const r = await fetch('/api/agent/prompt', { method: 'POST' });
     const data = await r.json();
@@ -548,7 +541,10 @@ function App() {
   }, []);
 
   const handleSortByRisk = useCallback(() => {
-    setSortByRisk(v => { showToast(v ? 'Default file order' : 'Sorted by risk'); return !v; });
+    const next = !sortByRiskRef.current;
+    sortByRiskRef.current = next;
+    setSortByRisk(next);
+    showToast(next ? 'Sorted by risk' : 'Default file order');
   }, []);
 
   const [explainRunning, setExplainRunning] = useState(false);
@@ -627,14 +623,13 @@ function App() {
   }, [contextLines, fetchDiff]);
 
   const handleToggleWhitespace = useCallback(() => {
-    setIgnoreWhitespace(v => {
-      const next = !v;
-      showToast(next ? 'Hiding whitespace changes' : 'Showing whitespace changes');
-      diffCache.current.clear();
-      const af = activeFileRef.current;
-      if (af) fetchDiff(af, undefined, next);
-      return next;
-    });
+    const next = !ignoreWsRef.current;
+    ignoreWsRef.current = next;
+    setIgnoreWhitespace(next);
+    showToast(next ? 'Hiding whitespace changes' : 'Showing whitespace changes');
+    diffCache.current.clear();
+    const af = activeFileRef.current;
+    if (af) fetchDiff(af, undefined, next);
   }, [fetchDiff]);
 
   const handleCollapseAll = useCallback((action) => {
@@ -751,7 +746,7 @@ function App() {
   visibleFilesRef.current = visibleFiles;
 
   const activeFileOpenComments = useMemo(
-    () => (comments[activeFile] || []).filter(c => (c.status || 'open') !== 'resolved').length,
+    () => (comments[activeFile] || []).filter(isOpen).length,
     [comments, activeFile],
   );
   const activeStats = diffData && diffData.file_path === activeFile ? { adds: diffData.adds, dels: diffData.dels } : null;
@@ -761,7 +756,7 @@ function App() {
     let total = 0, open = 0;
     for (const arr of Object.values(comments || {})) {
       total += arr.length;
-      open += arr.filter(c => (c.status || 'open') !== 'resolved').length;
+      open += arr.filter(isOpen).length;
     }
     return { total, open };
   }, [comments]);
@@ -949,9 +944,9 @@ function App() {
       case 'expand-all-hunks': handleCollapseAll('expand'); break;
       case 'collapse-all-hunks': handleCollapseAll('collapse'); break;
       case 'toggle-whitespace': handleToggleWhitespace(); break;
-      case 'toggle-word-wrap': { const nw = !wordWrap; setWordWrap(nw); handleSettingsChange({ word_wrap: nw }); break; }
-      case 'font-size-up': { const ns = Math.min(fontSize + 1, 24); setFontSize(ns); handleSettingsChange({ font_size: ns }); break; }
-      case 'font-size-down': { const ns = Math.max(fontSize - 1, 8); setFontSize(ns); handleSettingsChange({ font_size: ns }); break; }
+      case 'toggle-word-wrap': handleSettingsChange({ word_wrap: !wordWrap }); break;
+      case 'font-size-up': handleSettingsChange({ font_size: clampFont(fontSize + 1) }); break;
+      case 'font-size-down': handleSettingsChange({ font_size: clampFont(fontSize - 1) }); break;
       case 'go-to-line': setShowGoToLine(v => !v); break;
       case 'export-summary': handleExportSummary(); break;
       case 'sort-risk': handleSortByRisk(); break;

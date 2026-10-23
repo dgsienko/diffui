@@ -4,6 +4,10 @@ export function shortName(path) {
   return path.split('/').pop();
 }
 
+export const isOpen = (c) => (c.status || 'open') !== 'resolved';
+
+export const clampFont = (n) => Math.max(8, Math.min(24, n));
+
 export function kb(keybindings, id, fallback) {
   return keybindings?.[id] || fallback;
 }
@@ -68,7 +72,7 @@ export function highlightRanges(htmlStr, ranges) {
 }
 
 // Character offset of a (node, offset) point within an element's text content.
-export function offsetInElement(el, node, nodeOffset) {
+function offsetInElement(el, node, nodeOffset) {
   const range = document.createRange();
   range.selectNodeContents(el);
   range.setEnd(node, nodeOffset);
@@ -185,10 +189,10 @@ export function useRangeSelection(codeSelector, containerRef, groupSelector) {
     window.getSelection()?.removeAllRanges();
   };
 
-  return { selMenu, setSelMenu, pendingSelection, setPendingSelection, commentFromSelection };
+  return { selMenu, pendingSelection, setPendingSelection, commentFromSelection };
 }
 
-export const isMac = navigator.platform.includes('Mac');
+const isMac = navigator.platform.includes('Mac');
 export const mod = isMac ? '⌘' : 'Ctrl';
 
 export function useResize(initial, min, max, axis = 'x') {

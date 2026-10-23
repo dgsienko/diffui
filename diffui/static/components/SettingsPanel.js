@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import htm from 'htm';
+import { clampFont } from '../lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -153,9 +154,9 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
 
         <label class="settings-label">Font size</label>
         <div class="settings-row">
-          <button class="settings-btn-sm" onClick=${() => update({ font_size: Math.max((fontSize || 13) - 1, 8) })}>−</button>
-          <span class="settings-value">${fontSize || 13}px</span>
-          <button class="settings-btn-sm" onClick=${() => update({ font_size: Math.min((fontSize || 13) + 1, 24) })}>+</button>
+          <button class="settings-btn-sm" onClick=${() => update({ font_size: clampFont(fontSize - 1) })}>−</button>
+          <span class="settings-value">${fontSize}px</span>
+          <button class="settings-btn-sm" onClick=${() => update({ font_size: clampFont(fontSize + 1) })}>+</button>
         </div>
 
         <label class="settings-label">Word wrap</label>
