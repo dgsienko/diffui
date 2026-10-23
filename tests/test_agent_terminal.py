@@ -286,6 +286,20 @@ class TestStartAgentEndpoint:
         mock_close.assert_called_once_with(11)
 
 
+def _read_until_exit(pty_fd: int, proc: subprocess.Popen) -> bytes:
+    output = b""
+    for _ in range(50):
+        ready, _, _ = select.select([pty_fd], [], [], 0.1)
+        if ready:
+            try:
+                output += os.read(pty_fd, 4096)
+            except OSError:  # Linux raises EIO once the child closes its end; macOS returns b"".
+                break
+        if proc.poll() is not None:
+            break
+    return output
+
+
 class TestPtyIntegration:
     def test_child_has_controlling_terminal(self):
         pty_fd, child_fd = pty.openpty()
@@ -307,13 +321,7 @@ class TestPtyIntegration:
         )
         os.close(child_fd)
 
-        output = b""
-        for _ in range(50):
-            ready, _, _ = select.select([pty_fd], [], [], 0.1)
-            if ready:
-                output += os.read(pty_fd, 4096)
-            if proc.poll() is not None:
-                break
+        output = _read_until_exit(pty_fd, proc)
 
         proc.wait(timeout=5)
         os.close(pty_fd)
@@ -394,13 +402,7 @@ class TestPtyIntegration:
         time.sleep(0.1)
         fcntl.ioctl(pty_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 100, 0, 0))
 
-        output = b""
-        for _ in range(50):
-            ready, _, _ = select.select([pty_fd], [], [], 0.1)
-            if ready:
-                output += os.read(pty_fd, 4096)
-            if proc.poll() is not None:
-                break
+        output = _read_until_exit(pty_fd, proc)
 
         proc.wait(timeout=5)
         os.close(pty_fd)
@@ -420,13 +422,7 @@ class TestPtyIntegration:
         )
         os.close(child_fd)
 
-        output = b""
-        for _ in range(50):
-            ready, _, _ = select.select([pty_fd], [], [], 0.1)
-            if ready:
-                output += os.read(pty_fd, 4096)
-            if proc.poll() is not None:
-                break
+        output = _read_until_exit(pty_fd, proc)
 
         proc.wait(timeout=5)
         os.close(pty_fd)

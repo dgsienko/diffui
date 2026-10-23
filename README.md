@@ -1,5 +1,11 @@
 # diffui
 
+[![CI](https://github.com/dgsienko/diffui/actions/workflows/ci.yml/badge.svg)](https://github.com/dgsienko/diffui/actions/workflows/ci.yml)
+
+<p align="center">
+  <a href="#install">install</a> · <a href="#quick-start">quick start</a> · <a href="#ai-agent-integration">agents</a> · <a href="#terminal-ui">terminal UI</a> · <a href="#keybindings">keybindings</a> · <a href="#development">development</a>
+</p>
+
 A local code review UI tool with optional AI agent integration.
 
 Review any branch with syntax-highlighted diffs, inline comments, and risk scoring. If you have a coding agent installed locally, you can leave feedback directly on the diff, watch the agent respond, and review the next round of changes in a tight loop without leaving the browser. There is also an AI-powered explain feature that walks you through what the branch does.
@@ -226,3 +232,7 @@ pip install -e ".[dev]"
 pytest
 ruff check .
 ```
+
+## License
+
+Copyright (c) 2026 Dillon Sienko. All rights reserved.
