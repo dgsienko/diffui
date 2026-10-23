@@ -125,13 +125,9 @@ function hunkStats(lines) {
 function Hunk({ hunk, byLine, searchTerm, onRightClick, onCtrlClick, onOpenInEditor, onLineHover, onAddComment, onDeleteComment, onEditComment, onReplyComment, onResolveComment, onApplySuggestion, commentingLine, setCommentingLine, commentingSelection, filePath, blameData, collapseAll }) {
   const [collapsed, setCollapsed] = useState(false);
   const stats = useMemo(() => hunkStats(hunk.lines), [hunk.lines]);
-  const lastCollapseVersion = useRef(0);
 
   useEffect(() => {
-    if (collapseAll && collapseAll.version !== lastCollapseVersion.current) {
-      lastCollapseVersion.current = collapseAll.version;
-      setCollapsed(collapseAll.action === 'collapse');
-    }
+    if (collapseAll) setCollapsed(collapseAll.action === 'collapse');
   }, [collapseAll]);
 
   return html`

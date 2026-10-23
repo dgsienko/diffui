@@ -97,9 +97,7 @@ function App() {
   const [fileLine, setFileLine] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
-  const [showIgnored, setShowIgnored] = useState(false);
   const [collapseAll, setCollapseAll] = useState(null);
-  const collapseVersion = useRef(0);
   const [fontSize, setFontSize] = useState(13);
   const [wordWrap, setWordWrap] = useState(false);
   const [keybindings, setKeybindings] = useState({});
@@ -362,11 +360,6 @@ function App() {
 
   const handleFileSelect = useCallback((path) => {
     saveScrollPosition();
-    const cacheKey = `${path}:${viewRef.current}:c${contextRef.current}:ws${ignoreWsRef.current}`;
-    const cached = diffCache.current.get(cacheKey);
-    if (cached) {
-      setDiffData(cached);
-    }
     setActiveFile(path);
     setBrowsing(false);
     setFileLine(null);
@@ -654,8 +647,7 @@ function App() {
   }, [fetchDiff]);
 
   const handleCollapseAll = useCallback((action) => {
-    collapseVersion.current += 1;
-    setCollapseAll({ action, version: collapseVersion.current });
+    setCollapseAll({ action });
     showToast(action === 'collapse' ? 'All hunks collapsed' : 'All hunks expanded');
   }, []);
 
@@ -755,16 +747,13 @@ function App() {
   }, [searchMatches, searchMatchIndex]);
 
   const visibleFiles = useMemo(() => {
-    let filtered = showReviewed ? files : files.filter(f => !f.reviewed);
-    if (!showIgnored) {
-      filtered = filtered.filter(f => !f.ignored);
-    }
+    let filtered = (showReviewed ? files : files.filter(f => !f.reviewed)).filter(f => !f.ignored);
     if (fileFilter) {
       const lower = fileFilter.toLowerCase();
       filtered = filtered.filter(f => f.path.toLowerCase().includes(lower));
     }
     return treeOrder(filtered, groupMode, sortByRisk);
-  }, [files, showReviewed, sortByRisk, fileFilter, showIgnored, groupMode]);
+  }, [files, showReviewed, sortByRisk, fileFilter, groupMode]);
   const previewing = showPreview && !!activeFile && !browsing && isPreviewable(activeFile);
   const activeFileReviewed = useMemo(() => files.find(f => f.path === activeFile)?.reviewed, [files, activeFile]);
 
@@ -1022,7 +1011,7 @@ function App() {
       <${SearchBar}
         value=${searchTerm}
         onChange=${setSearchTerm}
-        onClose=${() => { setShowSearch(false); setSearchTerm(''); setSearchMatchIndex(0); }}
+        onClose=${() => { setShowSearch(false); setSearchTerm(''); }}
         matchCount=${searchMatchCount}
         matchIndex=${searchMatchIndex}
         onNext=${() => navigateSearchMatch('next')}
