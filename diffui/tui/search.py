@@ -19,7 +19,7 @@ from diffui.tui.client import ApiClient
 Target = tuple[str, int | None]
 _DEBOUNCE = 0.15
 _SCOPES = (("changed", "Changed"), ("all", "All files"))
-_UNCHANGED_TAG = "  not in diff"
+_NOT_IN_DIFF = "  not in diff"
 
 
 class SearchScreen(ModalScreen[Target | None]):
@@ -100,7 +100,7 @@ class SearchScreen(ModalScreen[Target | None]):
         def heading(text: str, changed: bool = True) -> None:
             label = Text(text, style=f"bold {p.accent}", no_wrap=True)
             if not changed:
-                label.append(_UNCHANGED_TAG, style=f"not bold {p.fg_muted}")
+                label.append(_NOT_IN_DIFF, style=f"not bold {p.fg_muted}")
             options.append(Option(label, disabled=True))
 
         files = data["files"]
@@ -110,7 +110,7 @@ class SearchScreen(ModalScreen[Target | None]):
                 label = Text(f["path"], style=p.fg if f["changed"] else p.fg_muted, no_wrap=True, overflow="ellipsis")
                 label.highlight_regex(mark, f"bold {p.warn_fg}")
                 if not f["changed"]:
-                    label.append(_UNCHANGED_TAG, style=p.gutter_fg)
+                    label.append(_NOT_IN_DIFF, style=p.gutter_fg)
                 add(label, (f["path"], None))
         current = None
         for hit in data["hits"]:
