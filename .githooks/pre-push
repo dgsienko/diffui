@@ -22,7 +22,7 @@ if [[ ",${SKIP:-}," == *",check-suite,"* ]]; then
     echo "  check-suite skipped."
 else
     echo "  check-suite..."
-    printf '%s\n' "$refs" | python scripts/check_suite.py
+    printf '%s\n' "$refs" | python3 scripts/check_suite.py
 fi
 
 echo "All checks passed."
