@@ -150,7 +150,7 @@ class TestResolveRepos:
         repos, idx = resolve_repos([repo_path])
         assert len(repos) == 1
         assert idx == 0
-        assert repos[0].name == "diffui"
+        assert repos[0].resolve() == Path(repo_path).resolve()
 
     def test_deduplicates(self):
         from diffui.git_utils import resolve_repos

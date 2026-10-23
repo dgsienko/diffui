@@ -22,7 +22,8 @@ import { AgentTerminal } from './components/AgentTerminal.js';
 import { CommentsPanel } from './components/CommentsPanel.js';
 import { FileFilterBar } from './components/FileFilterBar.js';
 import { GoToLineDialog } from './components/GoToLineDialog.js';
-import { shortName, mod } from './lib/utils.js';
+import { SearchDialog } from './components/SearchDialog.js';
+import { shortName, mod, nearestNewLine } from './lib/utils.js';
 
 const html = htm.bind(h);
 
@@ -91,6 +92,9 @@ function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showGoToLine, setShowGoToLine] = useState(false);
+  const [showRepoSearch, setShowRepoSearch] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
+  const [fileLine, setFileLine] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   const [showIgnored, setShowIgnored] = useState(false);
@@ -105,6 +109,7 @@ function App() {
   const scrollPositions = useRef(new Map());
   const hoveredLineRef = useRef(null);
   const scrollToLineRef = useRef(null);
+  const searchJumpRef = useRef(null);
   const latestCallbacks = useRef({});
   const activeFileRef = useRef(activeFile);
   activeFileRef.current = activeFile;
@@ -115,6 +120,8 @@ function App() {
   const branchRef = useRef(branch);
   branchRef.current = branch;
   const visibleFilesRef = useRef([]);
+  const browsingRef = useRef(false);
+  browsingRef.current = browsing;
   const showCompletionRef = useRef(false);
   const dialogOpenRef = useRef(false);
   const ignoreWsRef = useRef(false);
@@ -176,7 +183,9 @@ function App() {
       setEmptyReason(null);
     }
     const current = activeFileRef.current;
-    if (data.length > 0 && (!current || !data.find(f => f.path === current))) {
+    const inDiff = data.some(f => f.path === current);
+    if (inDiff) setBrowsing(false);
+    if (data.length > 0 && !browsingRef.current && !inDiff) {
       const firstUnreviewed = data.find(f => !f.reviewed);
       const newActive = (firstUnreviewed || data[0]).path;
       setActiveFile(newActive);
@@ -184,6 +193,12 @@ function App() {
     }
     setLoading(false);
   }, [view, fetchDiff]);
+
+  const saveScrollPosition = useCallback(() => {
+    if (activeFileRef.current && diffRef.current) {
+      scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
+    }
+  }, []);
 
   const flashLineRef = useRef(null);
   const scrollToLineAndFlash = useCallback((lineNum) => {
@@ -199,7 +214,12 @@ function App() {
 
   useEffect(() => {
     if (!activeFile || !diffRef.current) return;
-    const targetLine = scrollToLineRef.current;
+    let targetLine = scrollToLineRef.current;
+    const jump = searchJumpRef.current;
+    if (jump && diffData?.file_path === jump.path) {
+      searchJumpRef.current = null;
+      targetLine = nearestNewLine(diffData, jump.line);
+    }
     let rafId;
     if (targetLine !== null) {
       scrollToLineRef.current = null;
@@ -266,9 +286,7 @@ function App() {
       const cb = latestCallbacks.current;
       if (events.includes('git_changed') || events.includes('files_changed')) {
         diffCache.current.clear();
-        if (cb.activeFile && diffRef.current) {
-          scrollPositions.current.set(cb.activeFile, diffRef.current.scrollTop);
-        }
+        saveScrollPosition();
         cb.fetchFiles();
         cb.fetchCommits();
         cb.fetchRepos();
@@ -318,6 +336,7 @@ function App() {
   const handleViewChange = useCallback(async (newView) => {
     setView(newView);
     setActiveFile(null);
+    setBrowsing(false);
     setDiffData(null);
     diffCache.current.clear();
     scrollPositions.current.clear();
@@ -332,6 +351,7 @@ function App() {
       body: JSON.stringify({ index }),
     });
     setActiveFile(null);
+    setBrowsing(false);
     setDiffData(null);
     setView('all');
     diffCache.current.clear();
@@ -341,17 +361,35 @@ function App() {
   }, [fetchRepos, fetchBranch, fetchCommits, fetchFiles, fetchComments]);
 
   const handleFileSelect = useCallback((path) => {
-    if (activeFileRef.current && diffRef.current) {
-      scrollPositions.current.set(activeFileRef.current, diffRef.current.scrollTop);
-    }
+    saveScrollPosition();
     const cacheKey = `${path}:${viewRef.current}:c${contextRef.current}:ws${ignoreWsRef.current}`;
     const cached = diffCache.current.get(cacheKey);
     if (cached) {
       setDiffData(cached);
     }
     setActiveFile(path);
+    setBrowsing(false);
+    setFileLine(null);
     fetchDiff(path);
-  }, [fetchDiff]);
+  }, [fetchDiff, saveScrollPosition]);
+
+  const handleSearchOpen = useCallback(({ path, line, changed }) => {
+    setShowRepoSearch(false);
+    if (!changed) {
+      saveScrollPosition();
+      setActiveFile(path);
+      setDiffData(null);
+      setBrowsing(true);
+      setFileLine(line);
+      return;
+    }
+    const opening = path !== activeFileRef.current || browsingRef.current;
+    if (opening) handleFileSelect(path);
+    if (!line) return;
+    if (diffMode === 'file') setFileLine(line);
+    else if (opening) searchJumpRef.current = { path, line };
+    else scrollToLineAndFlash(nearestNewLine(diffData, line));
+  }, [diffMode, diffData, handleFileSelect, saveScrollPosition, scrollToLineAndFlash]);
 
   const handleCommentSelect = useCallback((filePath, lineIndex) => {
     scrollToLineRef.current = lineIndex;
@@ -360,7 +398,7 @@ function App() {
 
   const handleToggleReview = useCallback(async () => {
     const af = activeFileRef.current;
-    if (!af) return;
+    if (!af || browsingRef.current) return;
     const r = await fetch(`/api/reviewed/${encodeURIComponent(af)}`, { method: 'POST' });
     const data = await r.json();
     showToast(data.reviewed ? 'Marked as reviewed' : 'Marked as unreviewed', 'success');
@@ -727,7 +765,7 @@ function App() {
     }
     return treeOrder(filtered, groupMode, sortByRisk);
   }, [files, showReviewed, sortByRisk, fileFilter, showIgnored, groupMode]);
-  const previewing = showPreview && !!activeFile && isPreviewable(activeFile);
+  const previewing = showPreview && !!activeFile && !browsing && isPreviewable(activeFile);
   const activeFileReviewed = useMemo(() => files.find(f => f.path === activeFile)?.reviewed, [files, activeFile]);
 
   visibleFilesRef.current = visibleFiles;
@@ -758,7 +796,7 @@ function App() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          activeFile,
+          activeFile: browsingRef.current ? undefined : activeFile,
           diffMode,
           showFileTree,
           showReviewed,
@@ -769,7 +807,7 @@ function App() {
   }, [activeFile, diffMode, showFileTree, showReviewed]);
 
   showCompletionRef.current = showCompletion;
-  dialogOpenRef.current = showSettings || showSearch || showFileFilter || showShortcuts || showCommandPalette || showGoToLine;
+  dialogOpenRef.current = showSettings || showSearch || showFileFilter || showShortcuts || showCommandPalette || showGoToLine || showRepoSearch;
   const prevReviewedRef = useRef(null);
   useEffect(() => {
     if (prevReviewedRef.current !== null && files.length > 0
@@ -799,6 +837,7 @@ function App() {
         setShowShortcuts(false);
         setShowCommandPalette(false);
         setShowGoToLine(false);
+        setShowRepoSearch(false);
         setSearchTerm('');
         return;
       }
@@ -859,6 +898,9 @@ function App() {
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
       } else if (e.key === 'w') {
         handleToggleWhitespace();
+      } else if (e.key === '/') {
+        e.preventDefault();
+        setShowRepoSearch(true);
       } else if (e.key === '?') {
         setShowShortcuts(v => !v);
       }
@@ -880,6 +922,7 @@ function App() {
     { id: 'copy-gitlab-link', label: 'Copy GitLab link', keys: 'Y', category: 'Actions' },
     { id: 'toggle-file-tree', label: 'Toggle file tree', keys: keybindings['toggle-file-tree'] || 'b', category: 'Actions' },
     { id: 'search', label: 'Search in diff', keys: 'Ctrl+F', category: 'Actions' },
+    { id: 'repo-search', label: 'Search files and text', keys: '/', category: 'Navigation' },
     { id: 'shortcuts', label: 'Show keyboard shortcuts', keys: '?', category: 'Help' },
     { id: 'settings', label: 'Open settings', category: 'Settings' },
     { id: 'mode-unified', label: 'Switch to unified diff', category: 'Settings' },
@@ -915,6 +958,7 @@ function App() {
       case 'copy-gitlab-link': handleCopyGitLabLink(); break;
       case 'toggle-file-tree': setShowFileTree(v => !v); break;
       case 'search': setShowSearch(v => !v); break;
+      case 'repo-search': setShowRepoSearch(true); break;
       case 'shortcuts': setShowShortcuts(v => !v); break;
       case 'settings': setShowSettings(v => !v); break;
       case 'mode-unified': setDiffMode('unified'); break;
@@ -1033,6 +1077,7 @@ function App() {
           onBulkResolve=${() => handleBulkResolve(activeFile)}
           onToggleReview=${handleToggleReview}
           previewing=${previewing}
+          browsing=${browsing}
           onTogglePreview=${() => setShowPreview(v => !v)}
           keybindings=${keybindings}
         />
@@ -1043,8 +1088,8 @@ function App() {
               ? html`<${EmptyState} files=${files} visibleFiles=${visibleFiles} fileFilter=${fileFilter} showReviewed=${showReviewed} emptyReason=${emptyReason} />`
               : previewing
                 ? html`<${PreviewViewer} containerRef=${diffRef} filePath=${activeFile} />`
-                : diffMode === 'file'
-                ? html`<${FullFileViewer} containerRef=${diffRef} filePath=${activeFile} view=${view} />`
+                : browsing || diffMode === 'file'
+                ? html`<${FullFileViewer} containerRef=${diffRef} filePath=${activeFile} view=${view} gotoLine=${fileLine} readOnly=${browsing} />`
                 : diffMode === 'split' && diffData
                   ? html`<${SplitDiffViewer}
                       containerRef=${diffRef}
@@ -1076,7 +1121,7 @@ function App() {
                       />`
                     : html`<${DiffSkeleton} />`
           }
-          ${diffMode === 'unified' && diffData && html`
+          ${diffMode === 'unified' && diffData && !browsing && html`
             <${Minimap} diffData=${diffData} comments=${comments} containerRef=${diffRef} />
           `}
         </div>
@@ -1098,6 +1143,13 @@ function App() {
       <${GoToLineDialog}
         onSubmit=${handleGoToLine}
         onClose=${() => setShowGoToLine(false)}
+      />
+    `}
+    ${showRepoSearch && html`
+      <${SearchDialog}
+        view=${view}
+        onOpen=${handleSearchOpen}
+        onClose=${() => setShowRepoSearch(false)}
       />
     `}
     ${showAgentTerminal && html`

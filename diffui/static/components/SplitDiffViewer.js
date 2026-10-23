@@ -49,7 +49,7 @@ function SplitLine({ line, side, onRightClick, commentRanges }) {
   const lineHtml = commentRanges && commentRanges.length ? highlightRanges(line.html, commentRanges) : line.html;
 
   return html`
-    <div class=${'split-line ' + typeClass} data-line-index=${line.index} onContextMenu=${(e) => { if (window.getSelection && window.getSelection().toString()) return; e.preventDefault(); onRightClick(line); }}>
+    <div class=${'split-line ' + typeClass} data-line-index=${line.index} data-line-new=${side === 'right' ? line.new_num || undefined : undefined} onContextMenu=${(e) => { if (window.getSelection && window.getSelection().toString()) return; e.preventDefault(); onRightClick(line); }}>
       <span class="split-gutter">${num || ''}</span>
       <span class="split-code" dangerouslySetInnerHTML=${{ __html: lineHtml }}></span>
     </div>
