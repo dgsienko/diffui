@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 SKILLS = ("check-docs", "check-scope", "check-tests")
 TIMEOUT_SECONDS = 600
@@ -74,7 +75,17 @@ def main() -> int:
     prompt = PROMPT.format(skills=skill_files, range=diff_range, log=log.stdout, stat=stat.stdout, diff=diff.stdout)
     try:
         result = subprocess.run(
-            ["claude", "-p", "--restricted", "--tools", "Read,Grep,Glob", "--strict-mcp-config"],
+            # check-docs reads ~/.claude/STYLE.md and TROPES.md, outside the repo that --restricted allows.
+            [
+                "claude",
+                "-p",
+                "--restricted",
+                "--tools",
+                "Read,Grep,Glob",
+                "--strict-mcp-config",
+                "--add-dir",
+                str(Path.home() / ".claude"),
+            ],
             input=prompt,
             capture_output=True,
             text=True,
