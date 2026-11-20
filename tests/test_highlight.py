@@ -108,7 +108,7 @@ class TestParseDiffToJson:
             "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1 +1 @@\n-        keep old\n+        keep new\n"
         )
         lines = parse_diff_to_json(diff, "f.txt", CATPPUCCIN_MOCHA)["hunks"][-1]["lines"]
-        assert ["<mark>old</mark>" in lines[0]["html"], "<mark>new</mark>" in lines[1]["html"]] == [True, True]
+        assert [">old</mark>" in lines[0]["html"], ">new</mark>" in lines[1]["html"]] == [True, True]
 
 
 class TestHighlightFileToJson:
