@@ -161,6 +161,10 @@ class TestTokenColor:
         ("old", "new", ([(0, 3)], [(0, 3)])),
         ("a c", "a b c", ([], [(2, 3)])),
         ("a b c", "a c", ([(2, 3)], [])),
+        pytest.param("    x = old", "    x = new", ([(8, 11)], [(8, 11)]), id="leading-indent"),
+        pytest.param("\tx = old", "\tx = new", ([(5, 8)], [(5, 8)]), id="leading-tab"),
+        pytest.param("a  old  b", "a  new  b", ([(3, 6)], [(3, 6)]), id="runs-of-spaces"),
+        pytest.param("  a old new b", "  a b", ([(4, 11)], []), id="deleted-run-spans-inner-space"),
     ],
 )
 def test_word_diff_ranges(old, new, ranges):
