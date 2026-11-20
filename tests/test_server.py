@@ -678,3 +678,13 @@ class TestLocalOriginOnly:
             ) as ws,
         ):
             ws.receive_json()
+
+
+def test_settings_start_at_the_defaults_whatever_the_developer_saved(_server_app):
+    # Each settings test restores what it changes, so the server must report what a fresh
+    # AppState loads from the empty test config root, not the real ~/.config/diffui.
+    from diffui.server.state import AppState
+
+    defaults = AppState().settings()
+    reported = _server_app.get("/api/settings").json()
+    assert {k: reported[k] for k in defaults} == defaults
