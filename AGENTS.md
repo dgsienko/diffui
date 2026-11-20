@@ -102,6 +102,7 @@ Frontend changes follow these rules:
 - Fonts: `--font-ui` for chrome (bars, buttons, tree, panels, dialogs, toasts), `--font-mono` for code, line numbers, diff paths and comment code blocks.
 - Borders: only where they carry structure (the bar bottom edge, the tree/diff divider). Use spacing or a background shift elsewhere.
 - Animations: 0.15s, only where they mean something.
+- Scrollbars: styled once for every element at the top of `style.css`, from `--border` and `--gutter-fg`. Do not add per-component scrollbar rules.
 - No emoji as UI elements. Use text labels or CSS indicators.
 - Every async action has a loading state. Every interactive element works.
 
