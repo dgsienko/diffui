@@ -163,6 +163,7 @@ Inside herdr, `A` pastes the prompt into the workspace's agent pane. Anywhere el
 | `ctrl+f` | Find in this file |
 | `n` / `N` | Next / previous find match, while matches are showing |
 | `\|` | Switch between unified and split diff |
+| `e` | Show every line of the file, or only the changes. Shared with the web UI's All lines and remembered |
 | `tab` | Split view: move between the old and new line of a replaced pair |
 | `c` or `enter` | Comment on the line or range, or reply to the thread |
 | `v` | Start a line range at the cursor, then extend it with `up` / `down` |
@@ -207,6 +208,7 @@ The header shows the current scope. The browser has the same choices in its view
 - `.md` files get a rendered preview and images show inline. Markdown is sanitized before rendering, and diagram blocks go to kroki.io.
 - Font size and line wrap are in Settings and the command palette.
 - `w` or the Whitespace button toggles ignore whitespace.
+- `e` or the All lines button shows every line of the file in unified and split view, instead of the changes with a few lines of context. It is remembered across files and sessions, and the TUI shares it. More context and Less context step the context when it is off.
 - `ctrl+click` (`cmd+click` on macOS) a line to open it in VS Code, Cursor, Vim or Neovim. Pick the editor in Settings.
 
 ## Keybindings
@@ -224,6 +226,7 @@ The header shows the current scope. The browser has the same choices in its view
 | `c` | Comment on hovered line |
 | `b` | Toggle explorer sidebar |
 | `w` | Toggle ignore whitespace |
+| `e` | Toggle all lines |
 | `s` | Toggle sort by risk |
 | `S` | Copy review summary |
 | `y` | Copy file path |
@@ -243,7 +246,7 @@ Most shortcuts are ignored while a dialog is open. `r`, `a`, `c`, `y`, `s`, `S`,
 
 Review state lives in `~/.config/diffui/`:
 
-- `settings.json` holds theme, editor, agent CLI, display name, font size, line wrap and rebound keys. It is global.
+- `settings.json` holds theme, editor, agent CLI, display name, font size, line wrap, all lines and rebound keys. It is global.
 - `{repo}/{branch}/reviewed.json` holds review status.
 - `{repo}/{branch}/comments.json` holds comments.
 - `{repo}/{branch}/session.json` holds UI session state: the active file, diff mode, scroll positions and the explorer and reviewed-file toggles.

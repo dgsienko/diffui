@@ -29,6 +29,7 @@ const REBINDABLE_KEYS = [
   { id: 'export-summary', label: 'Export summary' },
   { id: 'toggle-file-tree', label: 'Toggle explorer' },
   { id: 'next-unreviewed', label: 'Next unreviewed' },
+  { id: 'toggle-all-lines', label: 'Show all lines' },
 ];
 
 export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindings }) {

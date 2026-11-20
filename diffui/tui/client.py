@@ -89,14 +89,18 @@ class ApiClient:
     async def settings(self) -> dict:
         return _json(await self._get("/api/settings"))
 
+    async def update_settings(self, **changes) -> None:
+        r = await self._http.put("/api/settings", json=changes)
+        r.raise_for_status()
+
     async def branch(self) -> dict:
         return _json(await self._get("/api/branch"))
 
     async def files(self, order: str, view: str) -> list[dict]:
         return _json(await self._get("/api/files", order=order, view=view, hide_ignored="true"))
 
-    async def diff(self, path: str, view: str) -> dict:
-        return _json(await self._get(f"/api/diff/{quote(path)}", view=view, html=0))
+    async def diff(self, path: str, view: str, context: int = 3) -> dict:
+        return _json(await self._get(f"/api/diff/{quote(path)}", view=view, context=context, html=0))
 
     async def search(self, query: str, view: str, scope: str) -> dict:
         return _json(await self._get("/api/search", q=query, view=view, scope=scope))

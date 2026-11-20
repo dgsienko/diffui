@@ -46,6 +46,7 @@ class SettingsUpdate(BaseModel):
     agent_cli: str | None = Field(default=None, pattern="^(claude|codex|opencode|cursor)$")
     font_size: int | None = Field(default=None, ge=8, le=32)
     word_wrap: bool | None = None
+    show_all_lines: bool | None = None
     keybindings: dict[str, str] | None = None
 
 

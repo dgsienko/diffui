@@ -38,6 +38,7 @@ KEYS: list[tuple[str, list[tuple[str, str]]]] = [
         "View and search",
         [
             ("|", "Switch between unified and split diff"),
+            ("e", "Show every line of the file, or only the changes. Saved for the next session"),
             ("tab", "Split view: move between the old and new line of a replaced pair"),
             ("/", "Search file names and text in the scope's files"),
             ("ctrl+f", "Find in this file. enter and shift+enter, or down and up, step through the matches"),

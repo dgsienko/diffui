@@ -61,6 +61,7 @@ class AppState:
         self.agent_cli: str = saved.get("agent_cli", "claude")
         self.font_size: int = saved.get("font_size", 13)
         self.word_wrap: bool = saved.get("word_wrap", False)
+        self.show_all_lines: bool = saved.get("show_all_lines", False)
         self.keybindings: dict[str, str] = saved.get("keybindings", {})
         self.ignore_patterns: list[str] = []
         self.theme_index: int = theme_index
@@ -133,6 +134,7 @@ class AppState:
             "agent_cli": self.agent_cli,
             "font_size": self.font_size,
             "word_wrap": self.word_wrap,
+            "show_all_lines": self.show_all_lines,
             "keybindings": self.keybindings,
         }
 
