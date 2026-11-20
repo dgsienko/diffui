@@ -6,6 +6,8 @@ import { kb } from '../lib/keys.js';
 
 const html = htm.bind(h);
 
+const WORD_HIGHLIGHT_OPTIONS = [['background', 'Background'], ['underline', 'Underline'], ['off', 'Off']];
+
 const EDITORS = [
   { value: 'code', label: 'VS Code' },
   { value: 'cursor', label: 'Cursor' },
@@ -32,7 +34,7 @@ const REBINDABLE_KEYS = [
   { id: 'toggle-all-lines', label: 'Show all lines' },
 ];
 
-export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindings }) {
+export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, wordHighlight, keybindings }) {
   const [settings, setSettings] = useState(null);
   const [themes, setThemes] = useState([]);
   const [showKeybindings, setShowKeybindings] = useState(false);
@@ -159,6 +161,15 @@ export function SettingsPanel({ onChange, onClose, fontSize, wordWrap, keybindin
           <button class=${'settings-toggle' + (wordWrap ? ' active' : '')} onClick=${() => update({ word_wrap: !wordWrap })}>
             ${wordWrap ? 'On' : 'Off'}
           </button>
+        </div>
+
+        <label class="settings-label">Changed words</label>
+        <div class="settings-row">
+          <div class="segmented segmented-sm">
+            ${WORD_HIGHLIGHT_OPTIONS.map(([value, label]) => html`
+              <button class=${'segmented-btn' + (wordHighlight === value ? ' active' : '')} onClick=${() => update({ word_highlight: value })}>${label}</button>
+            `)}
+          </div>
         </div>
 
         <div class="settings-divider"></div>

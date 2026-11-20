@@ -80,6 +80,7 @@ function App() {
   const [collapseAll, setCollapseAll] = useState(null);
   const [fontSize, setFontSize] = useState(13);
   const [wordWrap, setWordWrap] = useState(false);
+  const [wordHighlight, setWordHighlight] = useState('background');
   const [keybindings, setKeybindings] = useState({});
   const [commentsPulse, setCommentsPulse] = useState(false);
   const diffRef = useRef(null);
@@ -196,6 +197,7 @@ function App() {
       }
       if (settings.font_size) setFontSize(settings.font_size);
       if (settings.word_wrap !== undefined) setWordWrap(settings.word_wrap);
+      if (settings.word_highlight) setWordHighlight(settings.word_highlight);
       if (settings.keybindings) setKeybindings(settings.keybindings);
       if (settings.show_all_lines) {
         showAllLinesRef.current = true;
@@ -207,7 +209,7 @@ function App() {
     });
   }, []);
 
-  useAppearance({ themeCss, fontSize, wordWrap });
+  useAppearance({ themeCss, fontSize, wordWrap, wordHighlight });
 
   const commentsPulseTimer = useRef(null);
   const handleLiveEvents = useCallback((events) => {
@@ -313,6 +315,7 @@ function App() {
   const handleSettingsChange = useCallback(async (settings) => {
     if (settings.font_size !== undefined) setFontSize(settings.font_size);
     if (settings.word_wrap !== undefined) setWordWrap(settings.word_wrap);
+    if (settings.word_highlight !== undefined) setWordHighlight(settings.word_highlight);
     if (settings.keybindings !== undefined) setKeybindings(settings.keybindings);
     const res = await sendJson('/api/settings', 'PUT', settings);
     const data = await res.json();
@@ -467,7 +470,7 @@ function App() {
   }, [reviewedCount, files.length]);
 
   const { paletteCommands, handleCommand } = useKeyboard({
-    keybindings, fontSize, wordWrap,
+    keybindings, fontSize, wordWrap, wordHighlight,
     showCompletionRef, dialogOpenRef, visibleFilesRef, activeFileRef,
     handleFileSelect, handleToggleReview, handleCopyPath, handleSortByRisk, handleExportSummary,
     handleCopyGitLabLink, handleNextUnreviewed, navigateComment, scrollToHunk, handleToggleWhitespace,
@@ -618,6 +621,7 @@ function App() {
         onClose=${() => setShowSettings(false)}
         fontSize=${fontSize}
         wordWrap=${wordWrap}
+        wordHighlight=${wordHighlight}
         keybindings=${keybindings}
       />
     `}

@@ -203,10 +203,11 @@ The header shows the current scope. The browser has the same choices in its view
 
 ## Display
 
-- 16 color themes, with Graphite as the default: Graphite, Catppuccin Mocha, Catppuccin Latte, GitHub Dark, Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night, Rosé Pine, Rosé Pine Moon, Monokai Pro, Kanagawa, Everforest and Ayu Dark.
+- 17 color themes, with Graphite as the default: Graphite, Graphite High Contrast, Catppuccin Mocha, Catppuccin Latte, GitHub Dark, Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night, Rosé Pine, Rosé Pine Moon, Monokai Pro, Kanagawa, Everforest and Ayu Dark.
 - The blame gutter shows the author and age of each line.
 - `.md` files get a rendered preview and images show inline. Markdown is sanitized before rendering, and diagram blocks go to kroki.io.
 - Font size and line wrap are in Settings and the command palette.
+- Changed words inside a modified line are highlighted with a background, an underline, or not at all. Pick the style under "Changed words" in Settings, or cycle it from the command palette.
 - `w` or the Whitespace button toggles ignore whitespace.
 - `e` or the All lines button shows every line of the file in unified and split view, instead of the changes with a few lines of context. It is remembered across files and sessions, and the TUI shares it. More context and Less context step the context when it is off.
 - `ctrl+click` (`cmd+click` on macOS) a line to open it in VS Code, Cursor, Vim or Neovim. Pick the editor in Settings.
