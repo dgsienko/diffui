@@ -46,7 +46,7 @@ diffui/
 │   ├── filelist.py     # FileList: tree or risk-ordered files
 │   └── screens.py      # Help, comment composer, agent prompt and commit picker
 ├── static/             # Preact frontend: app.js, components/, lib/ (use*.js hooks, api.js, keys.js, markdown.js, utils.js), style.css
-└── themes/             # Theme dataclass, 16 themes in definitions.py
+└── themes/             # Theme dataclass, 17 themes in definitions.py
 ```
 
 ## Shared patterns

@@ -202,7 +202,7 @@ The header shows the current scope. The browser has the same choices in its view
 
 ## Display
 
-- 16 color themes, with Graphite as the default: Graphite, Catppuccin Mocha, Catppuccin Latte, GitHub Dark, Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night, Rosé Pine, Rosé Pine Moon, Monokai Pro, Kanagawa, Everforest and Ayu Dark.
+- 17 color themes, with Graphite as the default: Graphite, Graphite High Contrast, Catppuccin Mocha, Catppuccin Latte, GitHub Dark, Dracula, One Dark, Solarized Dark, Gruvbox Dark, Nord, Tokyo Night, Rosé Pine, Rosé Pine Moon, Monokai Pro, Kanagawa, Everforest and Ayu Dark.
 - The blame gutter shows the author and age of each line.
 - `.md` files get a rendered preview and images show inline. Markdown is sanitized before rendering, and diagram blocks go to kroki.io.
 - Font size and line wrap are in Settings and the command palette.
