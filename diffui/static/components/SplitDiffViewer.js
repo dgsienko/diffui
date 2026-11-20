@@ -38,6 +38,35 @@ function splitHunkLines(lines) {
   return { left, right };
 }
 
+// Hunk headers and lines sit at the same index in both panes, but a comment thread
+// or comment box takes room on one side only, so equal scrollTops drift apart below
+// every thread. The target is scrolled to put the row at the top of the source pane
+// at its own top, the same distance into it. While the source scrolls through a thread
+// the other side lacks, the target waits at the start of the next row.
+const ROWS = ':scope > .split-hunk-header, :scope > .split-line';
+
+function lastRowAtOrAbove(rows, y) {
+  let lo = 0;
+  let hi = rows.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (rows[mid].offsetTop <= y) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+function alignedScrollTop(source, target) {
+  const sourceRows = source.querySelectorAll(ROWS);
+  const targetRows = target.querySelectorAll(ROWS);
+  if (!sourceRows.length || sourceRows.length !== targetRows.length) return source.scrollTop;
+  const sourceTop = source.scrollTop + sourceRows[0].offsetTop;
+  const i = lastRowAtOrAbove(sourceRows, sourceTop);
+  const into = sourceTop - sourceRows[i].offsetTop;
+  const room = i + 1 < targetRows.length ? targetRows[i + 1].offsetTop - targetRows[i].offsetTop : Infinity;
+  return targetRows[i].offsetTop - targetRows[0].offsetTop + Math.min(into, room);
+}
+
 function SplitLine({ line, side, onRightClick, commentRanges }) {
   if (!line) return html`<div class="split-line empty"></div>`;
 
@@ -57,17 +86,22 @@ export function SplitDiffViewer({ data, comments, actions, containerRef }) {
   const [commentingLine, setCommentingLine] = useState(null);
   const leftRef = useRef(null);
   const rightRef = useRef(null);
-  const syncing = useRef(false);
+  // The position each pane was last scrolled to by syncScroll, so its own scroll
+  // event is recognised as the echo and not synced back.
+  const echo = useRef(new Map());
   const localContainerRef = useRef(null);
   const { selMenu, pendingSelection, setPendingSelection, commentFromSelection } = useRangeSelection('.split-code', localContainerRef, '.split-pane');
 
-  const syncScroll = (source, target) => {
-    if (syncing.current) return;
-    syncing.current = true;
-    requestAnimationFrame(() => {
-      if (target.current) target.current.scrollTop = source.current.scrollTop;
-      syncing.current = false;
-    });
+  const syncScroll = (sourceRef, targetRef) => {
+    const source = sourceRef.current;
+    const target = targetRef.current;
+    if (!source || !target) return;
+    const expected = echo.current.get(source);
+    echo.current.delete(source);
+    if (expected && expected.top === source.scrollTop && expected.left === source.scrollLeft) return;
+    target.scrollTop = alignedScrollTop(source, target);
+    target.scrollLeft = source.scrollLeft;
+    echo.current.set(target, { top: target.scrollTop, left: target.scrollLeft });
   };
 
   const handleRightClick = (line) => { setPendingSelection(null); setCommentingLine(line.index); };

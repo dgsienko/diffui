@@ -208,6 +208,7 @@ The header shows the current scope. The browser has the same choices in its view
 - Font size and line wrap are in Settings and the command palette.
 - `w` or the Whitespace button toggles ignore whitespace.
 - Scrollbars take the theme's colors: a thin thumb in the border color that brightens on hover.
+- In split view the two sides scroll together, up and down and sideways, and paired lines stay level even when a comment thread sits on one side only.
 - `ctrl+click` (`cmd+click` on macOS) a line to open it in VS Code, Cursor, Vim or Neovim. Pick the editor in Settings.
 
 ## Keybindings
