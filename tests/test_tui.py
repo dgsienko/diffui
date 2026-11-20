@@ -461,3 +461,22 @@ def test_escape_sequences_in_the_diff_never_reach_the_terminal(server, temp_repo
     texts = [line["text"] for hunk in data["hunks"] for line in hunk["lines"]]
     assert any("pwned" in t for t in texts)
     assert not any("\x1b" in t or "\x07" in t for t in texts)
+
+
+def test_e_shows_every_line_of_the_file_and_is_remembered(server):
+    def texts(view):
+        return [r.line["text"] for r in view.rows if r.kind == "line"]
+
+    async def scenario(app, view, pilot):
+        try:
+            assert app.active == "app.py" and " line 1" not in texts(view)
+            await pilot.press("e")
+            await until(pilot, lambda: " line 1" in texts(view), state=lambda: texts(view)[:3])
+            assert (await app.client.settings())["show_all_lines"] is True
+            await pilot.press("e")
+            await until(pilot, lambda: " line 1" not in texts(view))
+            assert (await app.client.settings())["show_all_lines"] is False
+        finally:
+            await app.client.update_settings(show_all_lines=False)
+
+    run_tui(server, scenario)

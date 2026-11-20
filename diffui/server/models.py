@@ -47,6 +47,7 @@ class SettingsUpdate(BaseModel):
     font_size: int | None = Field(default=None, ge=8, le=32)
     word_wrap: bool | None = None
     word_highlight: str | None = Field(default=None, pattern="^(background|underline|off)$")
+    show_all_lines: bool | None = None
     keybindings: dict[str, str] | None = None
 
 

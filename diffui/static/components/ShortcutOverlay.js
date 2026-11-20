@@ -16,6 +16,7 @@ const SHORTCUTS = [
   { id: 'next-unreviewed', action: 'Next unreviewed file' },
   { id: 'sort-risk', action: 'Sort by risk' },
   { keys: 'w', action: 'Toggle ignore whitespace' },
+  { id: 'toggle-all-lines', action: 'Show all lines of the file' },
   { id: 'toggle-file-tree', action: 'Toggle explorer' },
   { keys: `${mod}+K`, action: 'Command palette' },
   { keys: '/', action: 'Search files and text' },

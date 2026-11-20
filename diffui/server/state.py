@@ -62,6 +62,7 @@ class AppState:
         self.font_size: int = saved.get("font_size", 13)
         self.word_wrap: bool = saved.get("word_wrap", False)
         self.word_highlight: str = saved.get("word_highlight", "background")
+        self.show_all_lines: bool = saved.get("show_all_lines", False)
         self.keybindings: dict[str, str] = saved.get("keybindings", {})
         self.ignore_patterns: list[str] = []
         self.theme_index: int = theme_index
@@ -135,6 +136,7 @@ class AppState:
             "font_size": self.font_size,
             "word_wrap": self.word_wrap,
             "word_highlight": self.word_highlight,
+            "show_all_lines": self.show_all_lines,
             "keybindings": self.keybindings,
         }
 

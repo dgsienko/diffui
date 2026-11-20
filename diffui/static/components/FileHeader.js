@@ -8,11 +8,13 @@ const html = htm.bind(h);
 
 const MODES = [['unified', 'Unified'], ['split', 'Split'], ['file', 'File']];
 
-export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeChange, ignoreWhitespace, onToggleWhitespace, showReviewed, onToggleShowReviewed, showBlame, onToggleBlame, contextLines, onExpandContext, openCommentCount, onBulkResolve, onToggleReview, previewing, browsing, onTogglePreview, keybindings }) {
+export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeChange, ignoreWhitespace, onToggleWhitespace, showReviewed, onToggleShowReviewed, showBlame, onToggleBlame, contextLines, onExpandContext, showAllLines, onToggleAllLines, openCommentCount, onBulkResolve, onToggleReview, previewing, browsing, onTogglePreview, keybindings }) {
   const name = activeFile ? shortName(activeFile) : '';
   const dir = activeFile ? activeFile.slice(0, activeFile.length - name.length) : '';
   const previewable = activeFile && isPreviewable(activeFile);
   const diffView = activeFile && diffMode === 'unified' && !previewing;
+  // Unified and split both show hunks of context; the file view always shows every line.
+  const contextView = activeFile && diffMode !== 'file' && !previewing;
   const reviewKey = kb(keybindings, 'toggle-review');
 
   const path = html`
@@ -62,20 +64,25 @@ export function FileHeader({ activeFile, stats, reviewed, diffMode, onDiffModeCh
             ${previewing ? 'Raw' : previewLabel(activeFile)}
           </button>
         `}
-        ${diffView && html`
-          <button class=${'btn' + (showBlame ? ' active' : '')} onClick=${onToggleBlame} title="Toggle git blame annotations">
-            ${showBlame ? 'Hide blame' : 'Blame'}
+        ${contextView && html`
+          <button class=${'btn' + (showAllLines ? ' active' : '')} onClick=${onToggleAllLines} title=${`${showAllLines ? 'Show only the changes and their context' : 'Show every line of the file'} (${kb(keybindings, 'toggle-all-lines')})`}>
+            All lines
           </button>
-          ${contextLines > 3 && html`
+          ${!showAllLines && contextLines > 3 && html`
             <button class="btn" onClick=${() => onExpandContext('collapse')} title="Show fewer context lines around changes">
               Less context
             </button>
           `}
-          ${contextLines < 9999 && html`
+          ${!showAllLines && contextLines < 9999 && html`
             <button class="btn" onClick=${() => onExpandContext('expand')} title="Show more context lines around changes">
               More context
             </button>
           `}
+        `}
+        ${diffView && html`
+          <button class=${'btn' + (showBlame ? ' active' : '')} onClick=${onToggleBlame} title="Toggle git blame annotations">
+            ${showBlame ? 'Hide blame' : 'Blame'}
+          </button>
           ${openCommentCount > 0 && html`
             <button class="btn" onClick=${onBulkResolve} title="Resolve all open comments in this file">
               Resolve all (${openCommentCount})

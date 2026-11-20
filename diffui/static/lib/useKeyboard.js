@@ -9,7 +9,7 @@ export function useKeyboard({
   showCompletionRef, dialogOpenRef, visibleFilesRef, activeFileRef,
   handleFileSelect, handleToggleReview, handleCopyPath, handleSortByRisk, handleExportSummary,
   handleCopyGitLabLink, handleNextUnreviewed, navigateComment, scrollToHunk, handleToggleWhitespace,
-  handleExpandContext, handleCollapseAll, handleSettingsChange, handleBulkResolve, handleSendToAgent, handleExplain,
+  handleExpandContext, handleToggleAllLines, handleCollapseAll, handleSettingsChange, handleBulkResolve, handleSendToAgent, handleExplain,
   setDiffMode, setFileFilter, setSearchTerm, setShowCommandPalette, setShowCompletion, setShowFileFilter,
   setShowFileTree, setShowGoToLine, setShowRepoSearch, setShowReviewed, setShowSearch, setShowSettings, setShowShortcuts
 }) {
@@ -91,6 +91,8 @@ export function useKeyboard({
         scrollToHunk(e.key === 'j' ? 'next' : 'prev');
       } else if (e.key === 'w') {
         handleToggleWhitespace();
+      } else if (e.key === kb(keybindings, 'toggle-all-lines')) {
+        handleToggleAllLines();
       } else if (e.key === '/') {
         e.preventDefault();
         setShowRepoSearch(true);
@@ -126,6 +128,7 @@ export function useKeyboard({
     { id: 'expand-all-hunks', label: 'Expand all hunks', category: 'Actions' },
     { id: 'collapse-all-hunks', label: 'Collapse all hunks', category: 'Actions' },
     { id: 'toggle-whitespace', label: 'Toggle ignore whitespace', keys: 'w', category: 'Actions' },
+    { id: 'toggle-all-lines', label: 'Show all lines of the file', keys: kb(keybindings, 'toggle-all-lines'), category: 'Actions' },
     { id: 'toggle-word-wrap', label: 'Toggle word wrap', category: 'Settings' },
     { id: 'cycle-word-highlight', label: 'Cycle changed-word highlight', category: 'Settings' },
     { id: 'font-size-up', label: 'Increase font size', category: 'Settings' },
@@ -163,6 +166,7 @@ export function useKeyboard({
       case 'expand-all-hunks': handleCollapseAll('expand'); break;
       case 'collapse-all-hunks': handleCollapseAll('collapse'); break;
       case 'toggle-whitespace': handleToggleWhitespace(); break;
+      case 'toggle-all-lines': handleToggleAllLines(); break;
       case 'toggle-word-wrap': handleSettingsChange({ word_wrap: !wordWrap }); break;
       case 'cycle-word-highlight': {
         const i = WORD_HIGHLIGHT_STYLES.indexOf(wordHighlight);
@@ -181,7 +185,7 @@ export function useKeyboard({
       case 'prev-hunk': scrollToHunk('prev'); break;
       case 'next-hunk': scrollToHunk('next'); break;
     }
-  }, [handleToggleReview, handleFileSelect, handleCopyPath, handleCopyGitLabLink, handleExpandContext, handleCollapseAll, handleToggleWhitespace, handleExportSummary, handleSortByRisk, handleBulkResolve, handleSendToAgent, handleExplain, scrollToHunk, handleSettingsChange, wordWrap, wordHighlight, fontSize]);
+  }, [handleToggleReview, handleFileSelect, handleCopyPath, handleCopyGitLabLink, handleExpandContext, handleToggleAllLines, handleCollapseAll, handleToggleWhitespace, handleExportSummary, handleSortByRisk, handleBulkResolve, handleSendToAgent, handleExplain, scrollToHunk, handleSettingsChange, wordWrap, wordHighlight, fontSize]);
 
   return { paletteCommands, handleCommand };
 }

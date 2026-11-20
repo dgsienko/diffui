@@ -87,6 +87,7 @@ diffui/
 - `treeOrder()` in `FileTree.js` gives the file order that prev/next file and next-unreviewed follow. `_order_files` in `routes_diff.py` mirrors it for the TUI. Sort by risk turns the tree into one flat list.
 - The top bar holds navigation and global actions. `FileHeader` above the active viewer holds the per-file ones (view mode, whitespace, blame, resolve all, Mark reviewed).
 - `FullFileViewer` renders a window of lines. Hunk blocks use `content-visibility: auto`.
+- Context: `contextRef` holds the context every `fetchDiff` sends, `FULL_CONTEXT` while the `show_all_lines` setting is on (the All lines button, `e`), else `contextLines` (More / Less context). `fetchDiff` drops a response whose context is no longer current, so the 3-line fetch at startup cannot overwrite the full one.
 - `SearchDialog` calls `/api/search` 150ms after the last keystroke and aborts the request it replaces. `handleSearchOpen` in `app.js` scrolls to the line the diff shows nearest to a hit (`nearestNewLine`). A file outside the diff sets `browsing` and opens in `FullFileViewer` with `readOnly`, because the server reports an unchanged file as all added. `browsing` swaps `FileHeader` for a short one, makes `handleToggleReview` return, stops `fetchFiles` from resetting the active file, and keeps `activeFile` out of the session save. It ends when the file joins the diff or another file is picked.
 - Keep the accessibility basics: `role="treeitem"` on tree items, focus trapping in the settings dialog, `:focus-visible` outlines on buttons, and `+`/`-` prefixes next to the diff colors.
 
@@ -124,6 +125,7 @@ After a change:
 - Open in browser (`o`) writes `activeFile` to `/api/session`, which the web UI restores on load.
 - Range comments send what the web UI sends for a selection across lines: `line_index` is the first diff line's `index`, `sel_end_index` the last, `sel_start` 0, `sel_end` the last line's text length, and `selected_text` the lines joined by newlines. Threads anchor under the first line. A single line sends none of the selection fields.
 - Split view: `build_rows(..., split=True)` uses `split_pairs` to pair a run of removes with the run of adds that follows, as `splitHunkLines` does in `SplitDiffViewer.js`. A split `Row` has `old` and `new` (a context line is both), and `row.line` is the new one when there is one. `DiffView.target` picks the line a comment goes against. `side` is None for the keyboard (new side) and is set by `tab` or the pointer. A range follows one side and sorts its lines by `index`, since paired rows are not in diff order. A resize that crosses `SPLIT_MIN_WIDTH` rebuilds the rows. Long lines are cut at the side's edge, because split has no horizontal scroll.
+- All lines: `e` (`action_all_lines`) flips `DiffuiApp.all_lines`, saves it as `show_all_lines` through `update_settings`, and reloads the diff with `FULL_CONTEXT`. `_apply_theme` reads it at startup with the theme.
 - Find in file is client-side: `Find` matches `code_of(line)` of each row, and `code_segments` draws the spans. The `find_step` and `clear_find` bindings sit before the thread ones, and `check_action` enables them only while matches show, so `n` is next thread otherwise.
 - `SearchScreen` calls `/api/search` 150ms after the last keystroke. `DiffView.goto_line` moves to the nearest new-side line when the diff does not show the hit's line.
 - Files outside the diff: a result whose path is not in the view's file list sets `DiffuiApp.browsing`. `_load_diff` takes the file from `/api/file` (its `text` per line, since `html` is for the web UI) and wraps it as one hunk of context lines. `DiffView.readonly` then makes `context` return `readonly`, which matches no `c`, `x` or `v` binding, and turns off hover, gutter presses, range selection and split. `check_action` hides Reviewed and Hunks. `_refresh_files` leaves a browsed file open on file events and stops browsing once the file joins the diff.
@@ -172,7 +174,7 @@ All in `~/.config/diffui/`:
 
 | File | Scope | Format |
 | --- | --- | --- |
-| `settings.json` | Global | `{theme, editor, user_name, agent_cli, font_size, word_wrap, word_highlight, keybindings}` |
+| `settings.json` | Global | `{theme, editor, user_name, agent_cli, font_size, word_wrap, word_highlight, show_all_lines, keybindings}` |
 | `{repo}/{branch}/reviewed.json` | Per branch | `{"path": mtime}` |
 | `{repo}/{branch}/comments.json` | Per branch | `{"path": [{...}]}` |
 | `{repo}/{branch}/session.json` | Per branch | `{activeFile, diffMode, showFileTree, showReviewed, scrollPositions}` |

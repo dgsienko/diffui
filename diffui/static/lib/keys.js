@@ -8,6 +8,7 @@ export const DEFAULT_KEYS = {
   'export-summary': 'S',
   'toggle-file-tree': 'b',
   'next-unreviewed': ']',
+  'toggle-all-lines': 'e',
 };
 
 export function kb(keybindings, id) {

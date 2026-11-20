@@ -82,6 +82,7 @@ class TestServerRoutes:
             ("word_wrap", True),
             ("word_highlight", "underline"),
             ("word_highlight", "off"),
+            ("show_all_lines", True),
             ("keybindings", {"toggle-review": "R", "sort-risk": "x"}),
         ],
     )
