@@ -206,6 +206,7 @@ The header shows the current scope. The browser has the same choices in its view
 - The blame gutter shows the author and age of each line.
 - `.md` files get a rendered preview and images show inline. Markdown is sanitized before rendering, and diagram blocks go to kroki.io.
 - Font size and line wrap are in Settings and the command palette.
+- Changed words inside a modified line are highlighted with a background, an underline, or not at all. Pick the style under "Changed words" in Settings, or cycle it from the command palette.
 - `w` or the Whitespace button toggles ignore whitespace.
 - `ctrl+click` (`cmd+click` on macOS) a line to open it in VS Code, Cursor, Vim or Neovim. Pick the editor in Settings.
 

@@ -57,7 +57,7 @@ def _apply_word_highlights(code_html: str, ranges: list[tuple[int, int]], code_p
             end = code_html.index(";", i) + 1 if code_html[i] == "&" else i + 1
             should_mark = plain_idx in marked_chars
             if should_mark != in_highlight:
-                result.append("<mark>" if should_mark else "</mark>")
+                result.append('<mark class="word-hl">' if should_mark else "</mark>")
                 in_highlight = should_mark
             result.append(code_html[i:end])
             plain_idx += 1
