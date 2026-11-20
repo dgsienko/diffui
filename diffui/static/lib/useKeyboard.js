@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useCallback } from 'preact/hooks';
 import { mod, clampFont } from './utils.js';
 import { kb } from './keys.js';
+import { WORD_HIGHLIGHT_STYLES } from './useAppearance.js';
 
 // Global keydown handler plus the command palette's command list and dispatcher.
 export function useKeyboard({
-  keybindings, fontSize, wordWrap,
+  keybindings, fontSize, wordWrap, wordHighlight,
   showCompletionRef, dialogOpenRef, visibleFilesRef, activeFileRef,
   handleFileSelect, handleToggleReview, handleCopyPath, handleSortByRisk, handleExportSummary,
   handleCopyGitLabLink, handleNextUnreviewed, navigateComment, scrollToHunk, handleToggleWhitespace,
@@ -126,6 +127,7 @@ export function useKeyboard({
     { id: 'collapse-all-hunks', label: 'Collapse all hunks', category: 'Actions' },
     { id: 'toggle-whitespace', label: 'Toggle ignore whitespace', keys: 'w', category: 'Actions' },
     { id: 'toggle-word-wrap', label: 'Toggle word wrap', category: 'Settings' },
+    { id: 'cycle-word-highlight', label: 'Cycle changed-word highlight', category: 'Settings' },
     { id: 'font-size-up', label: 'Increase font size', category: 'Settings' },
     { id: 'font-size-down', label: 'Decrease font size', category: 'Settings' },
     { id: 'export-summary', label: 'Copy review summary', keys: kb(keybindings, 'export-summary'), category: 'Actions' },
@@ -162,6 +164,11 @@ export function useKeyboard({
       case 'collapse-all-hunks': handleCollapseAll('collapse'); break;
       case 'toggle-whitespace': handleToggleWhitespace(); break;
       case 'toggle-word-wrap': handleSettingsChange({ word_wrap: !wordWrap }); break;
+      case 'cycle-word-highlight': {
+        const i = WORD_HIGHLIGHT_STYLES.indexOf(wordHighlight);
+        handleSettingsChange({ word_highlight: WORD_HIGHLIGHT_STYLES[(i + 1) % WORD_HIGHLIGHT_STYLES.length] });
+        break;
+      }
       case 'font-size-up': handleSettingsChange({ font_size: clampFont(fontSize + 1) }); break;
       case 'font-size-down': handleSettingsChange({ font_size: clampFont(fontSize - 1) }); break;
       case 'go-to-line': setShowGoToLine(v => !v); break;
@@ -174,7 +181,7 @@ export function useKeyboard({
       case 'prev-hunk': scrollToHunk('prev'); break;
       case 'next-hunk': scrollToHunk('next'); break;
     }
-  }, [handleToggleReview, handleFileSelect, handleCopyPath, handleCopyGitLabLink, handleExpandContext, handleCollapseAll, handleToggleWhitespace, handleExportSummary, handleSortByRisk, handleBulkResolve, handleSendToAgent, handleExplain, scrollToHunk, handleSettingsChange, wordWrap, fontSize]);
+  }, [handleToggleReview, handleFileSelect, handleCopyPath, handleCopyGitLabLink, handleExpandContext, handleCollapseAll, handleToggleWhitespace, handleExportSummary, handleSortByRisk, handleBulkResolve, handleSendToAgent, handleExplain, scrollToHunk, handleSettingsChange, wordWrap, wordHighlight, fontSize]);
 
   return { paletteCommands, handleCommand };
 }
