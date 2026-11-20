@@ -115,6 +115,13 @@ class TestParseDiffToJson:
         by_text = {line["text"]: line["index"] for h in result["hunks"] for line in h["lines"]}
         assert by_text == {"-old": 4, "+new": 5, "-a": 7, "+b": 8}
 
+    def test_word_highlight_lands_on_the_changed_word_of_an_indented_line(self):
+        diff = (
+            "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1 +1 @@\n-        keep old\n+        keep new\n"
+        )
+        lines = parse_diff_to_json(diff, "f.txt", CATPPUCCIN_MOCHA)["hunks"][-1]["lines"]
+        assert [">old</mark>" in lines[0]["html"], ">new</mark>" in lines[1]["html"]] == [True, True]
+
 
 class TestHighlightFileToJson:
     def test_empty_content(self):

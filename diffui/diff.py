@@ -83,26 +83,28 @@ def strip_diff_prefix(line: str) -> str:
     return line[1:] if line[:1] in ("+", "-", " ") else line
 
 
-def _word_offsets(words: list[str]) -> list[int]:
-    offsets = [0] * (len(words) + 1)
-    for i, w in enumerate(words):
-        offsets[i + 1] = offsets[i] + len(w) + 1
-    return offsets
+_WORD_RE = re.compile(r"\S+")
+
+
+def _word_spans(line: str) -> list[tuple[int, int]]:
+    # Real character offsets of each word, so leading indentation and runs of
+    # whitespace between words do not shift the ranges.
+    return [m.span() for m in _WORD_RE.finditer(line)]
 
 
 def word_diff_ranges(old_line: str, new_line: str) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
-    old_words = old_line.split()
-    new_words = new_line.split()
-    old_off = _word_offsets(old_words)
-    new_off = _word_offsets(new_words)
+    old_spans = _word_spans(old_line)
+    new_spans = _word_spans(new_line)
+    old_words = [old_line[s:e] for s, e in old_spans]
+    new_words = [new_line[s:e] for s, e in new_spans]
     matcher = difflib.SequenceMatcher(None, old_words, new_words)
     old_ranges: list[tuple[int, int]] = []
     new_ranges: list[tuple[int, int]] = []
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag in ("replace", "delete"):
-            old_ranges.append((old_off[i1], max(old_off[i2] - 1, old_off[i1])))
+            old_ranges.append((old_spans[i1][0], old_spans[i2 - 1][1]))
         if tag in ("replace", "insert"):
-            new_ranges.append((new_off[j1], max(new_off[j2] - 1, new_off[j1])))
+            new_ranges.append((new_spans[j1][0], new_spans[j2 - 1][1]))
     return old_ranges, new_ranges
 
 
