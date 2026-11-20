@@ -53,6 +53,8 @@ Screen.-narrow FileList { width: 1fr; max-width: 100%; height: 30%; min-height: 
 
 _NEEDS = {"select_range": "line", "clear_selection": "range"}
 _SCOPES = (("uncommitted", "working"), ("branch", "all"), ("last turn", "last-turn"))
+# Context sent for "All lines": large enough that git shows every line of the file.
+FULL_CONTEXT = 1_000_000
 
 
 def _number(line: dict) -> str:
@@ -120,6 +122,7 @@ class DiffuiApp(App[None]):
         Binding("t", "scope('last-turn')", show=False),
         Binding("C", "commits", show=False),
         Binding("vertical_line", "split", "Split", key_display="|"),
+        Binding("e", "all_lines", show=False),
         Binding("r", "review", "Reviewed"),
         Binding("s", "sort", show=False),
         Binding("A", "agent", "Agent", key_display="A"),
@@ -140,6 +143,8 @@ class DiffuiApp(App[None]):
         self.order = "tree"
         self.view = "all"
         self.diff_theme = DEFAULT_THEME
+        # Show every line of the file, not just the hunks. Saved as show_all_lines.
+        self.all_lines = False
         self._branch: dict = {}
         self._diff_seq = 0
 
@@ -192,7 +197,9 @@ class DiffuiApp(App[None]):
             self.notify(f"Request failed: {e}", severity="error", markup=False)
 
     async def _apply_theme(self) -> None:
-        name = (await self.client.settings())["theme"]
+        settings = await self.client.settings()
+        self.all_lines = settings.get("show_all_lines", False)
+        name = settings["theme"]
         theme = next(t for t in ALL_THEMES if t.name == name)
         self.register_theme(
             TextualTheme(
@@ -274,6 +281,8 @@ class DiffuiApp(App[None]):
             bar.append("   sorted by risk", style="dim")
         if self.query_one(DiffView).split_active:
             bar.append("   split", style="dim")
+        if self.all_lines:
+            bar.append("   all lines", style="dim")
         self.query_one("#bar", Static).update(bar)
 
     def on_resize(self, _event) -> None:
@@ -292,7 +301,7 @@ class DiffuiApp(App[None]):
         if browsing:
             data = _file_as_diff(await self.client.file(path, self.view))
         else:
-            data = await self.client.diff(path, self.view)
+            data = await self.client.diff(path, self.view, FULL_CONTEXT if self.all_lines else 3)
         if seq == self._diff_seq and path == self.active:
             view = self._show(path, data, [] if browsing else self.comments.get(path, []), browsing)
             if line is not None and not view.goto_line(line):
@@ -365,6 +374,14 @@ class DiffuiApp(App[None]):
     async def _pick_commit(self, sha: str | None) -> None:
         if sha:
             await self._set_view(sha)
+
+    async def action_all_lines(self) -> None:
+        self.all_lines = not self.all_lines
+        self._update_bar()
+        self.notify("Showing all lines" if self.all_lines else "Showing changes with 3 lines of context", timeout=2)
+        await self._safely(self.client.update_settings(show_all_lines=self.all_lines))
+        if self.active and not self.browsing:
+            await self._safely(self._load_diff(self.active))
 
     def action_split(self) -> None:
         self.notify(self.query_one(DiffView).toggle_split(), timeout=2)

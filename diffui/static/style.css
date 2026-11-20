@@ -580,6 +580,23 @@ mark {
   padding: 0 1px;
 }
 
+/* Changed words inside a paired remove/add line. No padding, so the marked
+   text keeps the same columns as the line on the other side. */
+mark.word-hl {
+  padding: 0;
+}
+
+html.word-hl-underline mark.word-hl {
+  background: transparent;
+  border-radius: 0;
+  text-decoration: underline 2px currentColor;
+  text-underline-offset: 3px;
+}
+
+html.word-hl-off mark.word-hl {
+  background: transparent;
+}
+
 /* --- Empty state --- */
 
 .empty-state {

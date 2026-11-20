@@ -41,3 +41,33 @@ class TestDefaultTheme:
         assert state.AppState().theme is DEFAULT_THEME
         monkeypatch.setattr(state, "load_settings", lambda: {"theme": "Dracula"})
         assert state.AppState().theme.name == "Dracula"
+
+
+def _luminance(hex_color: str) -> float:
+    channels = [int(hex_color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def _contrast(a: str, b: str) -> float:
+    high, low = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+class TestGraphiteHighContrast:
+    def test_code_colors_stay_readable_on_every_line_background(self):
+        from diffui.themes.definitions import GRAPHITE_HIGH_CONTRAST as theme
+
+        for background in (theme.bg, theme.add_bg, theme.remove_bg):
+            for color in (theme.fg, *theme.syntax.values()):
+                assert _contrast(color, background) >= 4.5, f"{color} on {background}"
+
+    def test_changed_lines_stand_out_more_than_in_graphite(self):
+        from diffui.themes.definitions import GRAPHITE
+        from diffui.themes.definitions import GRAPHITE_HIGH_CONTRAST as theme
+
+        for field_name in ("add_bg", "remove_bg"):
+            assert _contrast(getattr(theme, field_name), theme.bg) >= 1.5
+            assert _contrast(getattr(theme, field_name), theme.bg) > _contrast(
+                getattr(GRAPHITE, field_name), GRAPHITE.bg
+            )

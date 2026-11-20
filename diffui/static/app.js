@@ -38,6 +38,9 @@ import { useSessionSave } from './lib/useSessionSave.js';
 
 const html = htm.bind(h);
 
+// Context sent for "All lines": large enough that git shows every line of the file.
+const FULL_CONTEXT = 1000000;
+
 function App() {
   const [repos, setRepos] = useState([]);
   const [files, setFiles] = useState([]);
@@ -65,6 +68,7 @@ function App() {
   const [fileFilter, setFileFilter] = useState('');
   const [diffMode, setDiffMode] = useState('unified');
   const [contextLines, setContextLines] = useState(3);
+  const [showAllLines, setShowAllLines] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -76,6 +80,7 @@ function App() {
   const [collapseAll, setCollapseAll] = useState(null);
   const [fontSize, setFontSize] = useState(13);
   const [wordWrap, setWordWrap] = useState(false);
+  const [wordHighlight, setWordHighlight] = useState('background');
   const [keybindings, setKeybindings] = useState({});
   const [commentsPulse, setCommentsPulse] = useState(false);
   const diffRef = useRef(null);
@@ -91,8 +96,11 @@ function App() {
   commentsRef.current = comments;
   const viewRef = useRef(view);
   viewRef.current = view;
+  const showAllLinesRef = useRef(false);
+  showAllLinesRef.current = showAllLines;
+  // The context every diff fetch uses unless it passes its own.
   const contextRef = useRef(contextLines);
-  contextRef.current = contextLines;
+  contextRef.current = showAllLines ? FULL_CONTEXT : contextLines;
   const branchRef = useRef(branch);
   branchRef.current = branch;
   const visibleFilesRef = useRef([]);
@@ -145,7 +153,7 @@ function App() {
     const res = await safeFetch(`/api/diff/${encodeURIComponent(path)}?view=${v}&context=${c}&ignore_whitespace=${ws}`);
     const data = await res.json();
     diffCache.current.set(cacheKey, data);
-    if (activeFileRef.current === path) {
+    if (activeFileRef.current === path && c === contextRef.current) {
       setDiffData(data);
     }
   }, []);
@@ -189,12 +197,19 @@ function App() {
       }
       if (settings.font_size) setFontSize(settings.font_size);
       if (settings.word_wrap !== undefined) setWordWrap(settings.word_wrap);
+      if (settings.word_highlight) setWordHighlight(settings.word_highlight);
       if (settings.keybindings) setKeybindings(settings.keybindings);
+      if (settings.show_all_lines) {
+        showAllLinesRef.current = true;
+        contextRef.current = FULL_CONTEXT;
+        setShowAllLines(true);
+        if (activeFileRef.current && !session.activeFile) fetchDiff(activeFileRef.current);
+      }
       if (session.activeFile) fetchDiff(session.activeFile);
     });
   }, []);
 
-  useAppearance({ themeCss, fontSize, wordWrap });
+  useAppearance({ themeCss, fontSize, wordWrap, wordHighlight });
 
   const commentsPulseTimer = useRef(null);
   const handleLiveEvents = useCallback((events) => {
@@ -300,6 +315,7 @@ function App() {
   const handleSettingsChange = useCallback(async (settings) => {
     if (settings.font_size !== undefined) setFontSize(settings.font_size);
     if (settings.word_wrap !== undefined) setWordWrap(settings.word_wrap);
+    if (settings.word_highlight !== undefined) setWordHighlight(settings.word_highlight);
     if (settings.keybindings !== undefined) setKeybindings(settings.keybindings);
     const res = await sendJson('/api/settings', 'PUT', settings);
     const data = await res.json();
@@ -329,7 +345,23 @@ function App() {
     }
   }, [handleFileSelect]);
 
+  const handleToggleAllLines = useCallback(() => {
+    const next = !showAllLinesRef.current;
+    showAllLinesRef.current = next;
+    contextRef.current = next ? FULL_CONTEXT : 3;
+    setShowAllLines(next);
+    setContextLines(3);
+    sendJson('/api/settings', 'PUT', { show_all_lines: next });
+    const af = activeFileRef.current;
+    if (af) fetchDiff(af);
+    showToast(next ? 'Showing all lines' : 'Showing changes with 3 lines of context');
+  }, [fetchDiff]);
+
   const handleExpandContext = useCallback((direction = 'expand') => {
+    if (showAllLinesRef.current) {
+      showToast('All lines is on');
+      return;
+    }
     const levels = [3, 10, 50, 9999];
     let next;
     if (direction === 'collapse') {
@@ -338,6 +370,7 @@ function App() {
       next = levels.find(l => l > contextLines) || 9999;
     }
     setContextLines(next);
+    contextRef.current = next;
     const af = activeFileRef.current;
     if (af) {
       for (const key of [...diffCache.current.keys()]) {
@@ -437,11 +470,11 @@ function App() {
   }, [reviewedCount, files.length]);
 
   const { paletteCommands, handleCommand } = useKeyboard({
-    keybindings, fontSize, wordWrap,
+    keybindings, fontSize, wordWrap, wordHighlight,
     showCompletionRef, dialogOpenRef, visibleFilesRef, activeFileRef,
     handleFileSelect, handleToggleReview, handleCopyPath, handleSortByRisk, handleExportSummary,
     handleCopyGitLabLink, handleNextUnreviewed, navigateComment, scrollToHunk, handleToggleWhitespace,
-    handleExpandContext, handleCollapseAll, handleSettingsChange, handleBulkResolve, handleSendToAgent, handleExplain,
+    handleExpandContext, handleToggleAllLines, handleCollapseAll, handleSettingsChange, handleBulkResolve, handleSendToAgent, handleExplain,
     setDiffMode, setFileFilter, setSearchTerm, setShowCommandPalette, setShowCompletion, setShowFileFilter,
     setShowFileTree, setShowGoToLine, setShowRepoSearch, setShowReviewed, setShowSearch, setShowSettings, setShowShortcuts
   });
@@ -535,6 +568,8 @@ function App() {
           onToggleBlame=${() => setShowBlame(v => !v)}
           contextLines=${contextLines}
           onExpandContext=${handleExpandContext}
+          showAllLines=${showAllLines}
+          onToggleAllLines=${handleToggleAllLines}
           openCommentCount=${activeFileOpenComments}
           onBulkResolve=${() => handleBulkResolve(activeFile)}
           onToggleReview=${handleToggleReview}
@@ -586,6 +621,7 @@ function App() {
         onClose=${() => setShowSettings(false)}
         fontSize=${fontSize}
         wordWrap=${wordWrap}
+        wordHighlight=${wordHighlight}
         keybindings=${keybindings}
       />
     `}

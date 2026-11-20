@@ -46,7 +46,7 @@ diffui/
 │   ├── filelist.py     # FileList: tree or risk-ordered files
 │   └── screens.py      # Help, comment composer, agent prompt and commit picker
 ├── static/             # Preact frontend: app.js, components/, lib/ (use*.js hooks, api.js, keys.js, markdown.js, utils.js), style.css
-└── themes/             # Theme dataclass, 16 themes in definitions.py
+└── themes/             # Theme dataclass, 17 themes in definitions.py
 ```
 
 ## Shared patterns
@@ -57,7 +57,7 @@ diffui/
 - Branch-scoped state: reviewed status, comments and session live in `~/.config/diffui/{repo}/{branch}/`, where `{repo}` and `{branch}` are `_safe_name()` of the repo path and branch. `get_repo_root()` and `_cached_current_branch()` are `lru_cache`'d. `_save_json` writes a temp file and renames it. `_load_json` moves an unparseable file aside to `.corrupt`, so the next save cannot overwrite it.
 - Worktrees: `get_git_dir()` resolves the real git dir for regular repos and linked worktrees.
 - Comments: `author_type` is `user` or `agent`. `category` is bug, suggestion, nit or question. `status` is open or resolved. The web UI locks a user's comment for editing once an agent replies (`canEdit` in `CommentDisplay.js`). The server does not enforce that. `agentColor()` hashes the author name, so each agent gets its own color.
-- Word-level diff: `pair_diff_lines` pairs consecutive removes and adds, and `word_diff_ranges` uses `difflib.SequenceMatcher` for the changed word spans. Each word keeps its real character offsets (`_word_spans`), so indentation and runs of spaces do not shift the marks.
+- Word-level diff: `pair_diff_lines` pairs consecutive removes and adds, and `word_diff_ranges` uses `difflib.SequenceMatcher` for the changed word spans. Each word keeps its real character offsets (`_word_spans`), so indentation and runs of spaces do not shift the marks. They render as `<mark class="word-hl">`, styled by the `word-hl-background`, `word-hl-underline` or `word-hl-off` class `useAppearance` puts on `<html>` from the `word_highlight` setting.
 - Diff line `index`: `parse_diff_to_json` numbers every line of the diff text, and saved comments anchor on that number. `split_into_hunks` returns the lines before the first `@@` as a pseudo hunk. `parse_diff_to_json` emits neither that hunk nor the `@@` lines, but both still advance `index`. Skipping the count shifts every anchor. `file_note` (from `file_change_note`) is set when the header holds a rename, mode change, new or deleted file, or binary marker.
 - `html=0` on `/api/diff` and `/api/file` skips Pygments HTML and word highlights. The TUI sends it and highlights `text` itself.
 - Settings: `SettingsUpdate` in `models.py` limits `editor` to code, cursor, vim or nvim and `agent_cli` to claude, codex, opencode or cursor. A new agent CLI also needs an entry in `_AGENT_CMDS` (`routes_review.py`) and `_INTERACTIVE_CMDS` (`routes_agent_terminal.py`).
@@ -88,6 +88,7 @@ diffui/
 - The top bar holds navigation and global actions. `FileHeader` above the active viewer holds the per-file ones (view mode, whitespace, blame, resolve all, Mark reviewed).
 - Split scrolling: each `.split-pane` scrolls itself, and `syncScroll` in `SplitDiffViewer.js` copies `scrollLeft` and aligns the top row (`alignedScrollTop`), since comment threads take room on one side only. `echo` holds the position it set on the other pane, so that pane's scroll event is not synced back.
 - `FullFileViewer` renders a window of lines. Hunk blocks use `content-visibility: auto`.
+- Context: `contextRef` holds the context every `fetchDiff` sends, `FULL_CONTEXT` while the `show_all_lines` setting is on (the All lines button, `e`), else `contextLines` (More / Less context). `fetchDiff` drops a response whose context is no longer current, so the 3-line fetch at startup cannot overwrite the full one.
 - `SearchDialog` calls `/api/search` 150ms after the last keystroke and aborts the request it replaces. `handleSearchOpen` in `app.js` scrolls to the line the diff shows nearest to a hit (`nearestNewLine`). A file outside the diff sets `browsing` and opens in `FullFileViewer` with `readOnly`, because the server reports an unchanged file as all added. `browsing` swaps `FileHeader` for a short one, makes `handleToggleReview` return, stops `fetchFiles` from resetting the active file, and keeps `activeFile` out of the session save. It ends when the file joins the diff or another file is picked.
 - Keep the accessibility basics: `role="treeitem"` on tree items, focus trapping in the settings dialog, `:focus-visible` outlines on buttons, and `+`/`-` prefixes next to the diff colors.
 
@@ -126,6 +127,7 @@ After a change:
 - Open in browser (`o`) writes `activeFile` to `/api/session`, which the web UI restores on load.
 - Range comments send what the web UI sends for a selection across lines: `line_index` is the first diff line's `index`, `sel_end_index` the last, `sel_start` 0, `sel_end` the last line's text length, and `selected_text` the lines joined by newlines. Threads anchor under the first line. A single line sends none of the selection fields.
 - Split view: `build_rows(..., split=True)` uses `split_pairs` to pair a run of removes with the run of adds that follows, as `splitHunkLines` does in `SplitDiffViewer.js`. A split `Row` has `old` and `new` (a context line is both), and `row.line` is the new one when there is one. `DiffView.target` picks the line a comment goes against. `side` is None for the keyboard (new side) and is set by `tab` or the pointer. A range follows one side and sorts its lines by `index`, since paired rows are not in diff order. A resize that crosses `SPLIT_MIN_WIDTH` rebuilds the rows. Long lines are cut at the side's edge, because split has no horizontal scroll.
+- All lines: `e` (`action_all_lines`) flips `DiffuiApp.all_lines`, saves it as `show_all_lines` through `update_settings`, and reloads the diff with `FULL_CONTEXT`. `_apply_theme` reads it at startup with the theme.
 - Find in file is client-side: `Find` matches `code_of(line)` of each row, and `code_segments` draws the spans. The `find_step` and `clear_find` bindings sit before the thread ones, and `check_action` enables them only while matches show, so `n` is next thread otherwise.
 - `SearchScreen` calls `/api/search` 150ms after the last keystroke. `DiffView.goto_line` moves to the nearest new-side line when the diff does not show the hit's line.
 - Files outside the diff: a result whose path is not in the view's file list sets `DiffuiApp.browsing`. `_load_diff` takes the file from `/api/file` (its `text` per line, since `html` is for the web UI) and wraps it as one hunk of context lines. `DiffView.readonly` then makes `context` return `readonly`, which matches no `c`, `x` or `v` binding, and turns off hover, gutter presses, range selection and split. `check_action` hides Reviewed and Hunks. `_refresh_files` leaves a browsed file open on file events and stops browsing once the file joins the diff.
@@ -174,7 +176,7 @@ All in `~/.config/diffui/`:
 
 | File | Scope | Format |
 | --- | --- | --- |
-| `settings.json` | Global | `{theme, editor, user_name, agent_cli, font_size, word_wrap, keybindings}` |
+| `settings.json` | Global | `{theme, editor, user_name, agent_cli, font_size, word_wrap, word_highlight, show_all_lines, keybindings}` |
 | `{repo}/{branch}/reviewed.json` | Per branch | `{"path": mtime}` |
 | `{repo}/{branch}/comments.json` | Per branch | `{"path": [{...}]}` |
 | `{repo}/{branch}/session.json` | Per branch | `{activeFile, diffMode, showFileTree, showReviewed, scrollPositions}` |

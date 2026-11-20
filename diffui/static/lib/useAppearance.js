@@ -1,6 +1,8 @@
 import { useEffect } from 'preact/hooks';
 
-export function useAppearance({ themeCss, fontSize, wordWrap }) {
+export const WORD_HIGHLIGHT_STYLES = ['background', 'underline', 'off'];
+
+export function useAppearance({ themeCss, fontSize, wordWrap, wordHighlight }) {
   useEffect(() => {
     if (themeCss) {
       let style = document.getElementById('theme-vars');
@@ -20,4 +22,9 @@ export function useAppearance({ themeCss, fontSize, wordWrap }) {
   useEffect(() => {
     document.documentElement.classList.toggle('word-wrap-enabled', wordWrap);
   }, [wordWrap]);
+
+  useEffect(() => {
+    const root = document.documentElement.classList;
+    for (const style of WORD_HIGHLIGHT_STYLES) root.toggle(`word-hl-${style}`, style === wordHighlight);
+  }, [wordHighlight]);
 }
