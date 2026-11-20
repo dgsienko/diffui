@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 import diffui.git_utils
 from diffui.server.app import create_app
+from diffui.server.state import app_state
 
 _APP_V1 = "\n".join(f"line {i}" for i in range(1, 21)) + "\n"
 _APP_V2 = _APP_V1.replace("line 5", "line five").replace("line 12", "line twelve")
@@ -27,6 +28,9 @@ def diffui_config_root(tmp_path_factory):
     root = tmp_path_factory.mktemp("diffui-config")
     mp = pytest.MonkeyPatch()
     mp.setattr(diffui.git_utils, "_CONFIG_ROOT", root)
+    # app_state read settings.json when diffui.server.state was imported, from the real
+    # config root, so the developer's own theme, keys and display settings reached the tests.
+    app_state.__init__()
     # A suite run from a herdr pane would otherwise write to the live sidebar.
     mp.delenv("HERDR_WORKSPACE_ID", raising=False)
     # A pre-push hook in a linked worktree exports GIT_DIR, which points the temp repos' git calls at the checkout.

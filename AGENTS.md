@@ -164,7 +164,7 @@ CI (`.github/workflows/ci.yml`) runs `ruff check`, `ruff format --check` and `py
 
 ## Testing
 
-- `tests/conftest.py` points `_CONFIG_ROOT` at a temp dir for the whole session, clears `HERDR_WORKSPACE_ID`, and builds the `temp_repo` fixture (a `feature` branch with a dirty tree and an untracked file). It also provides `_server_app` (a `TestClient` on `temp_repo` with `base_url="http://localhost"`) and `post_comment`, and after every test resets the comments, reviewed marks and active repo, so tests need no cleanup of their own.
+- `tests/conftest.py` points `_CONFIG_ROOT` at a temp dir for the whole session and reloads `app_state` from it (the import already read the real `settings.json`), clears `HERDR_WORKSPACE_ID`, and builds the `temp_repo` fixture (a `feature` branch with a dirty tree and an untracked file). It also provides `_server_app` (a `TestClient` on `temp_repo` with `base_url="http://localhost"`) and `post_comment`, and after every test resets the comments, reviewed marks and active repo, so tests need no cleanup of their own.
 - `tests/test_server.py` covers the routes that `test_comments.py` and `test_search.py` don't. Its `fake_herdr` fixture puts a fake `herdr` on `PATH`. `test_risk.py` covers `_score_risk` and `_order_files`.
 - `tests/test_tui.py` runs the real `DiffuiApp` under `App.run_test()` against a `LocalServer` on `temp_repo`. Tests drive the app with `asyncio.run` and wait with `until()`, because the server reaches the view through the watcher and SSE.
 - `test_diff.py`, `test_highlight.py`, `test_git_utils.py`, `test_events.py`, `test_agent_terminal.py` and `test_themes.py` cover the matching modules.
