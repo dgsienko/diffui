@@ -47,18 +47,30 @@ class TestHighlightLineHtml:
         pytest.param(
             '<span style="color:red">hello</span>', [], "hello", '<span style="color:red">hello</span>', id="no-ranges"
         ),
-        pytest.param("hello world", [(0, 5)], "hello world", "<mark>hello</mark> world", id="plain-text"),
+        pytest.param(
+            "hello world", [(0, 5)], "hello world", '<mark class="word-hl">hello</mark> world', id="plain-text"
+        ),
         pytest.param(
             '<span style="color:red">abc</span>',
             [(0, 3)],
             "abc",
-            '<span style="color:red"><mark>abc</mark></span>',
+            '<span style="color:red"><mark class="word-hl">abc</mark></span>',
             id="inside-span",
         ),
         pytest.param(
-            "&lt;div&gt;", [(0, 5)], "<div>", "<mark>&lt;div&gt;</mark>", id="entities-count-as-one-character"
+            "&lt;div&gt;",
+            [(0, 5)],
+            "<div>",
+            '<mark class="word-hl">&lt;div&gt;</mark>',
+            id="entities-count-as-one-character",
         ),
-        pytest.param("&lt;div&gt;", [(0, 1)], "<div>", "<mark>&lt;</mark>div&gt;", id="range-ends-inside-entities"),
+        pytest.param(
+            "&lt;div&gt;",
+            [(0, 1)],
+            "<div>",
+            '<mark class="word-hl">&lt;</mark>div&gt;',
+            id="range-ends-inside-entities",
+        ),
     ],
 )
 def test_apply_word_highlights(code_html, ranges, plain, marked):

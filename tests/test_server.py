@@ -80,6 +80,8 @@ class TestServerRoutes:
             ("agent_cli", "codex"),
             ("font_size", 16),
             ("word_wrap", True),
+            ("word_highlight", "underline"),
+            ("word_highlight", "off"),
             ("keybindings", {"toggle-review": "R", "sort-risk": "x"}),
         ],
     )
