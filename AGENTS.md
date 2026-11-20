@@ -86,6 +86,7 @@ diffui/
 
 - `treeOrder()` in `FileTree.js` gives the file order that prev/next file and next-unreviewed follow. `_order_files` in `routes_diff.py` mirrors it for the TUI. Sort by risk turns the tree into one flat list.
 - The top bar holds navigation and global actions. `FileHeader` above the active viewer holds the per-file ones (view mode, whitespace, blame, resolve all, Mark reviewed).
+- Split scrolling: each `.split-pane` scrolls itself, and `syncScroll` in `SplitDiffViewer.js` copies `scrollLeft` and aligns the top row (`alignedScrollTop`), since comment threads take room on one side only. `echo` holds the position it set on the other pane, so that pane's scroll event is not synced back.
 - `FullFileViewer` renders a window of lines. Hunk blocks use `content-visibility: auto`.
 - Context: `contextRef` holds the context every `fetchDiff` sends, `FULL_CONTEXT` while the `show_all_lines` setting is on (the All lines button, `e`), else `contextLines` (More / Less context). `fetchDiff` drops a response whose context is no longer current, so the 3-line fetch at startup cannot overwrite the full one.
 - `SearchDialog` calls `/api/search` 150ms after the last keystroke and aborts the request it replaces. `handleSearchOpen` in `app.js` scrolls to the line the diff shows nearest to a hit (`nearestNewLine`). A file outside the diff sets `browsing` and opens in `FullFileViewer` with `readOnly`, because the server reports an unchanged file as all added. `browsing` swaps `FileHeader` for a short one, makes `handleToggleReview` return, stops `fetchFiles` from resetting the active file, and keeps `activeFile` out of the session save. It ends when the file joins the diff or another file is picked.
@@ -103,6 +104,7 @@ Frontend changes follow these rules:
 - Fonts: `--font-ui` for chrome (bars, buttons, tree, panels, dialogs, toasts), `--font-mono` for code, line numbers, diff paths and comment code blocks.
 - Borders: only where they carry structure (the bar bottom edge, the tree/diff divider). Use spacing or a background shift elsewhere.
 - Animations: 0.15s, only where they mean something.
+- Scrollbars: styled once for every element at the top of `style.css`, from `--border` and `--gutter-fg`. Do not add per-component scrollbar rules.
 - No emoji as UI elements. Use text labels or CSS indicators.
 - Every async action has a loading state. Every interactive element works.
 
